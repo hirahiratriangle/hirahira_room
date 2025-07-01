@@ -1,0 +1,14 @@
+# VSCodeの設定ファイル
+.vscode/
+
+# Pythonのコンパイルファイル
+--pycache__/*
+*.pyc
+
+
+
+.DS_Store
+
+
+venv/
+
