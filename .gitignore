@@ -2,13 +2,18 @@
 .vscode/
 
 # Pythonのコンパイルファイル
---pycache__/*
+--pycache__/
 *.pyc
 
 
 
 .DS_Store
 
-
+# 仮想環境
 venv/
+
+# アップされたメディアファイル
+media/
+
+
 
