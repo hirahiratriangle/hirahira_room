@@ -44,6 +44,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -137,20 +138,17 @@ AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',  # 管理サイト用(ユーザー名認証)
 )
 
-# # メールアドレス認証に変更する設定
-# ACCOUNT_AUTHENTICATION_METHOD = 'email'
-# ACCOUNT_USERNAME_REQUIRED = False
+# メールアドレス認証に変更する設定
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_USERNAME_REQUIRED = False
 
-# # サインアップにメールアドレス確認をはさむよう設定
-# ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
-# ACCOUNT_EMAIL_REQUIRED = True
+# サインアップにメールアドレス確認をはさむよう設定
+ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
+ACCOUNT_EMAIL_REQUIRED = True
 
 # django-allauth新しい設定（メールアドレス認証）
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
-
-# サインアップにメールアドレス確認をはさむよう設定
-ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 
 # ログイン/ログアウト後の遷移先を設定
 LOGIN_REDIRECT_URL = 'diary:diary_list'
@@ -174,6 +172,7 @@ DATABASES = {
 
 MEDIA_URL = '/media/'
 
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-development-key')
 
 
 

@@ -37,13 +37,13 @@ class InquiryForm(forms.Form):
         message = '送信者名: {0}\nメールアドレス: {1}\nメッセージ:\n{2}'.format(name, email, message)
         from_email = os.environ.get('FROM_EMAIL')
         to_list = [
-            os.environ.get('FROM_EMAIL')
-        ]
-        cc_list = [
             email
         ]
+        bcc_list = [
+            os.environ.get('FROM_EMAIL')
+        ]
 
-        message = EmailMessage(subject=subject, body=message, from_email=from_email, to=to_list, cc=cc_list)
+        message = EmailMessage(subject=subject, body=message, from_email=from_email, to=to_list, bcc=bcc_list)
         message.send()
 
 

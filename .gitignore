@@ -5,8 +5,7 @@
 --pycache__/
 *.pyc
 
-
-
+# Mac用
 .DS_Store
 
 # 仮想環境
@@ -14,6 +13,12 @@ venv/
 
 # アップされたメディアファイル
 media/
+
+# 静的ファイル
+staticfiles/
+
+# Gmailアプリパスワード
+vzto jsun uxtu ocea
 
 
 

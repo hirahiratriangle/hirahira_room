@@ -1,0 +1,23 @@
+# デプロイ
+az group delete --name hirahira --yes
+az group list --output table
+az webapp up --name hirahira-room --runtime "PYTHON|3.11" --resource-group hirahira --location japanwest
+
+# すべての情報を表示
+az webapp show --name hirahira-room --resource-group hirahira
+
+# ログを確認（問題がある場合）
+az webapp log tail --name hirahira-room --resource-group hirahira
+
+# 再起動
+az webapp restart --name hirahira-room --resource-group hirahira
+
+
+# 静的ファイルを収集
+python manage.py collectstatic --noinput --settings=config.settings
+
+# SECRET_KEY を生成
+python -c "import secrets; import string; chars = string.ascii_letters + string.digits + '-_'; print(''.join(secrets.choice(chars) for _ in range(50)))"
+
+# Gmailアプリパスワード
+vzto jsun uxtu ocea
