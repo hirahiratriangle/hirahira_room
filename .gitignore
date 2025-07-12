@@ -17,8 +17,8 @@ media/
 # 静的ファイル
 staticfiles/
 
-# Gmailアプリパスワード
-vzto jsun uxtu ocea
+# Azure
+.azure
 
 
 
