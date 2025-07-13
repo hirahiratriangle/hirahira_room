@@ -23,11 +23,11 @@ class OnlyYouMixin(UserPassesTestMixin):
 
 
 class IndexView(generic.TemplateView):
-    template_name = "index.html"
+    template_name = "diary/index.html"
 
 
 class InquiryView(generic.FormView):
-    template_name = "inquiry.html"
+    template_name = "diary/inquiry.html"
     form_class = InquiryForm
     success_url = reverse_lazy('diary:inquiry')
 
@@ -40,7 +40,7 @@ class InquiryView(generic.FormView):
 
 class DiaryListView(LoginRequiredMixin, generic.ListView):
     model = Diary
-    template_name = 'diary_list.html'
+    template_name = 'diary/diary_list.html'
     paginate_by = 5
 
     def get_queryset(self):
@@ -50,12 +50,12 @@ class DiaryListView(LoginRequiredMixin, generic.ListView):
 
 class DiaryDetailView(LoginRequiredMixin, OnlyYouMixin, generic.DetailView):
     model = Diary
-    template_name = 'diary_detail.html'
+    template_name = 'diary/diary_detail.html'
 
 
 class DiaryCreateView(LoginRequiredMixin, generic.CreateView):
     model = Diary
-    template_name = 'diary_create.html'
+    template_name = 'diary/diary_create.html'
     form_class = DiaryCreateForm
     success_url = reverse_lazy('diary:diary_list')
 
@@ -73,7 +73,7 @@ class DiaryCreateView(LoginRequiredMixin, generic.CreateView):
 
 class DiaryUpdateView(LoginRequiredMixin, OnlyYouMixin, generic.UpdateView):
     model = Diary
-    template_name = 'diary_update.html'
+    template_name = 'diary/diary_update.html'
     form_class = DiaryCreateForm
 
     def get_success_url(self):
@@ -90,7 +90,7 @@ class DiaryUpdateView(LoginRequiredMixin, OnlyYouMixin, generic.UpdateView):
 
 class DiaryDeleteView(LoginRequiredMixin, OnlyYouMixin, generic.DeleteView):
     model = Diary
-    template_name = 'diary_delete.html'
+    template_name = 'diary/diary_delete.html'
     success_url = reverse_lazy('diary:diary_list')
 
     def delete(self, request, *args, **kwargs):

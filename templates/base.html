@@ -30,34 +30,42 @@
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
         <div class="container px-5">
-            <a class="navbar-brand" href="{% url 'diary:index' %}">DIARY</a>
+            <a class="navbar-brand" href="{% url 'home:home' %}">{% block brand_name %}HIRAHIRA ROOM{% endblock %}</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive"
                     aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation"><span
                     class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="navbarResponsive">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link {% block active_inquiry %}{% endblock %}" href="{% url 'diary:inquiry' %}">INQUIRY</a>
-                    </li>
-                    {% if user.is_authenticated %}
-                    <li class="nav-item">
-                        <a class="nav-link {% block active_diary_list %}{% endblock %}"
-                           href="{% url 'diary:diary_list' %}">DIARY LIST</a>
-                    </li>
-                    {% endif %}
+                    {% block nav_items_left %}
+                    <!-- 各ページで独自のナビゲーション項目を追加 -->
+                    {% endblock %}
                 </ul>
                 <ul class="navbar-nav ms-auto">
                     {% if user.is_authenticated %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'account_logout' %}">Log Out</a>
+                    {% block nav_items_right_auth %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle"></i> {{ user.email|truncatechars:20 }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><h6 class="dropdown-header">{{ user.email }}</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'account_email' %}"><i class="fas fa-envelope"></i> メール設定</a></li>
+                            <li><a class="dropdown-item" href="{% url 'account_change_password' %}"><i class="fas fa-key"></i> パスワード変更</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'account_logout' %}"><i class="fas fa-sign-out-alt"></i> ログアウト</a></li>
+                        </ul>
                     </li>
+                    {% endblock %}
                     {% else %}
+                    {% block nav_items_right_anon %}
                     <li class="nav-item">
-                        <a class="nav-link {% block active_signup %}{% endblock %}" href="{% url 'account_signup' %}">Sign Up</a>
+                        <a class="nav-link" href="{% url 'account_signup' %}">Sign Up</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% block active_login %}{% endblock %}" href="{% url 'account_login' %}">Log In</a>
+                        <a class="nav-link" href="{% url 'account_login' %}">Log In</a>
                     </li>
+                    {% endblock %}
                     {% endif %}
                 </ul>
             </div>
@@ -71,8 +79,9 @@
         <div class="row">
             <ul class="messages" style="list-style: none;">
                 {% for message in messages %}
-                <li {% if message.tags %} class="{{ message.tags }}" {% endif %}>
+                <li {% if message.tags %} class="alert alert-{{ message.tags }} alert-dismissible fade show" {% endif %}>
                     {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </li>
                 {% endfor %}
             </ul>
@@ -84,12 +93,14 @@
 
     <!-- Footer -->
     <footer class="py-5 bg-black">
-        <div class="container px-5"><p class="m-0 text-center text-white small">Copyright &copy; Diary 2024</p>
+        <div class="container px-5">
+            <p class="m-0 text-center text-white small">Copyright &copy; {% block footer_text %}Hirahira Room{% endblock %} {% now "Y" %}</p>
         </div>
     </footer>
 
     <!-- Bootstrap core JS-->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
 </div>
 </body>
 </html>

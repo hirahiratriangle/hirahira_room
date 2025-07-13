@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Web上にあなた専用の日記ページを保存できるサービス | Private Diary{% endblock %}
+
+{% block nav_items_left %}
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'home:home' %}">HOME</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link active" href="{% url 'diary:index' %}">DIARY</a>
+</li>
+{% endblock %}
+
+{% block header%}
+<header class="masthead text-center text-white">
+  <div class="masthead-content">
+    <div class="container">
+      <h1 class="masthead-heading mb-0">Diary</h1>
+      <h2 class="masthead-subheading mb-0">あなた専用の日記保存サービス</h2>
+      {% if not user.is_authenticated %}
+      <a href="{% url 'account_login' %}" class="btn btn-primary btn-xl rounded-pill mt-5">LOG IN</a>
+      {% else %}
+      <div class="mt-5">
+        <a href="{% url 'diary:diary_list' %}" class="btn btn-primary btn-xl rounded-pill me-3">日記一覧</a>
+        <a href="{% url 'diary:diary_create' %}" class="btn btn-outline-light btn-xl rounded-pill">新しい日記を書く</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="bg-circle-1 bg-circle"></div>
+  <div class="bg-circle-2 bg-circle"></div>
+  <div class="bg-circle-3 bg-circle"></div>
+  <div class="bg-circle-4 bg-circle"></div>
+</header>
+{% endblock %}
+
+{% block contents %}
+{% if user.is_authenticated %}
+<!-- ログイン済みユーザー向けのコンテンツ -->
+<section class="py-5">
+  <div class="container text-center">
+    <h2 class="mb-5">{{ user.email }} さん、お疲れさまです</h2>
+    <div class="row">
+      <div class="col-md-4 mb-4">
+        <div class="card h-100">
+          <div class="card-body text-center">
+            <i class="fas fa-plus-circle fa-3x mb-3 text-primary"></i>
+            <h4 class="card-title">新しい日記を書く</h4>
+            <p class="card-text">今日の出来事や気持ちを記録しましょう</p>
+            <a href="{% url 'diary:diary_create' %}" class="btn btn-primary">日記を書く</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <div class="card h-100">
+          <div class="card-body text-center">
+            <i class="fas fa-list fa-3x mb-3 text-success"></i>
+            <h4 class="card-title">日記一覧</h4>
+            <p class="card-text">これまでに書いた日記を確認できます</p>
+            <a href="{% url 'diary:diary_list' %}" class="btn btn-success">一覧を見る</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 mb-4">
+        <div class="card h-100">
+          <div class="card-body text-center">
+            <i class="fas fa-search fa-3x mb-3 text-info"></i>
+            <h4 class="card-title">日記を探す</h4>
+            <p class="card-text">過去の日記を検索して振り返りましょう</p>
+            <a href="{% url 'diary:diary_list' %}" class="btn btn-info">検索する</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% else %}
+<!-- 未ログインユーザー向けのコンテンツ -->
+<section>
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-6 order-lg-2">
+        <div class="p-5">
+          <img class="img-fluid rounded-circle" src="{% static 'assets/img/01.jpg' %}" alt="">
+        </div>
+      </div>
+      <div class="col-lg-6 order-lg-1">
+        <div class="p-5">
+          <h2 class="display-4">Web Diary</h2>
+          <p>Web上で作成/編集/削除ができる日記</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-6">
+        <div class="p-5">
+          <img class="img-fluid rounded-circle" src="{% static 'assets/img/02.jpg' %}" alt="">
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="p-5">
+          <h2 class="display-4">Save Your Diary</h2>
+          <p>あなたの日記をWebに保存</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-lg-6 order-lg-2">
+        <div class="p-5">
+          <img class="img-fluid rounded-circle" src="{% static 'assets/img/03.jpg' %}" alt="">
+        </div>
+      </div>
+      <div class="col-lg-6 order-lg-1">
+        <div class="p-5">
+          <h2 class="display-4">Membership System</h2>
+          <p>会員制のWeb日記サービス</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA Section -->
+<section class="py-5 text-center bg-light">
+  <div class="container">
+    <h2 class="mb-4">今すぐ日記を始めましょう</h2>
+    <p class="lead mb-5">無料でアカウントを作成して、あなた専用の日記を始めてください。</p>
+    <a href="{% url 'account_signup' %}" class="btn btn-primary btn-xl rounded-pill me-3">新規登録</a>
+    <a href="{% url 'account_login' %}" class="btn btn-outline-primary btn-xl rounded-pill">ログイン</a>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

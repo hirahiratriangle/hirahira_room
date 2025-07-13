@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}ログアウト | Hirahira Room{% endblock %}
+
+{% block contents %}
+<div class="container d-flex justify-content-center">
+    <div class="row col-12 col-md-5">
+        <div class="my-div-style">
+            <h1 class="text-center mb-4">ログアウト</h1>
+            <p class="text-center mb-4">ログアウトしますか？</p>
+            
+            <form method="post" action="{% url 'account_logout' %}">
+                {% csrf_token %}
+                {% if redirect_field_value %}
+                    <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}"/>
+                {% endif %}
+                
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" type="submit">ログアウト</button>
+                    <a href="{% url 'home:home' %}" class="btn btn-outline-secondary">キャンセル</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

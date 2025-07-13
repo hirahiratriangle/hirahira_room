@@ -3,7 +3,17 @@ from .settings_common import *
 import os
 
 # 本番環境設定
-DEBUG = False
+DEBUG = os.getenv("DEBUG", "False") == "True"
+
+# WhiteNoise を有効化
+# runserver_nostatic を先頭に
+INSTALLED_APPS.insert(0, "whitenoise.runserver_nostatic")
+# SecurityMiddleware の直後に WhiteNoiseMiddleware を挿入
+idx = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
+MIDDLEWARE.insert(idx + 1, "whitenoise.middleware.WhiteNoiseMiddleware")
+# 圧縮＋ハッシュ付きで配信
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = ['https://hirahira-room.azurewebsites.net']
 
@@ -14,9 +24,6 @@ if 'WEBSITE_HOSTNAME' in os.environ:
 # 静的ファイルの設定
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# WhiteNoise の設定（オプション）
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # メディアファイル設定
 MEDIA_ROOT = '/home/site/wwwroot/media'
@@ -57,3 +64,5 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')  # Gmail アドレス
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')  # アプリパスワード
 DEFAULT_FROM_EMAIL = 'Diary<EMAIL_HOST_USER>'
+
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
