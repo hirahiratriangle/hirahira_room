@@ -1,0 +1,194 @@
+2025-10-30T12:47:23.2888646Z,Updating submodules.,c30f9256-d665-45fb-824d-b663f9d21f2f,0
+2025-10-30T12:47:24.4058819Z,Preparing deployment for commit id '5f1a6958-7'.,789e5e0d-c33a-4b39-990b-6bb65b62b1ac,0
+2025-10-30T12:47:24.8688253Z,PreDeployment: context.CleanOutputPath False,4ffc676b-15af-4fd3-8b67-8cb0e93274f7,0
+2025-10-30T12:47:25.0107127Z,PreDeployment: context.OutputPath /home/site/wwwroot,348e3575-940e-4466-9269-ae924a68422a,0
+2025-10-30T12:47:25.1715937Z,Repository path is /tmp/zipdeploy/extracted,92efb4c4-2c81-4e99-b0a8-2d6d6a668b03,0
+2025-10-30T12:47:25.3870536Z,Running oryx build...,b2c02057-99a8-4e05-a21d-26e5e7cea7e1,0
+	2025-10-30T12:47:25.4290399Z,Command: oryx build /tmp/zipdeploy/extracted -o /home/site/wwwroot --platform python --platform-version 3.11 -p virtualenv_name=antenv --log-file /tmp/build-debug.log  -i /tmp/8de17b279a979c1 --compress-destination-dir | tee /tmp/oryx-build.log,,0
+	2025-10-30T12:47:27.1030724Z,Operation performed by Microsoft Oryx&comma; https://github.com/Microsoft/Oryx,,0
+	2025-10-30T12:47:27.1528464Z,You can report issues at https://github.com/Microsoft/Oryx/issues,,0
+	2025-10-30T12:47:27.1845587Z,,,0
+	2025-10-30T12:47:27.2146174Z,Oryx Version: 0.2.20250611.1+0649de32f1279969c9023dd41b389cce4bb94493&comma; Commit: 0649de32f1279969c9023dd41b389cce4bb94493&comma; ReleaseTagName: 20250611.1,,0
+	2025-10-30T12:47:27.2538805Z,,,0
+	2025-10-30T12:47:27.3133201Z,Build Operation ID: 66775cacb90b5000,,0
+	2025-10-30T12:47:27.3451362Z,Repository Commit : 5f1a6958-782f-4bb0-95db-03c78dbb33d1,,0
+	2025-10-30T12:47:27.3746863Z,OS Type           : bullseye,,0
+	2025-10-30T12:47:27.4427264Z,Image Type        : githubactions,,0
+	2025-10-30T12:47:27.4657949Z,,,0
+	2025-10-30T12:47:27.4941939Z,Primary SDK Storage URL: https://oryx-cdn.microsoft.io,,0
+	2025-10-30T12:47:27.5145626Z,Backup SDK Storage URL: https://oryxsdks-cdn.azureedge.net,,0
+	2025-10-30T12:47:27.5298770Z,Detecting platforms...,,0
+	2025-10-30T12:47:27.5397592Z,External SDK provider is enabled.,,0
+	2025-10-30T12:47:27.5489441Z,Requesting metadata for platform python from external SDK provider,,0
+	2025-10-30T12:47:31.6872254Z,Requesting metadata for platform python from external SDK provider,,0
+	2025-10-30T12:47:32.9289990Z,Successfully requested blob for platform python&comma; blobName defaultVersion.bullseye.txt&comma; available at /var/OryxSdks/python/defaultVersion.bullseye.txt,,0
+	2025-10-30T12:47:33.2483282Z,Detected following platforms:,,0
+	2025-10-30T12:47:33.2871081Z,  python: 3.11.14,,0
+	2025-10-30T12:47:33.3049712Z,Requesting metadata for platform python from external SDK provider,,0
+	2025-10-30T12:47:37.7296199Z,Successfully requested blob for platform python&comma; blobName python-bullseye-3.11.14.tar.gz&comma; available at /var/OryxSdks/python/python-bullseye-3.11.14.tar.gz,,0
+	2025-10-30T12:47:38.7802083Z,Version '3.11.14' of platform 'python' is not installed. Generating script to install it...,,0
+	2025-10-30T12:47:39.1317349Z,,,0
+	2025-10-30T12:47:39.2225628Z,Using intermediate directory '/tmp/8de17b279a979c1'.,,0
+	2025-10-30T12:47:39.2616259Z,,,0
+	2025-10-30T12:47:39.2906938Z,Copying files to the intermediate directory...,,0
+	2025-10-30T12:47:39.9122860Z,Done in 0 sec(s).,,0
+	2025-10-30T12:47:39.9620375Z,,,0
+	2025-10-30T12:47:40.0116956Z,Source directory     : /tmp/8de17b279a979c1,,0
+	2025-10-30T12:47:40.0440886Z,Destination directory: /home/site/wwwroot,,0
+	2025-10-30T12:47:40.0821074Z,,,0
+	2025-10-30T12:47:40.1141825Z,,,0
+	2025-10-30T12:47:40.1427312Z,Downloading and extracting 'python' version '3.11.14' to '/tmp/oryx/platforms/python/3.11.14'...,,0
+	2025-10-30T12:47:40.1733230Z,Detected image debian flavor: bullseye.,,0
+	2025-10-30T12:47:40.2143239Z,Skipping download of python version 3.11.14 as it is available in external sdk provider cache...,,0
+	2025-10-30T12:47:40.2534088Z,Extracting contents...,,0
+	2025-10-30T12:47:53.6279481Z,Successfully extracted python version 3.11.14 from external sdk provider cache...,,0
+	2025-10-30T12:47:53.7055562Z,Done in 14 sec(s).,,0
+	2025-10-30T12:47:53.7378182Z,,,0
+	2025-10-30T12:47:53.7857168Z,image detector file exists&comma; platform is python..,,0
+	2025-10-30T12:47:53.8467571Z,OS detector file exists&comma; OS is bullseye..,,0
+	2025-10-30T12:47:54.0178096Z,Python Version: /tmp/oryx/platforms/python/3.11.14/bin/python3.11,,0
+	2025-10-30T12:47:54.0653863Z,Creating directory for command manifest file if it does not exist,,0
+	2025-10-30T12:47:54.0986943Z,Removing existing manifest file,,0
+	2025-10-30T12:47:54.1461861Z,Python Virtual Environment: antenv,,0
+	2025-10-30T12:47:54.1859293Z,Creating virtual environment...,,0
+	2025-10-30T12:48:10.5612367Z,Activating virtual environment...,,0
+	2025-10-30T12:48:10.6997096Z,Running pip install...,,0
+	2025-10-30T12:49:51.2974135Z,[12:48:12+0000] Collecting asgiref==3.8.1 (from -r requirements.txt (line 1)),,0
+	2025-10-30T12:49:51.4653093Z,[12:48:12+0000]   Downloading asgiref-3.8.1-py3-none-any.whl.metadata (9.3 kB),,0
+	2025-10-30T12:49:51.4954730Z,[12:48:12+0000] Collecting Django==5.2.3 (from -r requirements.txt (line 2)),,0
+	2025-10-30T12:49:51.5275515Z,[12:48:12+0000]   Downloading django-5.2.3-py3-none-any.whl.metadata (4.1 kB),,0
+	2025-10-30T12:49:51.5865225Z,[12:48:12+0000] Collecting django-allauth==65.9.0 (from -r requirements.txt (line 3)),,0
+	2025-10-30T12:49:51.6459770Z,[12:48:12+0000]   Downloading django_allauth-65.9.0.tar.gz (1.7 MB),,0
+	2025-10-30T12:49:51.6957579Z,[12:48:12+0000]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 18.6 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:51.7856155Z,[12:48:14+0000]   Installing build dependencies: started,,0
+	2025-10-30T12:49:51.8265019Z,[12:48:20+0000]   Installing build dependencies: finished with status 'done',,0
+	2025-10-30T12:49:51.8652261Z,[12:48:20+0000]   Getting requirements to build wheel: started,,0
+	2025-10-30T12:49:51.9061350Z,[12:48:21+0000]   Getting requirements to build wheel: finished with status 'done',,0
+	2025-10-30T12:49:51.9572740Z,[12:48:21+0000]   Preparing metadata (pyproject.toml): started,,0
+	2025-10-30T12:49:52.0067806Z,[12:48:23+0000]   Preparing metadata (pyproject.toml): finished with status 'done',,0
+	2025-10-30T12:49:52.0649177Z,[12:48:23+0000] Collecting django-bootstrap5==25.1 (from -r requirements.txt (line 4)),,0
+	2025-10-30T12:49:52.1277125Z,[12:48:23+0000]   Downloading django_bootstrap5-25.1-py3-none-any.whl.metadata (5.8 kB),,0
+	2025-10-30T12:49:52.2176280Z,[12:48:23+0000] Collecting djangorestframework==3.16.0 (from -r requirements.txt (line 5)),,0
+	2025-10-30T12:49:52.3252222Z,[12:48:23+0000]   Downloading djangorestframework-3.16.0-py3-none-any.whl.metadata (11 kB),,0
+	2025-10-30T12:49:52.3966972Z,[12:48:23+0000] Collecting joblib==1.5.1 (from -r requirements.txt (line 6)),,0
+	2025-10-30T12:49:52.4947260Z,[12:48:23+0000]   Downloading joblib-1.5.1-py3-none-any.whl.metadata (5.6 kB),,0
+	2025-10-30T12:49:52.5865643Z,[12:48:23+0000] Collecting narwhals==1.46.0 (from -r requirements.txt (line 7)),,0
+	2025-10-30T12:49:52.6661072Z,[12:48:23+0000]   Downloading narwhals-1.46.0-py3-none-any.whl.metadata (11 kB),,0
+	2025-10-30T12:49:52.7166350Z,[12:48:24+0000] Collecting numpy==2.3.1 (from -r requirements.txt (line 8)),,0
+	2025-10-30T12:49:52.7745930Z,[12:48:24+0000]   Downloading numpy-2.3.1-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (62 kB),,0
+	2025-10-30T12:49:52.8446843Z,[12:48:24+0000]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.1/62.1 kB 26.1 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:52.9070329Z,[12:48:24+0000] Collecting packaging==25.0 (from -r requirements.txt (line 9)),,0
+	2025-10-30T12:49:52.9550213Z,[12:48:24+0000]   Downloading packaging-25.0-py3-none-any.whl.metadata (3.3 kB),,0
+	2025-10-30T12:49:53.0049720Z,[12:48:25+0000] Collecting pandas==2.3.1 (from -r requirements.txt (line 10)),,0
+	2025-10-30T12:49:53.0355133Z,[12:48:25+0000]   Downloading pandas-2.3.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (91 kB),,0
+	2025-10-30T12:49:53.0764785Z,[12:48:25+0000]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 91.2/91.2 kB 35.3 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:53.1093183Z,[12:48:26+0000] Collecting pillow==11.2.1 (from -r requirements.txt (line 11)),,0
+	2025-10-30T12:49:53.1394641Z,[12:48:26+0000]   Downloading pillow-11.2.1-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (8.9 kB),,0
+	2025-10-30T12:49:53.1546203Z,[12:48:26+0000] Collecting plotly==6.2.0 (from -r requirements.txt (line 12)),,0
+	2025-10-30T12:49:53.1959902Z,[12:48:26+0000]   Downloading plotly-6.2.0-py3-none-any.whl.metadata (8.5 kB),,0
+	2025-10-30T12:49:53.2176606Z,[12:48:26+0000] Collecting python-dateutil==2.9.0.post0 (from -r requirements.txt (line 13)),,0
+	2025-10-30T12:49:53.2558350Z,[12:48:26+0000]   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB),,0
+	2025-10-30T12:49:53.3146925Z,[12:48:26+0000] Collecting pytz==2025.2 (from -r requirements.txt (line 14)),,0
+	2025-10-30T12:49:53.3453896Z,[12:48:26+0000]   Downloading pytz-2025.2-py2.py3-none-any.whl.metadata (22 kB),,0
+	2025-10-30T12:49:53.4059905Z,[12:48:26+0000] Collecting scikit-learn==1.7.0 (from -r requirements.txt (line 15)),,0
+	2025-10-30T12:49:53.4744681Z,[12:48:26+0000]   Downloading scikit_learn-1.7.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (17 kB),,0
+	2025-10-30T12:49:53.5162829Z,[12:48:27+0000] Collecting scipy==1.16.0 (from -r requirements.txt (line 16)),,0
+	2025-10-30T12:49:53.5575839Z,[12:48:27+0000]   Downloading scipy-1.16.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (61 kB),,0
+	2025-10-30T12:49:53.5878361Z,[12:48:27+0000]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.9/61.9 kB 25.7 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:53.6165398Z,[12:48:27+0000] Collecting six==1.17.0 (from -r requirements.txt (line 17)),,0
+	2025-10-30T12:49:53.6745916Z,[12:48:27+0000]   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB),,0
+	2025-10-30T12:49:53.6847905Z,[12:48:27+0000] Collecting sqlparse==0.5.3 (from -r requirements.txt (line 18)),,0
+	2025-10-30T12:49:53.7564855Z,[12:48:27+0000]   Downloading sqlparse-0.5.3-py3-none-any.whl.metadata (3.9 kB),,0
+	2025-10-30T12:49:53.8145077Z,[12:48:27+0000] Collecting threadpoolctl==3.6.0 (from -r requirements.txt (line 19)),,0
+	2025-10-30T12:49:53.8564002Z,[12:48:27+0000]   Downloading threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB),,0
+	2025-10-30T12:49:53.9248192Z,[12:48:27+0000] Collecting tzdata==2025.2 (from -r requirements.txt (line 20)),,0
+	2025-10-30T12:49:53.9755380Z,[12:48:27+0000]   Downloading tzdata-2025.2-py2.py3-none-any.whl.metadata (1.4 kB),,0
+	2025-10-30T12:49:54.0099656Z,[12:48:28+0000] Collecting whitenoise==6.9.0 (from -r requirements.txt (line 21)),,0
+	2025-10-30T12:49:54.0651306Z,[12:48:28+0000]   Downloading whitenoise-6.9.0-py3-none-any.whl.metadata (3.6 kB),,0
+	2025-10-30T12:49:54.1463646Z,[12:48:28+0000] Collecting psycopg2-binary==2.9.10 (from -r requirements.txt (line 22)),,0
+	2025-10-30T12:49:54.1781780Z,[12:48:28+0000]   Downloading psycopg2_binary-2.9.10-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB),,0
+	2025-10-30T12:49:54.2372783Z,[12:48:28+0000] Collecting gunicorn==23.0.0 (from -r requirements.txt (line 23)),,0
+	2025-10-30T12:49:54.3448058Z,[12:48:28+0000]   Downloading gunicorn-23.0.0-py3-none-any.whl.metadata (4.4 kB),,0
+	2025-10-30T12:49:54.3964448Z,[12:48:30+0000] Downloading asgiref-3.8.1-py3-none-any.whl (23 kB),,0
+	2025-10-30T12:49:54.4642907Z,[12:48:30+0000] Downloading django-5.2.3-py3-none-any.whl (8.3 MB),,0
+	2025-10-30T12:49:54.5139263Z,[12:48:30+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.3/8.3 MB 51.5 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:54.5440486Z,[12:48:30+0000] Downloading django_bootstrap5-25.1-py3-none-any.whl (26 kB),,0
+	2025-10-30T12:49:54.5656240Z,[12:48:30+0000] Downloading djangorestframework-3.16.0-py3-none-any.whl (1.1 MB),,0
+	2025-10-30T12:49:54.6163360Z,[12:48:30+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 50.1 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:54.6573049Z,[12:48:30+0000] Downloading joblib-1.5.1-py3-none-any.whl (307 kB),,0
+	2025-10-30T12:49:54.7168193Z,[12:48:30+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 307.7/307.7 kB 44.4 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:54.7644176Z,[12:48:30+0000] Downloading narwhals-1.46.0-py3-none-any.whl (373 kB),,0
+	2025-10-30T12:49:54.8163121Z,[12:48:30+0000]    ━━━━━━━━━━━━━━━━━━��━━━━━━━━━━━━━━━━━━━━━ 373.4/373.4 kB 46.9 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:54.8559328Z,[12:48:30+0000] Downloading numpy-2.3.1-cp311-cp311-manylinux_2_28_x86_64.whl (16.9 MB),,0
+	2025-10-30T12:49:54.9058756Z,[12:48:30+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.9/16.9 MB 30.1 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:54.9458710Z,[12:48:30+0000] Downloading packaging-25.0-py3-none-any.whl (66 kB),,0
+	2025-10-30T12:49:55.0172112Z,[12:48:30+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 66.5/66.5 kB 26.7 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.0564508Z,[12:48:30+0000] Downloading pandas-2.3.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.4 MB),,0
+	2025-10-30T12:49:55.0958071Z,[12:48:31+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.4/12.4 MB 55.6 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.1244265Z,[12:48:31+0000] Downloading pillow-11.2.1-cp311-cp311-manylinux_2_28_x86_64.whl (4.6 MB),,0
+	2025-10-30T12:49:55.1739196Z,[12:48:31+0000]    ━━━━━━━��━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.6/4.6 MB 44.3 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.2243231Z,[12:48:31+0000] Downloading plotly-6.2.0-py3-none-any.whl (9.6 MB),,0
+	2025-10-30T12:49:55.2758764Z,[12:48:31+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.6/9.6 MB 35.0 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.3262950Z,[12:48:31+0000] Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB),,0
+	2025-10-30T12:49:55.4438029Z,[12:48:31+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 229.9/229.9 kB 11.4 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.5158634Z,[12:48:31+0000] Downloading pytz-2025.2-py2.py3-none-any.whl (509 kB),,0
+	2025-10-30T12:49:55.5951468Z,[12:48:31+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 509.2/509.2 kB 24.9 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.6561548Z,[12:48:31+0000] Downloading scikit_learn-1.7.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.9 MB),,0
+	2025-10-30T12:49:55.7333597Z,[12:48:31+0000]    ━━��━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.9/12.9 MB 48.3 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.8054551Z,[12:48:31+0000] Downloading scipy-1.16.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (35.3 MB),,0
+	2025-10-30T12:49:55.8750443Z,[12:48:32+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 27.7 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.9237507Z,[12:48:32+0000] Downloading six-1.17.0-py2.py3-none-any.whl (11 kB),,0
+	2025-10-30T12:49:55.9505078Z,[12:48:32+0000] Downloading sqlparse-0.5.3-py3-none-any.whl (44 kB),,0
+	2025-10-30T12:49:55.9622471Z,[12:48:32+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 44.4/44.4 kB 18.9 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:55.9956343Z,[12:48:32+0000] Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB),,0
+	2025-10-30T12:49:56.0352005Z,[12:48:32+0000] Downloading tzdata-2025.2-py2.py3-none-any.whl (347 kB),,0
+	2025-10-30T12:49:56.0647002Z,[12:48:33+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━��━ 347.8/347.8 kB 3.4 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:56.1047225Z,[12:48:33+0000] Downloading whitenoise-6.9.0-py3-none-any.whl (20 kB),,0
+	2025-10-30T12:49:56.1538058Z,[12:48:33+0000] Downloading psycopg2_binary-2.9.10-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.0 MB),,0
+	2025-10-30T12:49:56.1875684Z,[12:48:33+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.0/3.0 MB 31.8 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:56.2265951Z,[12:48:33+0000] Downloading gunicorn-23.0.0-py3-none-any.whl (85 kB),,0
+	2025-10-30T12:49:56.2831472Z,[12:48:33+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 85.0/85.0 kB 35.2 MB/s eta 0:00:00,,0
+	2025-10-30T12:49:56.3838266Z,[12:48:34+0000] Building wheels for collected packages: django-allauth,,0
+	2025-10-30T12:49:56.4539346Z,[12:48:34+0000]   Building wheel for django-allauth (pyproject.toml): started,,0
+	2025-10-30T12:49:56.5034291Z,[12:48:39+0000]   Building wheel for django-allauth (pyproject.toml): finished with status 'done',,0
+	2025-10-30T12:49:56.5433318Z,[12:48:39+0000]   Created wheel for django-allauth: filename=django_allauth-65.9.0-py3-none-any.whl size=1850582 sha256=f638fb9f6ed07476e71d25c98fa43726ab740e9ba53951848f85f288fc3e3811,,0
+	2025-10-30T12:49:56.5752601Z,[12:48:39+0000]   Stored in directory: /usr/local/share/pip-cache/wheels/b6/e1/e5/10d37714f73e953838413da1044ca53ca47585c950ddcea398,,0
+	2025-10-30T12:49:56.6336929Z,[12:48:39+0000] Successfully built django-allauth,,0
+	2025-10-30T12:49:56.6747888Z,[12:48:40+0000] Installing collected packages: pytz&comma; whitenoise&comma; tzdata&comma; threadpoolctl&comma; sqlparse&comma; six&comma; psycopg2-binary&comma; pillow&comma; packaging&comma; numpy&comma; narwhals&comma; joblib&comma; asgiref&comma; scipy&comma; python-dateutil&comma; plotly&comma; gunicorn&comma; Django&comma; scikit-learn&comma; pandas&comma; djangorestframework&comma; django-bootstrap5&comma; django-allauth,,0
+	2025-10-30T12:49:56.7047435Z,[12:49:49+0000] Successfully installed Django-5.2.3 asgiref-3.8.1 django-allauth-65.9.0 django-bootstrap5-25.1 djangorestframework-3.16.0 gunicorn-23.0.0 joblib-1.5.1 narwhals-1.46.0 numpy-2.3.1 packaging-25.0 pandas-2.3.1 pillow-11.2.1 plotly-6.2.0 psycopg2-binary-2.9.10 python-dateutil-2.9.0.post0 pytz-2025.2 scikit-learn-1.7.0 scipy-1.16.0 six-1.17.0 sqlparse-0.5.3 threadpoolctl-3.6.0 tzdata-2025.2 whitenoise-6.9.0,,0
+	2025-10-30T12:49:56.7534148Z,,,0
+	2025-10-30T12:49:56.7930820Z,[notice] A new release of pip is available: 24.0 -> 25.3,,0
+	2025-10-30T12:49:56.8429447Z,[notice] To update&comma; run: pip install --upgrade pip,,0
+	2025-10-30T12:49:56.8745197Z,,,0
+	2025-10-30T12:49:56.8904895Z,Content in source directory is a Django app,,0
+	2025-10-30T12:49:56.8985651Z,Running collectstatic...,,0
+	2025-10-30T12:49:57.1261543Z,,,0
+	2025-10-30T12:49:57.1644417Z,129 static files copied to '/tmp/8de17b279a979c1/staticfiles'&comma; 8 unmodified.,,0
+	2025-10-30T12:49:57.2057532Z,Done in 6 sec(s).,,0
+	2025-10-30T12:49:57.2464724Z,Not a vso image&comma; so not writing build commands,,0
+	2025-10-30T12:49:57.2675190Z,Preparing output...,,0
+	2025-10-30T12:49:57.2877012Z,,,0
+	2025-10-30T12:49:57.3032620Z,Copying files to destination directory '/tmp/_preCompressedDestinationDir'...,,0
+	2025-10-30T12:50:23.6375689Z,Done in 26 sec(s).,,0
+	2025-10-30T12:50:23.7067314Z,Compressing content of directory '/tmp/_preCompressedDestinationDir'...,,0
+	2025-10-30T12:51:49.8806387Z,Copied the compressed output to '/home/site/wwwroot',,0
+	2025-10-30T12:51:49.9152126Z,,,0
+	2025-10-30T12:51:49.9638331Z,Removing existing manifest file,,0
+	2025-10-30T12:51:50.0166816Z,Creating a manifest file...,,0
+	2025-10-30T12:51:50.0740308Z,Manifest file created.,,0
+	2025-10-30T12:51:50.1138331Z,Copying .ostype to manifest output directory.,,0
+	2025-10-30T12:51:50.1737664Z,,,0
+	2025-10-30T12:51:50.2023630Z,Done in 251 sec(s).,,0
+2025-10-30T12:51:51.3482352Z,Running post deployment command(s)...,ccd944bb-d4da-4e59-bc59-78caff4ba357,0
+2025-10-30T12:51:51.4920910Z,,a39fd845-f29a-469b-8a32-95426c8d034e,0
+2025-10-30T12:51:51.6140495Z,Generating summary of Oryx build,a0e346d5-c077-404e-9912-00793a046f11,0
+2025-10-30T12:51:51.7893393Z,Parsing the build logs,c348ffbc-a3f6-4a32-950a-ac98fce89b70,0
+2025-10-30T12:51:51.9110250Z,Found 0 issue(s),ef69cb1c-cd4b-432a-a1a7-e4876e9ed6e6,0
+2025-10-30T12:51:52.0323653Z,,7eee959a-a5f9-4f77-aa1b-7b1ef1a1e140,0
+2025-10-30T12:51:52.1782441Z,Build Summary :,9599bb02-aba3-4c4c-a1ee-da9cdeee3994,0
+2025-10-30T12:51:52.4065717Z,===============,17078f00-2ca5-44ed-b187-0021f0a2b28b,0
+2025-10-30T12:51:52.5458525Z,Errors (0),5650a2f5-52be-4d2e-8035-641c8d8ce95b,0
+2025-10-30T12:51:52.6866289Z,Warnings (0),08217974-e9c1-4b9f-a243-1e573855ae57,0
+2025-10-30T12:51:52.8399136Z,,9c0e0c5f-0318-4fca-bca7-52bc0338673f,0
+2025-10-30T12:51:53.0257030Z,Triggering recycle (preview mode disabled).,6fc99db2-868c-44b7-8c8e-ab3d96bbf066,0
+2025-10-30T12:51:53.2573112Z,Deployment successful. deployer = Push-Deployer deploymentPath = ZipDeploy. Extract zip. Remote build.,1877409b-5421-4e93-a268-7da9e0018bc2,0

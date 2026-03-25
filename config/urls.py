@@ -16,7 +16,7 @@ urlpatterns = [
     path('diary/', include('diary.urls', namespace='diary')),
 
     # Iris Classifier アプリ
-    #path('iris/', include('iris_classifier.urls', namespace='iris_classifier')),
+    path('iris/', include('iris_classifier.urls', namespace='iris_classifier')),
 ]
 
 # メディアファイルの配信設定

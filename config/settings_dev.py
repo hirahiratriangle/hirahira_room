@@ -9,6 +9,14 @@ DEBUG = 'True'
 
 ALLOWED_HOSTS = []
 
+# データベース設定（開発環境ではSQLiteを使用）
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
 # ロギング設定
 LOGGING = {
     'version': 1,  # 1固定
@@ -23,6 +31,11 @@ LOGGING = {
         },
         # diaryアプリケーションが利用するロガー
         'diary': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+        #　iris_classifierアプリケーションが利用するロガー 
+        'iris_classifier': {
             'handlers': ['console'],
             'level': 'DEBUG',
         },
@@ -53,4 +66,3 @@ LOGGING = {
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 MEDIA_ROOT = BASE_DIR / 'media'
-

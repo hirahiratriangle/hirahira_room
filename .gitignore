@@ -20,5 +20,6 @@ staticfiles/
 # Azure
 .azure
 
-
-
+# 機械学習モデルファイル
+iris_classifier/models/
+*.pkl

@@ -1,7 +1,24 @@
+# 前準備
+az webapp stop --name hirahira-room --resource-group hirahira
+
 # デプロイ
-az group delete --name hirahira --yes
-az group list --output table
+＃az group delete --name hirahira --yes　（全リソース削除のため実行しないこと）
+az webapp delete --name hirahira-room --resource-group hirahira
 az webapp up --name hirahira-room --runtime "PYTHON|3.11" --resource-group hirahira --location japanwest
+
+# ポータル画面でVNETを追加する。
+
+# マイグレーション
+python manage.py migrate
+python manage.py train_iris_model （初期モデルのトレーニング）
+
+# 再起動
+az webapp restart --name hirahira-room --resource-group hirahira
+az webapp start --name hirahira-room --resource-group hirahira
+az webapp show --name hirahira-room --resource-group hirahira --query state
+
+# スーパーユーザー作成
+python manage.py createsuperuser
 
 # すべての情報を表示
 az webapp show --name hirahira-room --resource-group hirahira
@@ -20,4 +37,11 @@ python manage.py collectstatic --noinput --settings=config.settings
 python -c "import secrets; import string; chars = string.ascii_letters + string.digits + '-_'; print(''.join(secrets.choice(chars) for _ in range(50)))"
 
 # Gmailアプリパスワード
-vzto jsun uxtu ocea
+rdrl wtcj kidj gdcj
+
+
+
+
+
+https://note.com/t_ak66/n/n791abe9fda8a
+

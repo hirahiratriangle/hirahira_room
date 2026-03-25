@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Iris Classifier - Hirahira Room{% endblock %}
+
+{% block nav_items_left %}
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'home:home' %}">HOME</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'diary:index' %}">DIARY</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link active" href="{% url 'iris_classifier:index' %}">IRIS CLASSIFIER</a>
+</li>
+{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h2 fw-bold mb-2">Iris Classifier</h1>
+            <p class="mb-3">機械学習によるアヤメ品種分類</p>
+            <div class="mt-3">
+                <a href="{% url 'iris_classifier:predict' %}" class="btn btn-light me-2">予測を試す</a>
+                <a href="{% url 'iris_classifier:analysis' %}" class="btn btn-outline-light">データ分析</a>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+    {% if user.is_authenticated %}
+    <!-- ログインユーザー向け機能 -->
+    <section class="mb-5">
+        <h2 class="h4 mb-4" style="color: #2c5aa0;">専用機能</h2>
+        <div class="list-group">
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2">
+                            <i class="fas fa-magic me-2" style="color: #2c5aa0;"></i>
+                            品種予測
+                        </h5>
+                        <p class="mb-2 text-muted">アヤメの特徴を入力して品種を予測します</p>
+                        <div class="mt-2">
+                            <a href="{% url 'iris_classifier:predict' %}" class="btn btn-sm btn-outline-primary">予測開始</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2">
+                            <i class="fas fa-history me-2" style="color: #2c5aa0;"></i>
+                            予測履歴
+                        </h5>
+                        <p class="mb-2 text-muted">過去の予測結果を確認できます</p>
+                        <div class="mt-2">
+                            <a href="{% url 'iris_classifier:history' %}" class="btn btn-sm btn-outline-primary">履歴表示</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2">
+                            <i class="fas fa-chart-bar me-2" style="color: #2c5aa0;"></i>
+                            データ分析
+                        </h5>
+                        <p class="mb-2 text-muted">アヤメデータの可視化と分析</p>
+                        <div class="mt-2">
+                            <a href="{% url 'iris_classifier:analysis' %}" class="btn btn-sm btn-outline-primary">分析表示</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if recent_predictions %}
+        <!-- 最近の予測履歴 -->
+        <div class="mt-5">
+            <h3 class="h5 mb-3" style="color: #2c5aa0;">最近の予測履歴</h3>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>予測結果</th>
+                            <th>確率</th>
+                            <th>予測日時</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for prediction in recent_predictions %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-primary">{{ prediction.prediction }}</span>
+                            </td>
+                            <td>{{ prediction.probability|floatformat:1 }}%</td>
+                            <td>{{ prediction.created_at|date:"Y/m/d H:i" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-center">
+                <a href="{% url 'iris_classifier:history' %}" class="btn btn-outline-primary">すべての履歴を見る</a>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+    
+    {% else %}
+    <!-- 未ログインユーザー向け -->
+    <section class="mb-5">
+        <h2 class="h4 mb-4" style="color: #2c5aa0;">機能紹介</h2>
+        <ul class="list-unstyled">
+            <li class="mb-3">
+                <i class="fas fa-check-circle me-2" style="color: #2c5aa0;"></i>
+                <strong>AI予測:</strong> 機械学習による高精度な品種分類
+            </li>
+            <li class="mb-3">
+                <i class="fas fa-check-circle me-2" style="color: #2c5aa0;"></i>
+                <strong>データ分析:</strong> アヤメデータの可視化と統計分析
+            </li>
+            <li class="mb-3">
+                <i class="fas fa-check-circle me-2" style="color: #2c5aa0;"></i>
+                <strong>履歴管理:</strong> 予測履歴の保存と確認
+            </li>
+        </ul>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="mt-5 pt-4 border-top text-center">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">アカウントを作成して始めましょう</h2>
+        <p class="text-muted mb-4">ログインすると予測履歴の保存や詳細な分析機能をご利用いただけます</p>
+        <a href="{% url 'account_signup' %}" class="btn btn-primary me-3">新規登録</a>
+        <a href="{% url 'account_login' %}" class="btn btn-outline-primary">ログイン</a>
+    </section>
+    {% endif %}
+
+    <!-- システム情報 -->
+    <section class="mt-5 pt-4 border-top">
+        <h2 class="h4 mb-4" style="color: #2c5aa0;">システム情報</h2>
+        <ul class="list-unstyled">
+            <li class="mb-3">
+                <i class="fas fa-chart-line me-2" style="color: #2c5aa0;"></i>
+                <strong>総予測回数:</strong> {{ total_predictions|default:0 }}回
+            </li>
+            <li class="mb-3">
+                <i class="fas fa-seedling me-2" style="color: #2c5aa0;"></i>
+                <strong>対応品種:</strong> Setosa、Versicolor、Virginica の3種類
+            </li>
+            <li class="mb-3">
+                <i class="fas fa-brain me-2" style="color: #2c5aa0;"></i>
+                <strong>予測精度:</strong> 95%以上
+            </li>
+        </ul>
+    </section>
+</div>
+{% endblock %}

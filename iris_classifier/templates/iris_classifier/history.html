@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}予測履歴 - Iris Classifier{% endblock %}
+
+{% block nav_items_left %}
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'home:home' %}">HOME</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'diary:index' %}">DIARY</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link active" href="{% url 'iris_classifier:index' %}">IRIS CLASSIFIER</a>
+</li>
+{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h2 fw-bold mb-2">予測履歴</h1>
+            <p class="mb-0">過去の予測結果を確認できます</p>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- 戻るリンク -->
+            <div class="mb-4">
+                <a href="{% url 'iris_classifier:index' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> トップに戻る
+                </a>
+                <a href="{% url 'iris_classifier:predict' %}" class="btn btn-primary">
+                    <i class="fas fa-magic"></i> 新しく予測する
+                </a>
+            </div>
+
+            {% if predictions %}
+            <!-- 予測履歴一覧 -->
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-history"></i> あなたの予測履歴</h4>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>予測日時</th>
+                                    <th>予測結果</th>
+                                    <th>確率</th>
+                                    <th>がく片の長さ</th>
+                                    <th>がく片の幅</th>
+                                    <th>花弁の長さ</th>
+                                    <th>花弁の幅</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for prediction in predictions %}
+                                <tr>
+                                    <td>{{ prediction.created_at|date:"Y/m/d H:i" }}</td>
+                                    <td>
+                                        {% if prediction.prediction == 'Setosa' %}
+                                        <span class="badge bg-primary">{{ prediction.prediction }}</span>
+                                        {% elif prediction.prediction == 'Versicolor' %}
+                                        <span class="badge bg-success">{{ prediction.prediction }}</span>
+                                        {% else %}
+                                        <span class="badge bg-info">{{ prediction.prediction }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="width: 100px;">
+                                            <div class="progress-bar 
+                                                {% if prediction.probability >= 0.9 %}bg-success
+                                                {% elif prediction.probability >= 0.7 %}bg-info
+                                                {% else %}bg-warning{% endif %}" 
+                                                role="progressbar" 
+                                                style="width: {{ prediction.probability|floatformat:0 }}%"
+                                                aria-valuenow="{{ prediction.probability|floatformat:0 }}" 
+                                                aria-valuemin="0" 
+                                                aria-valuemax="100">
+                                                {{ prediction.probability|floatformat:0 }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ prediction.sepal_length }} cm</td>
+                                    <td>{{ prediction.sepal_width }} cm</td>
+                                    <td>{{ prediction.petal_length }} cm</td>
+                                    <td>{{ prediction.petal_width }} cm</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- ページネーション -->
+                    {% if is_paginated %}
+                    <nav aria-label="Page navigation" class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1" aria-label="First">
+                                    <span aria-hidden="true">&laquo;&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;&laquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;</span>
+                            </li>
+                            {% endif %}
+
+                            {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                            {% endfor %}
+
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                                    <span aria-hidden="true">&raquo;&raquo;</span>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;&raquo;</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 統計情報 -->
+            <div class="row mt-4">
+                <div class="col-md-4 mb-3">
+                    <div class="card text-center h-100">
+                        <div class="card-body">
+                            <i class="fas fa-chart-line fa-3x mb-3 text-primary"></i>
+                            <h4>{{ page_obj.paginator.count }}</h4>
+                            <p class="text-muted mb-0">総予測回数</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card text-center h-100">
+                        <div class="card-body">
+                            <i class="fas fa-calendar-alt fa-3x mb-3 text-success"></i>
+                            <h4>{{ predictions.first.created_at|date:"Y/m/d" }}</h4>
+                            <p class="text-muted mb-0">最終予測日</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card text-center h-100">
+                        <div class="card-body">
+                            <i class="fas fa-chart-bar fa-3x mb-3 text-info"></i>
+                            <h4>詳細</h4>
+                            <a href="{% url 'iris_classifier:analysis' %}" class="btn btn-outline-info btn-sm mt-2">
+                                データ分析を見る
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% else %}
+            <!-- 予測履歴がない場合 -->
+            <div class="card shadow">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-inbox fa-5x text-muted mb-4"></i>
+                    <h3 class="mb-3">予測履歴がありません</h3>
+                    <p class="text-muted mb-4">まだ予測を行っていません。早速アヤメの品種を予測してみましょう！</p>
+                    <a href="{% url 'iris_classifier:predict' %}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-magic"></i> 予測を開始する
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}

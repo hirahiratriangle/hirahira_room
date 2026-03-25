@@ -10,94 +10,104 @@
 <li class="nav-item">
     <a class="nav-link" href="{% url 'diary:index' %}">DIARY</a>
 </li>
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'iris_classifier:index' %}">IRIS CLASSIFIER</a>
+</li>
 {% endblock %}
 
 {% block header %}
-<header class="masthead text-center text-white">
-    <div class="masthead-content">
-        <div class="container px-5">
-            <h1 class="masthead-heading mb-0">Welcome to Hirahira Room</h1>
-            <h2 class="masthead-subheading mb-0">Your Personal Web Applications Hub</h2>
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h2 fw-bold mb-2">Hirahira Room</h1>
+            <p class="mb-3">Your Personal Web Applications Hub</p>
             {% if not user.is_authenticated %}
-            <a class="btn btn-primary btn-xl rounded-pill mt-5" href="{% url 'account_signup' %}">Get Started</a>
+            <a class="btn btn-light" href="{% url 'account_signup' %}">Get Started</a>
             {% else %}
-            <p class="mt-5 fs-4">Hello, {{ user.email }}!</p>
+            <p class="mb-0">Hello, {{ user.username }}!</p>
             {% endif %}
         </div>
     </div>
-    <div class="bg-circle-1 bg-circle"></div>
-    <div class="bg-circle-2 bg-circle"></div>
-    <div class="bg-circle-3 bg-circle"></div>
-    <div class="bg-circle-4 bg-circle"></div>
 </header>
 {% endblock %}
 
 {% block contents %}
-<div class="container px-5">
+<div class="container px-5 py-5">
     <!-- Applications Section -->
-    <section id="applications" class="py-5">
-        <div class="row gx-5 align-items-center">
-            <div class="col-lg-6 order-lg-2">
-                <div class="p-5">
-                    <img class="img-fluid rounded-circle" src="{% static 'assets/img/01.jpg' %}" alt="Diary App">
+    <section id="applications" class="mb-5">
+        <h2 class="h4 mb-4" style="color: #2c5aa0;">アプリケーション</h2>
+        <div class="list-group">
+            <!-- Diary -->
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2">
+                            <i class="fas fa-book me-2" style="color: #2c5aa0;"></i>
+                            Diary
+                        </h5>
+                        <p class="mb-2 text-muted">あなただけのプライベートな日記アプリケーション</p>
+                        <div class="mt-2">
+                            {% if user.is_authenticated %}
+                            <a href="{% url 'diary:diary_list' %}" class="btn btn-sm btn-outline-primary me-2">日記一覧</a>
+                            <a href="{% url 'diary:diary_create' %}" class="btn btn-sm btn-outline-primary">新規作成</a>
+                            {% else %}
+                            <a href="{% url 'diary:index' %}" class="btn btn-sm btn-outline-primary me-2">詳しく見る</a>
+                            <a href="{% url 'account_login' %}" class="btn btn-sm btn-outline-primary">ログイン</a>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="col-lg-6 order-lg-1">
-                <div class="p-5">
-                    <h2 class="display-4">Diary</h2>
-                    <p>記録し、振り返り、成長する。あなただけのプライベートな日記アプリケーション。日々の思い出を安全に保存し、いつでも振り返ることができます。</p>
-                    {% if user.is_authenticated %}
-                    <a href="{% url 'diary:diary_list' %}" class="btn btn-primary">日記一覧へ</a>
-                    <a href="{% url 'diary:diary_create' %}" class="btn btn-outline-primary">新規作成</a>
-                    {% else %}
-                    <a href="{% url 'diary:index' %}" class="btn btn-primary">詳しく見る</a>
-                    <a href="{% url 'account_login' %}" class="btn btn-outline-primary">ログインして始める</a>
-                    {% endif %}
+            
+            <!-- Iris Classifier -->
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2">
+                            <i class="fas fa-brain me-2" style="color: #2c5aa0;"></i>
+                            Iris Classifier
+                        </h5>
+                        <p class="mb-2 text-muted">機械学習によるアヤメの品種予測とデータ分析</p>
+                        <div class="mt-2">
+                            {% if user.is_authenticated %}
+                            <a href="{% url 'iris_classifier:predict' %}" class="btn btn-sm btn-outline-primary me-2">予測を試す</a>
+                            <a href="{% url 'iris_classifier:analysis' %}" class="btn btn-sm btn-outline-primary">分析を見る</a>
+                            {% else %}
+                            <a href="{% url 'iris_classifier:index' %}" class="btn btn-sm btn-outline-primary me-2">詳しく見る</a>
+                            <a href="{% url 'account_login' %}" class="btn btn-sm btn-outline-primary">ログイン</a>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
     
     <!-- Features Section -->
-    <section class="py-5" id="features">
-        <h2 class="text-center mb-5">主な機能</h2>
-        <div class="row">
-            <div class="col-lg-4 mb-4">
-                <div class="card h-100 text-center">
-                    <div class="card-body">
-                        <i class="fas fa-lock fa-3x mb-3 text-primary"></i>
-                        <h4 class="card-title">セキュア</h4>
-                        <p class="card-text">あなたのデータは安全に保護されています。ログイン認証により、プライバシーを確保。</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 mb-4">
-                <div class="card h-100 text-center">
-                    <div class="card-body">
-                        <i class="fas fa-mobile-alt fa-3x mb-3 text-primary"></i>
-                        <h4 class="card-title">レスポンシブ</h4>
-                        <p class="card-text">スマートフォン、タブレット、PCなど、どんなデバイスでも快適に利用できます。</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 mb-4">
-                <div class="card h-100 text-center">
-                    <div class="card-body">
-                        <i class="fas fa-chart-line fa-3x mb-3 text-primary"></i>
-                        <h4 class="card-title">データ分析</h4>
-                        <p class="card-text">データ分析と可視化機能で、新しい発見と洞察を得ることができます。</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <section id="features">
+        <h2 class="h4 mb-4" style="color: #2c5aa0;">主な機能</h2>
+        <ul class="list-unstyled">
+            <li class="mb-3">
+                <i class="fas fa-check-circle me-2" style="color: #2c5aa0;"></i>
+                <strong>セキュア:</strong> ログイン認証によりデータを安全に保護
+            </li>
+            <li class="mb-3">
+                <i class="fas fa-check-circle me-2" style="color: #2c5aa0;"></i>
+                <strong>レスポンシブ:</strong> スマートフォン、タブレット、PCに対応
+            </li>
+            <li class="mb-3">
+                <i class="fas fa-check-circle me-2" style="color: #2c5aa0;"></i>
+                <strong>データ分析:</strong> 可視化機能で新しい洞察を発見
+            </li>
+        </ul>
     </section>
 
     {% if not user.is_authenticated %}
     <!-- CTA Section -->
-    <section class="py-5 text-center">
-        <h2 class="mb-4">今すぐ始めましょう</h2>
-        <p class="lead mb-5">無料でアカウントを作成して、すべての機能をお試しください。</p>
-        <a href="{% url 'account_signup' %}" class="btn btn-primary btn-xl rounded-pill">アカウント作成</a>
+    <section class="mt-5 pt-4 border-top text-center">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">今すぐ始めましょう</h2>
+        <p class="text-muted mb-4">無料でアカウントを作成して、すべての機能をお試しください</p>
+        <a href="{% url 'account_signup' %}" class="btn btn-primary">アカウント作成</a>
     </section>
     {% endif %}
 </div>

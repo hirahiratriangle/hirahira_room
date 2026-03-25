@@ -65,4 +65,3 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')  # Gmail アドレス
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')  # アプリパスワード
 DEFAULT_FROM_EMAIL = 'Diary<EMAIL_HOST_USER>'
 
-DEBUG = os.getenv('DEBUG', 'True') == 'True'

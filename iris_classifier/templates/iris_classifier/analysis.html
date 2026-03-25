@@ -1,0 +1,360 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}データ分析 - Iris Classifier{% endblock %}
+
+{% block nav_items_left %}
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'home:home' %}">HOME</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'diary:index' %}">DIARY</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link active" href="{% url 'iris_classifier:index' %}">IRIS CLASSIFIER</a>
+</li>
+{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h2 fw-bold mb-2">データ分析</h1>
+            <p class="mb-0">アヤメ予測データの統計と可視化</p>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 my-5">
+    <!-- 戻るリンク -->
+    <div class="mb-4">
+        <a href="{% url 'iris_classifier:index' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> トップに戻る
+        </a>
+    </div>
+
+    <!-- 全体統計 -->
+    <section class="mb-5">
+        <h2 class="mb-4"><i class="fas fa-globe"></i> 全体統計</h2>
+        <div class="row">
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100 shadow">
+                    <div class="card-body">
+                        <i class="fas fa-chart-line fa-3x mb-3 text-primary"></i>
+                        <h3 class="card-title">{{ analysis_data.total_predictions }}</h3>
+                        <p class="card-text text-muted">総予測回数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100 shadow">
+                    <div class="card-body">
+                        <i class="fas fa-seedling fa-3x mb-3 text-primary"></i>
+                        <h3 class="card-title">{{ analysis_data.setosa_count }}</h3>
+                        <p class="card-text text-muted">Setosa</p>
+                        <small class="text-muted">{{ analysis_data.setosa_percentage|floatformat:1 }}%</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100 shadow">
+                    <div class="card-body">
+                        <i class="fas fa-seedling fa-3x mb-3 text-success"></i>
+                        <h3 class="card-title">{{ analysis_data.versicolor_count }}</h3>
+                        <p class="card-text text-muted">Versicolor</p>
+                        <small class="text-muted">{{ analysis_data.versicolor_percentage|floatformat:1 }}%</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100 shadow">
+                    <div class="card-body">
+                        <i class="fas fa-seedling fa-3x mb-3 text-info"></i>
+                        <h3 class="card-title">{{ analysis_data.virginica_count }}</h3>
+                        <p class="card-text text-muted">Virginica</p>
+                        <small class="text-muted">{{ analysis_data.virginica_percentage|floatformat:1 }}%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 品種分布の視覚化 -->
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie"></i> 品種分布</h5>
+            </div>
+            <div class="card-body">
+                {% if analysis_data.total_predictions > 0 %}
+                <div class="mb-3">
+                    <h6>Setosa</h6>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-primary" role="progressbar" 
+                             style="width: {{ analysis_data.setosa_percentage }}%"
+                             aria-valuenow="{{ analysis_data.setosa_percentage }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ analysis_data.setosa_count }} ({{ analysis_data.setosa_percentage|floatformat:1 }}%)
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Versicolor</h6>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ analysis_data.versicolor_percentage }}%"
+                             aria-valuenow="{{ analysis_data.versicolor_percentage }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ analysis_data.versicolor_count }} ({{ analysis_data.versicolor_percentage|floatformat:1 }}%)
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Virginica</h6>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ analysis_data.virginica_percentage }}%"
+                             aria-valuenow="{{ analysis_data.virginica_percentage }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ analysis_data.virginica_count }} ({{ analysis_data.virginica_percentage|floatformat:1 }}%)
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> まだ予測データがありません。
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    {% if user.is_authenticated and user_predictions %}
+    <!-- ユーザー個別統計 -->
+    <section class="mb-5">
+        <h2 class="mb-4"><i class="fas fa-user"></i> あなたの統計</h2>
+        <div class="row">
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100 shadow border-success">
+                    <div class="card-body">
+                        <i class="fas fa-chart-bar fa-3x mb-3 text-success"></i>
+                        <h3 class="card-title">{{ user_predictions }}</h3>
+                        <p class="card-text text-muted">あなたの予測回数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100 shadow">
+                    <div class="card-body">
+                        <i class="fas fa-seedling fa-3x mb-3 text-primary"></i>
+                        <h3 class="card-title">{{ user_stats.setosa }}</h3>
+                        <p class="card-text text-muted">Setosa</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100 shadow">
+                    <div class="card-body">
+                        <i class="fas fa-seedling fa-3x mb-3 text-success"></i>
+                        <h3 class="card-title">{{ user_stats.versicolor }}</h3>
+                        <p class="card-text text-muted">Versicolor</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-4">
+                <div class="card text-center h-100 shadow">
+                    <div class="card-body">
+                        <i class="fas fa-seedling fa-3x mb-3 text-info"></i>
+                        <h3 class="card-title">{{ user_stats.virginica }}</h3>
+                        <p class="card-text text-muted">Virginica</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ユーザーの品種分布 -->
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-user-chart"></i> あなたの品種分布</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6>Setosa</h6>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-primary" role="progressbar" 
+                             style="width: {{ user_stats.setosa_percentage }}%"
+                             aria-valuenow="{{ user_stats.setosa_percentage }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ user_stats.setosa }} ({{ user_stats.setosa_percentage|floatformat:1 }}%)
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Versicolor</h6>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ user_stats.versicolor_percentage }}%"
+                             aria-valuenow="{{ user_stats.versicolor_percentage }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ user_stats.versicolor }} ({{ user_stats.versicolor_percentage|floatformat:1 }}%)
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <h6>Virginica</h6>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ user_stats.virginica_percentage }}%"
+                             aria-valuenow="{{ user_stats.virginica_percentage }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ user_stats.virginica }} ({{ user_stats.virginica_percentage|floatformat:1 }}%)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- アヤメの特徴について -->
+    <section class="mb-5">
+        <h2 class="mb-4"><i class="fas fa-book"></i> アヤメの特徴について</h2>
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100 shadow">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">がく片（Sepal）</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>がく片は花の外側を保護する緑色の葉のような部分です。アヤメの分類では、がく片の長さと幅が重要な特徴となります。</p>
+                        <ul>
+                            <li><strong>一般的な範囲</strong>
+                                <ul>
+                                    <li>長さ: 4.0 - 8.0 cm</li>
+                                    <li>幅: 2.0 - 4.5 cm</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card h-100 shadow">
+                    <div class="card-header bg-warning text-white">
+                        <h5 class="mb-0">花弁（Petal）</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>花弁は花の内側にある色鮮やかな部分です。品種によって花弁のサイズが大きく異なるため、分類の重要な指標となります。</p>
+                        <ul>
+                            <li><strong>一般的な範囲</strong>
+                                <ul>
+                                    <li>長さ: 1.0 - 7.0 cm</li>
+                                    <li>幅: 0.1 - 2.5 cm</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">品種の特徴</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <h6 class="text-primary">Setosa（セトサ）</h6>
+                        <ul class="small">
+                            <li>花弁が最も小さい</li>
+                            <li>がく片が大きい</li>
+                            <li>最も区別しやすい品種</li>
+                            <li>花弁の長さが2cm未満</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <h6 class="text-success">Versicolor（バーシカラー）</h6>
+                        <ul class="small">
+                            <li>中程度のサイズ</li>
+                            <li>SetosaとVirginicaの中間</li>
+                            <li>花弁の長さが3-5cm程度</li>
+                            <li>がく片の幅が狭め</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <h6 class="text-info">Virginica（バージニカ）</h6>
+                        <ul class="small">
+                            <li>最も大きな品種</li>
+                            <li>花弁とがく片ともに大きい</li>
+                            <li>花弁の長さが5cm以上</li>
+                            <li>花弁の幅が広い</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- アクションボタン -->
+    <div class="text-center mb-4">
+        <a href="{% url 'iris_classifier:predict' %}" class="btn btn-primary btn-lg me-2">
+            <i class="fas fa-magic"></i> 予測を試す
+        </a>
+        {% if user.is_authenticated %}
+        <a href="{% url 'iris_classifier:history' %}" class="btn btn-success btn-lg">
+            <i class="fas fa-history"></i> 予測履歴を見る
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- データセット管理 -->
+    <div class="text-center mt-5">
+        <div class="row justify-content-center">
+            <!-- データセットダウンロード -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow h-100">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-download"></i> データセット</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-3">
+                            トレーニングに使用しているIrisデータセット（150サンプル）をCSV形式でダウンロードできます。
+                        </p>
+                        <a href="{% url 'iris_classifier:download_dataset' %}" class="btn btn-info btn-lg">
+                            <i class="fas fa-download"></i> データセットをダウンロード
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- モデル再トレーニング -->
+            <div class="col-md-6 mb-4">
+                <div class="card shadow h-100">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-sync-alt"></i> モデル再トレーニング</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-3">
+                            CSVファイルをアップロードして、カスタムデータでモデルを再トレーニングできます。
+                        </p>
+                        <p class="small text-muted mb-3">
+                            <strong>CSV形式:</strong> sepal_length, sepal_width, petal_length, petal_width, species<br>
+                            <strong>品種名:</strong> Setosa, Versicolor, Virginica
+                        </p>
+                        <form method="post" action="{% url 'iris_classifier:retrain' %}" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <input type="file" name="training_data" class="form-control" accept=".csv" required>
+                            </div>
+                            <button type="submit" class="btn btn-warning btn-lg w-100">
+                                <i class="fas fa-upload"></i> CSVをアップロードして再トレーニング
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

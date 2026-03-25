@@ -1,0 +1,324 @@
+2025-10-30T11:57:19.2052572Z,Updating submodules.,038d4216-6846-41b1-868b-29af7f21579e,0
+2025-10-30T11:57:20.5316897Z,Preparing deployment for commit id '6e16104b-b'.,8896b839-858f-428d-aed4-8bc948aa4b71,0
+2025-10-30T11:57:21.7390330Z,PreDeployment: context.CleanOutputPath False,26813f95-2a63-4fe9-8dd7-2cd5309c4bdf,0
+2025-10-30T11:57:22.4197163Z,PreDeployment: context.OutputPath /home/site/wwwroot,7f0d13f6-1f10-4a23-81d9-5bf5c8fd63ad,0
+2025-10-30T11:57:22.8018196Z,Repository path is /tmp/zipdeploy/extracted,256581aa-5d3e-4e5c-935f-02da214d4819,0
+2025-10-30T11:57:23.6492516Z,Running oryx build...,30dcf73e-86e5-4667-9291-0fed59b1b44c,0
+	2025-10-30T11:57:23.6921422Z,Command: oryx build /tmp/zipdeploy/extracted -o /home/site/wwwroot --platform python --platform-version 3.11 -p virtualenv_name=antenv --log-file /tmp/build-debug.log  -i /tmp/8de17ab7b71a508 --compress-destination-dir | tee /tmp/oryx-build.log,,0
+	2025-10-30T11:57:26.2691025Z,Operation performed by Microsoft Oryx&comma; https://github.com/Microsoft/Oryx,,0
+	2025-10-30T11:57:26.2974557Z,You can report issues at https://github.com/Microsoft/Oryx/issues,,0
+	2025-10-30T11:57:26.3092352Z,,,0
+	2025-10-30T11:57:26.3266537Z,Oryx Version: 0.2.20250611.1+0649de32f1279969c9023dd41b389cce4bb94493&comma; Commit: 0649de32f1279969c9023dd41b389cce4bb94493&comma; ReleaseTagName: 20250611.1,,0
+	2025-10-30T11:57:26.3381893Z,,,0
+	2025-10-30T11:57:26.3491000Z,Build Operation ID: 530476c7171d301f,,0
+	2025-10-30T11:57:26.3611359Z,Repository Commit : 6e16104b-be01-41a3-8b56-37ecded85244,,0
+	2025-10-30T11:57:26.3728061Z,OS Type           : bullseye,,0
+	2025-10-30T11:57:26.3928642Z,Image Type        : githubactions,,0
+	2025-10-30T11:57:26.4063977Z,,,0
+	2025-10-30T11:57:26.4171113Z,Primary SDK Storage URL: https://oryx-cdn.microsoft.io,,0
+	2025-10-30T11:57:26.4316451Z,Backup SDK Storage URL: https://oryxsdks-cdn.azureedge.net,,0
+	2025-10-30T11:57:26.4414483Z,Detecting platforms...,,0
+	2025-10-30T11:57:26.4527794Z,External SDK provider is enabled.,,0
+	2025-10-30T11:57:26.4634270Z,Requesting metadata for platform python from external SDK provider,,0
+	2025-10-30T11:57:27.6241888Z,Requesting metadata for platform python from external SDK provider,,0
+	2025-10-30T11:57:28.6727127Z,Successfully requested blob for platform python&comma; blobName defaultVersion.bullseye.txt&comma; available at /var/OryxSdks/python/defaultVersion.bullseye.txt,,0
+	2025-10-30T11:57:28.7184990Z,Detected following platforms:,,0
+	2025-10-30T11:57:28.7312727Z,  python: 3.11.14,,0
+	2025-10-30T11:57:28.7422582Z,Requesting metadata for platform python from external SDK provider,,0
+	2025-10-30T11:57:32.2631091Z,Successfully requested blob for platform python&comma; blobName python-bullseye-3.11.14.tar.gz&comma; available at /var/OryxSdks/python/python-bullseye-3.11.14.tar.gz,,0
+	2025-10-30T11:57:32.5381682Z,Version '3.11.14' of platform 'python' is not installed. Generating script to install it...,,0
+	2025-10-30T11:57:32.6899091Z,,,0
+	2025-10-30T11:57:32.7244918Z,Using intermediate directory '/tmp/8de17ab7b71a508'.,,0
+	2025-10-30T11:57:32.7366541Z,,,0
+	2025-10-30T11:57:32.7487193Z,Copying files to the intermediate directory...,,0
+	2025-10-30T11:57:33.0802500Z,Done in 1 sec(s).,,0
+	2025-10-30T11:57:33.0994758Z,,,0
+	2025-10-30T11:57:33.1134776Z,Source directory     : /tmp/8de17ab7b71a508,,0
+	2025-10-30T11:57:33.1349899Z,Destination directory: /home/site/wwwroot,,0
+	2025-10-30T11:57:33.1517338Z,,,0
+	2025-10-30T11:57:33.1711119Z,,,0
+	2025-10-30T11:57:33.1853610Z,Downloading and extracting 'python' version '3.11.14' to '/tmp/oryx/platforms/python/3.11.14'...,,0
+	2025-10-30T11:57:33.2047164Z,Detected image debian flavor: bullseye.,,0
+	2025-10-30T11:57:33.2155982Z,Skipping download of python version 3.11.14 as it is available in external sdk provider cache...,,0
+	2025-10-30T11:57:33.2264069Z,Extracting contents...,,0
+	2025-10-30T11:57:42.7884300Z,Successfully extracted python version 3.11.14 from external sdk provider cache...,,0
+	2025-10-30T11:57:42.8157737Z,Done in 9 sec(s).,,0
+	2025-10-30T11:57:42.8325016Z,,,0
+	2025-10-30T11:57:42.8468196Z,image detector file exists&comma; platform is python..,,0
+	2025-10-30T11:57:42.8645896Z,OS detector file exists&comma; OS is bullseye..,,0
+	2025-10-30T11:57:42.8988785Z,Python Version: /tmp/oryx/platforms/python/3.11.14/bin/python3.11,,0
+	2025-10-30T11:57:42.9135665Z,Creating directory for command manifest file if it does not exist,,0
+	2025-10-30T11:57:42.9268344Z,Removing existing manifest file,,0
+	2025-10-30T11:57:42.9398662Z,Python Virtual Environment: antenv,,0
+	2025-10-30T11:57:42.9551788Z,Creating virtual environment...,,0
+	2025-10-30T11:57:46.7479207Z,Activating virtual environment...,,0
+	2025-10-30T11:57:46.7797809Z,Running pip install...,,0
+	2025-10-30T11:58:27.8848437Z,[11:57:47+0000] Collecting asgiref==3.8.1 (from -r requirements.txt (line 1)),,0
+	2025-10-30T11:58:27.9131077Z,[11:57:47+0000]   Downloading asgiref-3.8.1-py3-none-any.whl.metadata (9.3 kB),,0
+	2025-10-30T11:58:27.9315720Z,[11:57:47+0000] Collecting Django==5.2.3 (from -r requirements.txt (line 2)),,0
+	2025-10-30T11:58:27.9497988Z,[11:57:47+0000]   Downloading django-5.2.3-py3-none-any.whl.metadata (4.1 kB),,0
+	2025-10-30T11:58:27.9683018Z,[11:57:47+0000] Collecting django-allauth==65.9.0 (from -r requirements.txt (line 3)),,0
+	2025-10-30T11:58:27.9856088Z,[11:57:47+0000]   Downloading django_allauth-65.9.0.tar.gz (1.7 MB),,0
+	2025-10-30T11:58:27.9975866Z,[11:57:47+0000]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 28.2 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.0147507Z,[11:57:48+0000]   Installing build dependencies: started,,0
+	2025-10-30T11:58:28.0281759Z,[11:57:50+0000]   Installing build dependencies: finished with status 'done',,0
+	2025-10-30T11:58:28.0425924Z,[11:57:50+0000]   Getting requirements to build wheel: started,,0
+	2025-10-30T11:58:28.0563103Z,[11:57:50+0000]   Getting requirements to build wheel: finished with status 'done',,0
+	2025-10-30T11:58:28.0690675Z,[11:57:50+0000]   Preparing metadata (pyproject.toml): started,,0
+	2025-10-30T11:58:28.0867822Z,[11:57:51+0000]   Preparing metadata (pyproject.toml): finished with status 'done',,0
+	2025-10-30T11:58:28.1046388Z,[11:57:51+0000] Collecting django-bootstrap5==25.1 (from -r requirements.txt (line 4)),,0
+	2025-10-30T11:58:28.1174943Z,[11:57:51+0000]   Downloading django_bootstrap5-25.1-py3-none-any.whl.metadata (5.8 kB),,0
+	2025-10-30T11:58:28.1399456Z,[11:57:51+0000] Collecting djangorestframework==3.16.0 (from -r requirements.txt (line 5)),,0
+	2025-10-30T11:58:28.1594258Z,[11:57:51+0000]   Downloading djangorestframework-3.16.0-py3-none-any.whl.metadata (11 kB),,0
+	2025-10-30T11:58:28.1726146Z,[11:57:51+0000] Collecting joblib==1.5.1 (from -r requirements.txt (line 6)),,0
+	2025-10-30T11:58:28.1864051Z,[11:57:51+0000]   Downloading joblib-1.5.1-py3-none-any.whl.metadata (5.6 kB),,0
+	2025-10-30T11:58:28.1990624Z,[11:57:51+0000] Collecting narwhals==1.46.0 (from -r requirements.txt (line 7)),,0
+	2025-10-30T11:58:28.2105914Z,[11:57:51+0000]   Downloading narwhals-1.46.0-py3-none-any.whl.metadata (11 kB),,0
+	2025-10-30T11:58:28.2248740Z,[11:57:52+0000] Collecting numpy==2.3.1 (from -r requirements.txt (line 8)),,0
+	2025-10-30T11:58:28.2387759Z,[11:57:52+0000]   Downloading numpy-2.3.1-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (62 kB),,0
+	2025-10-30T11:58:28.2508502Z,[11:57:52+0000]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.1/62.1 kB 3.8 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.2674623Z,[11:57:52+0000] Collecting packaging==25.0 (from -r requirements.txt (line 9)),,0
+	2025-10-30T11:58:28.2791946Z,[11:57:52+0000]   Downloading packaging-25.0-py3-none-any.whl.metadata (3.3 kB),,0
+	2025-10-30T11:58:28.2914183Z,[11:57:52+0000] Collecting pandas==2.3.1 (from -r requirements.txt (line 10)),,0
+	2025-10-30T11:58:28.3302167Z,[11:57:52+0000]   Downloading pandas-2.3.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (91 kB),,0
+	2025-10-30T11:58:28.3489591Z,[11:57:52+0000]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 91.2/91.2 kB 4.3 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.3691346Z,[11:57:53+0000] Collecting pillow==11.2.1 (from -r requirements.txt (line 11)),,0
+	2025-10-30T11:58:28.3876390Z,[11:57:53+0000]   Downloading pillow-11.2.1-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (8.9 kB),,0
+	2025-10-30T11:58:28.4034318Z,[11:57:53+0000] Collecting plotly==6.2.0 (from -r requirements.txt (line 12)),,0
+	2025-10-30T11:58:28.4172891Z,[11:57:53+0000]   Downloading plotly-6.2.0-py3-none-any.whl.metadata (8.5 kB),,0
+	2025-10-30T11:58:28.4321710Z,[11:57:53+0000] Collecting python-dateutil==2.9.0.post0 (from -r requirements.txt (line 13)),,0
+	2025-10-30T11:58:28.4552985Z,[11:57:53+0000]   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB),,0
+	2025-10-30T11:58:28.4663962Z,[11:57:53+0000] Collecting pytz==2025.2 (from -r requirements.txt (line 14)),,0
+	2025-10-30T11:58:28.4814751Z,[11:57:53+0000]   Downloading pytz-2025.2-py2.py3-none-any.whl.metadata (22 kB),,0
+	2025-10-30T11:58:28.4981472Z,[11:57:53+0000] Collecting scikit-learn==1.7.0 (from -r requirements.txt (line 15)),,0
+	2025-10-30T11:58:28.5154976Z,[11:57:53+0000]   Downloading scikit_learn-1.7.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (17 kB),,0
+	2025-10-30T11:58:28.5330951Z,[11:57:53+0000] Collecting scipy==1.16.0 (from -r requirements.txt (line 16)),,0
+	2025-10-30T11:58:28.5515579Z,[11:57:53+0000]   Downloading scipy-1.16.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (61 kB),,0
+	2025-10-30T11:58:28.5669864Z,[11:57:53+0000]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.9/61.9 kB 3.0 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.5783768Z,[11:57:53+0000] Collecting six==1.17.0 (from -r requirements.txt (line 17)),,0
+	2025-10-30T11:58:28.5887548Z,[11:57:53+0000]   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB),,0
+	2025-10-30T11:58:28.6025994Z,[11:57:53+0000] Collecting sqlparse==0.5.3 (from -r requirements.txt (line 18)),,0
+	2025-10-30T11:58:28.6140043Z,[11:57:53+0000]   Downloading sqlparse-0.5.3-py3-none-any.whl.metadata (3.9 kB),,0
+	2025-10-30T11:58:28.6249154Z,[11:57:53+0000] Collecting threadpoolctl==3.6.0 (from -r requirements.txt (line 19)),,0
+	2025-10-30T11:58:28.6357748Z,[11:57:53+0000]   Downloading threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB),,0
+	2025-10-30T11:58:28.6472414Z,[11:57:53+0000] Collecting tzdata==2025.2 (from -r requirements.txt (line 20)),,0
+	2025-10-30T11:58:28.6621944Z,[11:57:54+0000]   Downloading tzdata-2025.2-py2.py3-none-any.whl.metadata (1.4 kB),,0
+	2025-10-30T11:58:28.6760759Z,[11:57:54+0000] Collecting whitenoise==6.9.0 (from -r requirements.txt (line 21)),,0
+	2025-10-30T11:58:28.6876043Z,[11:57:54+0000]   Downloading whitenoise-6.9.0-py3-none-any.whl.metadata (3.6 kB),,0
+	2025-10-30T11:58:28.7016646Z,[11:57:54+0000] Downloading asgiref-3.8.1-py3-none-any.whl (23 kB),,0
+	2025-10-30T11:58:28.7117492Z,[11:57:54+0000] Downloading django-5.2.3-py3-none-any.whl (8.3 MB),,0
+	2025-10-30T11:58:28.7214973Z,[11:57:55+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.3/8.3 MB 15.2 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.7354028Z,[11:57:55+0000] Downloading django_bootstrap5-25.1-py3-none-any.whl (26 kB),,0
+	2025-10-30T11:58:28.7476554Z,[11:57:55+0000] Downloading djangorestframework-3.16.0-py3-none-any.whl (1.1 MB),,0
+	2025-10-30T11:58:28.7604790Z,[11:57:55+0000]    ━━━━━━��━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 33.9 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.7739276Z,[11:57:55+0000] Downloading joblib-1.5.1-py3-none-any.whl (307 kB),,0
+	2025-10-30T11:58:28.7879247Z,[11:57:55+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 307.7/307.7 kB 12.6 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.8193502Z,[11:57:55+0000] Downloading narwhals-1.46.0-py3-none-any.whl (373 kB),,0
+	2025-10-30T11:58:28.8322114Z,[11:57:55+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 373.4/373.4 kB 8.3 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.8454247Z,[11:57:55+0000] Downloading numpy-2.3.1-cp311-cp311-manylinux_2_28_x86_64.whl (16.9 MB),,0
+	2025-10-30T11:58:28.8694651Z,[11:57:55+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.9/16.9 MB 22.6 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.8838797Z,[11:57:55+0000] Downloading packaging-25.0-py3-none-any.whl (66 kB),,0
+	2025-10-30T11:58:28.9044788Z,[11:57:55+0000]    ━━━━━━━━━━━━━━━━��━━━━━━━━━━━━━━━━━━━━━━━ 66.5/66.5 kB 1.5 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.9293269Z,[11:57:55+0000] Downloading pandas-2.3.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.4 MB),,0
+	2025-10-30T11:58:28.9450398Z,[11:57:56+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.4/12.4 MB 23.9 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:28.9601348Z,[11:57:56+0000] Downloading pillow-11.2.1-cp311-cp311-manylinux_2_28_x86_64.whl (4.6 MB),,0
+	2025-10-30T11:58:28.9794231Z,[11:57:56+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.6/4.6 MB 19.1 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:29.0011516Z,[11:57:56+0000] Downloading plotly-6.2.0-py3-none-any.whl (9.6 MB),,0
+	2025-10-30T11:58:29.0171680Z,[11:57:57+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.6/9.6 MB 10.3 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:29.0332352Z,[11:57:57+0000] Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB),,0
+	2025-10-30T11:58:29.0554872Z,[11:57:57+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 229.9/229.9 kB 3.2 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:29.0698092Z,[11:57:57+0000] Downloading pytz-2025.2-py2.py3-none-any.whl (509 kB),,0
+	2025-10-30T11:58:29.0820466Z,[11:57:57+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 509.2/509.2 kB 17.0 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:29.1022729Z,[11:57:57+0000] Downloading scikit_learn-1.7.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.9 MB),,0
+	2025-10-30T11:58:29.1173679Z,[11:57:58+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.9/12.9 MB 29.3 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:29.1445933Z,[11:57:58+0000] Downloading scipy-1.16.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (35.3 MB),,0
+	2025-10-30T11:58:29.1670596Z,[11:57:59+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 6.0 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:29.1788256Z,[11:57:59+0000] Downloading six-1.17.0-py2.py3-none-any.whl (11 kB),,0
+	2025-10-30T11:58:29.1916243Z,[11:58:00+0000] Downloading sqlparse-0.5.3-py3-none-any.whl (44 kB),,0
+	2025-10-30T11:58:29.2043532Z,[11:58:00+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 44.4/44.4 kB 523.9 kB/s eta 0:00:00,,0
+	2025-10-30T11:58:29.2193221Z,[11:58:00+0000] Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB),,0
+	2025-10-30T11:58:29.2333814Z,[11:58:00+0000] Downloading tzdata-2025.2-py2.py3-none-any.whl (347 kB),,0
+	2025-10-30T11:58:29.2448924Z,[11:58:00+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 347.8/347.8 kB 6.0 MB/s eta 0:00:00,,0
+	2025-10-30T11:58:29.2647465Z,[11:58:00+0000] Downloading whitenoise-6.9.0-py3-none-any.whl (20 kB),,0
+	2025-10-30T11:58:29.2757277Z,[11:58:00+0000] Building wheels for collected packages: django-allauth,,0
+	2025-10-30T11:58:29.2898871Z,[11:58:00+0000]   Building wheel for django-allauth (pyproject.toml): started,,0
+	2025-10-30T11:58:29.3005124Z,[11:58:02+0000]   Building wheel for django-allauth (pyproject.toml): finished with status 'done',,0
+	2025-10-30T11:58:29.3964647Z,[11:58:02+0000]   Created wheel for django-allauth: filename=django_allauth-65.9.0-py3-none-any.whl size=1850582 sha256=429a89da250464d48885c4d6c3ab28e4d0da131564b30690bc12039a553c5c68,,0
+	2025-10-30T11:58:29.5055572Z,[11:58:02+0000]   Stored in directory: /usr/local/share/pip-cache/wheels/b6/e1/e5/10d37714f73e953838413da1044ca53ca47585c950ddcea398,,0
+	2025-10-30T11:58:29.5237916Z,[11:58:02+0000] Successfully built django-allauth,,0
+	2025-10-30T11:58:29.5779995Z,[11:58:02+0000] Installing collected packages: pytz&comma; whitenoise&comma; tzdata&comma; threadpoolctl&comma; sqlparse&comma; six&comma; pillow&comma; packaging&comma; numpy&comma; narwhals&comma; joblib&comma; asgiref&comma; scipy&comma; python-dateutil&comma; plotly&comma; Django&comma; scikit-learn&comma; pandas&comma; djangorestframework&comma; django-bootstrap5&comma; django-allauth,,0
+	2025-10-30T11:58:29.6009953Z,[11:58:27+0000] Successfully installed Django-5.2.3 asgiref-3.8.1 django-allauth-65.9.0 django-bootstrap5-25.1 djangorestframework-3.16.0 joblib-1.5.1 narwhals-1.46.0 numpy-2.3.1 packaging-25.0 pandas-2.3.1 pillow-11.2.1 plotly-6.2.0 python-dateutil-2.9.0.post0 pytz-2025.2 scikit-learn-1.7.0 scipy-1.16.0 six-1.17.0 sqlparse-0.5.3 threadpoolctl-3.6.0 tzdata-2025.2 whitenoise-6.9.0,,0
+	2025-10-30T11:58:29.6209939Z,,,0
+	2025-10-30T11:58:29.6376823Z,[notice] A new release of pip is available: 24.0 -> 25.3,,0
+	2025-10-30T11:58:29.6526302Z,[notice] To update&comma; run: pip install --upgrade pip,,0
+	2025-10-30T11:58:29.6917844Z,,,0
+	2025-10-30T11:58:29.7039852Z,Content in source directory is a Django app,,0
+	2025-10-30T11:58:29.7148991Z,Running collectstatic...,,0
+	2025-10-30T11:58:29.7266598Z,Traceback (most recent call last):,,0
+	2025-10-30T11:58:29.7401018Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 25&comma; in <module>,,0
+	2025-10-30T11:58:29.7511779Z,    import psycopg as Database,,0
+	2025-10-30T11:58:29.7634167Z,ModuleNotFoundError: No module named 'psycopg',,0
+	2025-10-30T11:58:29.7748799Z,,,0
+	2025-10-30T11:58:29.7850546Z,During handling of the above exception&comma; another exception occurred:,,0
+	2025-10-30T11:58:29.7951751Z,,,0
+	2025-10-30T11:58:29.8089077Z,Traceback (most recent call last):,,0
+	2025-10-30T11:58:29.8194404Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 27&comma; in <module>,,0
+	2025-10-30T11:58:29.8314664Z,    import psycopg2 as Database,,0
+	2025-10-30T11:58:29.8427527Z,ModuleNotFoundError: No module named 'psycopg2',,0
+	2025-10-30T11:58:29.8546672Z,,,0
+	2025-10-30T11:58:29.8774242Z,During handling of the above exception&comma; another exception occurred:,,0
+	2025-10-30T11:58:29.8897661Z,,,0
+	2025-10-30T11:58:29.9033167Z,Traceback (most recent call last):,,0
+	2025-10-30T11:58:29.9491470Z,  File "/tmp/8de17ab7b71a508/manage.py"&comma; line 22&comma; in <module>,,0
+	2025-10-30T11:58:29.9636492Z,    main(),,0
+	2025-10-30T11:58:29.9733213Z,  File "/tmp/8de17ab7b71a508/manage.py"&comma; line 18&comma; in main,,0
+	2025-10-30T11:58:29.9824384Z,    execute_from_command_line(sys.argv),,0
+	2025-10-30T11:58:29.9945935Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/core/management/__init__.py"&comma; line 442&comma; in execute_from_command_line,,0
+	2025-10-30T11:58:30.0046094Z,    utility.execute(),,0
+	2025-10-30T11:58:30.0139339Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/core/management/__init__.py"&comma; line 416&comma; in execute,,0
+	2025-10-30T11:58:30.0270278Z,    django.setup(),,0
+	2025-10-30T11:58:30.0361260Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/__init__.py"&comma; line 24&comma; in setup,,0
+	2025-10-30T11:58:30.0454620Z,    apps.populate(settings.INSTALLED_APPS),,0
+	2025-10-30T11:58:30.0572791Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/apps/registry.py"&comma; line 116&comma; in populate,,0
+	2025-10-30T11:58:30.0676388Z,    app_config.import_models(),,0
+	2025-10-30T11:58:30.0772237Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/apps/config.py"&comma; line 269&comma; in import_models,,0
+	2025-10-30T11:58:30.0881421Z,    self.models_module = import_module(models_module_name),,0
+	2025-10-30T11:58:30.0973134Z,                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.1077257Z,  File "/tmp/oryx/platforms/python/3.11.14/lib/python3.11/importlib/__init__.py"&comma; line 126&comma; in import_module,,0
+	2025-10-30T11:58:30.1240417Z,    return _bootstrap._gcd_import(name[level:]&comma; package&comma; level),,0
+	2025-10-30T11:58:30.1359067Z,           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.1505952Z,  File "<frozen importlib._bootstrap>"&comma; line 1204&comma; in _gcd_import,,0
+	2025-10-30T11:58:30.1601476Z,  File "<frozen importlib._bootstrap>"&comma; line 1176&comma; in _find_and_load,,0
+	2025-10-30T11:58:30.1693219Z,  File "<frozen importlib._bootstrap>"&comma; line 1147&comma; in _find_and_load_unlocked,,0
+	2025-10-30T11:58:30.1786139Z,  File "<frozen importlib._bootstrap>"&comma; line 690&comma; in _load_unlocked,,0
+	2025-10-30T11:58:30.1907421Z,  File "<frozen importlib._bootstrap_external>"&comma; line 940&comma; in exec_module,,0
+	2025-10-30T11:58:30.2009202Z,  File "<frozen importlib._bootstrap>"&comma; line 241&comma; in _call_with_frames_removed,,0
+	2025-10-30T11:58:30.2147833Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/contrib/auth/models.py"&comma; line 5&comma; in <module>,,0
+	2025-10-30T11:58:30.2310468Z,    from django.contrib.auth.base_user import AbstractBaseUser&comma; BaseUserManager,,0
+	2025-10-30T11:58:30.2437107Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/contrib/auth/base_user.py"&comma; line 43&comma; in <module>,,0
+	2025-10-30T11:58:30.2573132Z,    class AbstractBaseUser(models.Model):,,0
+	2025-10-30T11:58:30.2700994Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/base.py"&comma; line 145&comma; in __new__,,0
+	2025-10-30T11:58:30.2826003Z,    new_class.add_to_class("_meta"&comma; Options(meta&comma; app_label)),,0
+	2025-10-30T11:58:30.2932761Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/base.py"&comma; line 373&comma; in add_to_class,,0
+	2025-10-30T11:58:30.3065729Z,    value.contribute_to_class(cls&comma; name),,0
+	2025-10-30T11:58:30.3184972Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/options.py"&comma; line 238&comma; in contribute_to_class,,0
+	2025-10-30T11:58:30.3354965Z,    self.db_table&comma; connection.ops.max_name_length(),,0
+	2025-10-30T11:58:30.3460842Z,                   ^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.3598176Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/utils/connection.py"&comma; line 15&comma; in __getattr__,,0
+	2025-10-30T11:58:30.3772382Z,    return getattr(self._connections[self._alias]&comma; item),,0
+	2025-10-30T11:58:30.3889743Z,                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.4031029Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/utils/connection.py"&comma; line 62&comma; in __getitem__,,0
+	2025-10-30T11:58:30.4176131Z,    conn = self.create_connection(alias),,0
+	2025-10-30T11:58:30.4329577Z,           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.4460266Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/utils.py"&comma; line 193&comma; in create_connection,,0
+	2025-10-30T11:58:30.4570541Z,    backend = load_backend(db["ENGINE"]),,0
+	2025-10-30T11:58:30.4702457Z,              ^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.4846412Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/utils.py"&comma; line 113&comma; in load_backend,,0
+	2025-10-30T11:58:30.4972019Z,    return import_module("%s.base" % backend_name),,0
+	2025-10-30T11:58:30.5106437Z,           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.5240366Z,  File "/tmp/oryx/platforms/python/3.11.14/lib/python3.11/importlib/__init__.py"&comma; line 126&comma; in import_module,,0
+	2025-10-30T11:58:30.5463004Z,    return _bootstrap._gcd_import(name[level:]&comma; package&comma; level),,0
+	2025-10-30T11:58:30.5582306Z,           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.5703143Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 29&comma; in <module>,,0
+	2025-10-30T11:58:30.5872181Z,    raise ImproperlyConfigured("Error loading psycopg2 or psycopg module"),,0
+	2025-10-30T11:58:30.6034888Z,django.core.exceptions.ImproperlyConfigured: Error loading psycopg2 or psycopg module,,0
+	2025-10-30T11:58:30.6141585Z,"2025-10-30 11:58:28"|WARNING|Traceback (most recent call last):,,0
+	2025-10-30T11:58:30.6268049Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 25&comma; in <module>,,0
+	2025-10-30T11:58:30.6426389Z,    import psycopg as Database,,0
+	2025-10-30T11:58:30.6531054Z,ModuleNotFoundError: No module named 'psycopg',,0
+	2025-10-30T11:58:30.6676619Z,,,0
+	2025-10-30T11:58:30.6793944Z,During handling of the above exception&comma; another exception occurred:,,0
+	2025-10-30T11:58:30.6904685Z,,,0
+	2025-10-30T11:58:30.7116834Z,Traceback (most recent call last):,,0
+	2025-10-30T11:58:30.7262912Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 27&comma; in <module>,,0
+	2025-10-30T11:58:30.7440936Z,    import psycopg2 as Database,,0
+	2025-10-30T11:58:30.7596431Z,ModuleNotFoundError: No module named 'psycopg2',,0
+	2025-10-30T11:58:30.7703632Z,,,0
+	2025-10-30T11:58:30.7815246Z,During handling of the above exception&comma; another exception occurred:,,0
+	2025-10-30T11:58:30.7926833Z,,,0
+	2025-10-30T11:58:30.8021681Z,Traceback (most recent call last):,,0
+	2025-10-30T11:58:30.8113833Z,  File "/tmp/8de17ab7b71a508/manage.py"&comma; line 22&comma; in <module>,,0
+	2025-10-30T11:58:30.8261734Z,    main(),,0
+	2025-10-30T11:58:30.8363106Z,  File "/tmp/8de17ab7b71a508/manage.py"&comma; line 18&comma; in main,,0
+	2025-10-30T11:58:30.8473498Z,    execute_from_command_line(sys.argv),,0
+	2025-10-30T11:58:30.8607015Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/core/management/__init__.py"&comma; line 442&comma; in execute_from_command_line,,0
+	2025-10-30T11:58:30.8721922Z,    utility.execute(),,0
+	2025-10-30T11:58:30.8853502Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/core/management/__init__.py"&comma; line 416&comma; in execute,,0
+	2025-10-30T11:58:30.8966474Z,    django.setup(),,0
+	2025-10-30T11:58:30.9078581Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/__init__.py"&comma; line 24&comma; in setup,,0
+	2025-10-30T11:58:30.9216294Z,    apps.populate(settings.INSTALLED_APPS),,0
+	2025-10-30T11:58:30.9338349Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/apps/registry.py"&comma; line 116&comma; in populate,,0
+	2025-10-30T11:58:30.9443132Z,    app_config.import_models(),,0
+	2025-10-30T11:58:30.9590461Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/apps/config.py"&comma; line 269&comma; in import_models,,0
+	2025-10-30T11:58:30.9740678Z,    self.models_module = import_module(models_module_name),,0
+	2025-10-30T11:58:30.9867816Z,                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:30.9988109Z,  File "/tmp/oryx/platforms/python/3.11.14/lib/python3.11/importlib/__init__.py"&comma; line 126&comma; in import_module,,0
+	2025-10-30T11:58:31.0096604Z,    return _bootstrap._gcd_import(name[level:]&comma; package&comma; level),,0
+	2025-10-30T11:58:31.0240498Z,           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:31.0677465Z,  File "<frozen importlib._bootstrap>"&comma; line 1204&comma; in _gcd_import,,0
+	2025-10-30T11:58:31.0822993Z,  File "<frozen importlib._bootstrap>"&comma; line 1176&comma; in _find_and_load,,0
+	2025-10-30T11:58:31.0931344Z,  File "<frozen importlib._bootstrap>"&comma; line 1147&comma; in _find_and_load_unlocked,,0
+	2025-10-30T11:58:31.1050478Z,  File "<frozen importlib._bootstrap>"&comma; line 690&comma; in _load_unlocked,,0
+	2025-10-30T11:58:31.1173361Z,  File "<frozen importlib._bootstrap_external>"&comma; line 940&comma; in exec_module,,0
+	2025-10-30T11:58:31.1279520Z,  File "<frozen importlib._bootstrap>"&comma; line 241&comma; in _call_with_frames_removed,,0
+	2025-10-30T11:58:31.1488543Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/contrib/auth/models.py"&comma; line 5&comma; in <module>,,0
+	2025-10-30T11:58:31.1604683Z,    from django.contrib.auth.base_user import AbstractBaseUser&comma; BaseUserManager,,0
+	2025-10-30T11:58:31.1719478Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/contrib/auth/base_user.py"&comma; line 43&comma; in <module>,,0
+	2025-10-30T11:58:31.1834313Z,    class AbstractBaseUser(models.Model):,,0
+	2025-10-30T11:58:31.1947595Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/base.py"&comma; line 145&comma; in __new__,,0
+	2025-10-30T11:58:31.2062708Z,    new_class.add_to_class("_meta"&comma; Options(meta&comma; app_label)),,0
+	2025-10-30T11:58:31.2202373Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/base.py"&comma; line 373&comma; in add_to_class,,0
+	2025-10-30T11:58:31.2320037Z,    value.contribute_to_class(cls&comma; name),,0
+	2025-10-30T11:58:31.2490920Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/options.py"&comma; line 238&comma; in contribute_to_class,,0
+	2025-10-30T11:58:31.2620725Z,    self.db_table&comma; connection.ops.max_name_length(),,0
+	2025-10-30T11:58:31.2753991Z,                   ^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:31.2883163Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/utils/connection.py"&comma; line 15&comma; in __getattr__,,0
+	2025-10-30T11:58:31.3030152Z,    return getattr(self._connections[self._alias]&comma; item),,0
+	2025-10-30T11:58:31.3191689Z,                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:31.3302706Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/utils/connection.py"&comma; line 62&comma; in __getitem__,,0
+	2025-10-30T11:58:31.3419533Z,    conn = self.create_connection(alias),,0
+	2025-10-30T11:58:31.3556130Z,           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:31.3675762Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/utils.py"&comma; line 193&comma; in create_connection,,0
+	2025-10-30T11:58:31.3812921Z,    backend = load_backend(db["ENGINE"]),,0
+	2025-10-30T11:58:31.3911987Z,              ^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:31.4105769Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/utils.py"&comma; line 113&comma; in load_backend,,0
+	2025-10-30T11:58:31.4271126Z,    return import_module("%s.base" % backend_name),,0
+	2025-10-30T11:58:31.4383807Z,           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:31.4507579Z,  File "/tmp/oryx/platforms/python/3.11.14/lib/python3.11/importlib/__init__.py"&comma; line 126&comma; in import_module,,0
+	2025-10-30T11:58:31.4648860Z,    return _bootstrap._gcd_import(name[level:]&comma; package&comma; level),,0
+	2025-10-30T11:58:31.4760008Z,           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^,,0
+	2025-10-30T11:58:31.4907729Z,  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 29&comma; in <module>,,0
+	2025-10-30T11:58:31.5035305Z,    raise ImproperlyConfigured("Error loading psycopg2 or psycopg module"),,0
+	2025-10-30T11:58:31.5143738Z,django.core.exceptions.ImproperlyConfigured: Error loading psycopg2 or psycopg module | Exit code: 1 | Please review message | More information: https://aka.ms/troubleshoot-python,,0
+	2025-10-30T11:58:31.5273401Z,Done in 1 sec(s).,,0
+	2025-10-30T11:58:31.5388093Z,Not a vso image&comma; so not writing build commands,,0
+	2025-10-30T11:58:31.5495583Z,Preparing output...,,0
+	2025-10-30T11:58:31.5646639Z,,,0
+	2025-10-30T11:58:31.5780398Z,Copying files to destination directory '/tmp/_preCompressedDestinationDir'...,,0
+	2025-10-30T11:58:56.3183273Z,Done in 28 sec(s).,,0
+	2025-10-30T11:58:56.4295172Z,Compressing content of directory '/tmp/_preCompressedDestinationDir'...,,0
+	2025-10-30T11:59:27.8172311Z,Copied the compressed output to '/home/site/wwwroot',,0
+	2025-10-30T11:59:27.9748320Z,,,0
+	2025-10-30T11:59:27.9930433Z,Removing existing manifest file,,0
+	2025-10-30T11:59:28.0128812Z,Creating a manifest file...,,0
+	2025-10-30T11:59:28.0400351Z,Manifest file created.,,0
+	2025-10-30T11:59:28.0611230Z,Copying .ostype to manifest output directory.,,0
+	2025-10-30T11:59:28.0741599Z,,,0
+	2025-10-30T11:59:28.0854153Z,Done in 116 sec(s).,,0
+2025-10-30T11:59:29.0719406Z,Running post deployment command(s)...,1caf9025-da53-4715-9bc8-c195df9c79a1,0
+2025-10-30T11:59:29.6623829Z,,770e96d7-9b72-4b4b-af42-2d848d1f1ce3,0
+2025-10-30T11:59:29.8691353Z,Generating summary of Oryx build,3d583a25-018b-4aca-bfc6-7d6d6dff47d4,0
+2025-10-30T11:59:30.0847515Z,Parsing the build logs,c5b25429-8b72-4ba4-9ef3-5f75a25e9610,0
+2025-10-30T11:59:30.2425862Z,Found 1 issue(s),b14d6809-1c47-4eab-be07-541f3a0dd350,0
+2025-10-30T11:59:30.3881334Z,,3dbe8850-8284-4788-8dd1-4d01a27c04f8,0
+2025-10-30T11:59:30.5359572Z,Build Summary :,f0d2537d-47b6-4c89-b494-f59c905b4b36,0
+2025-10-30T11:59:30.6721668Z,===============,b651340f-0559-4653-b47f-223707c03b19,0
+2025-10-30T11:59:30.8080101Z,Errors (0),fdee4ea8-c5f8-4841-a07c-08b6d294b399,0
+2025-10-30T11:59:30.9498463Z,Warnings (1),67756c13-b4d8-4261-aa57-7c749facb700,0
+2025-10-30T11:59:31.1474675Z,1. Traceback (most recent call last):\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 25&comma; in <module>\n    import psycopg as Database\nModuleNotFoundError: No module named 'psycopg'\n\nDuring handling of the above exception&comma; another exception occurred:\n\nTraceback (most recent call last):\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 27&comma; in <module>\n    import psycopg2 as Database\nModuleNotFoundError: No module named 'psycopg2'\n\nDuring handling of the above exception&comma; another exception occurred:\n\nTraceback (most recent call last):\n  File "/tmp/8de17ab7b71a508/manage.py"&comma; line 22&comma; in <module>\n    main()\n  File "/tmp/8de17ab7b71a508/manage.py"&comma; line 18&comma; in main\n    execute_from_command_line(sys.argv)\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/core/management/__init__.py"&comma; line 442&comma; in execute_from_command_line\n    utility.execute()\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/core/management/__init__.py"&comma; line 416&comma; in execute\n    django.setup()\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/__init__.py"&comma; line 24&comma; in setup\n    apps.populate(settings.INSTALLED_APPS)\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/apps/registry.py"&comma; line 116&comma; in populate\n    app_config.import_models()\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/apps/config.py"&comma; line 269&comma; in import_models\n    self.models_module = import_module(models_module_name)\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/tmp/oryx/platforms/python/3.11.14/lib/python3.11/importlib/__init__.py"&comma; line 126&comma; in import_module\n    return _bootstrap._gcd_import(name[level:]&comma; package&comma; level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "<frozen importlib._bootstrap>"&comma; line 1204&comma; in _gcd_import\n  File "<frozen importlib._bootstrap>"&comma; line 1176&comma; in _find_and_load\n  File "<frozen importlib._bootstrap>"&comma; line 1147&comma; in _find_and_load_unlocked\n  File "<frozen importlib._bootstrap>"&comma; line 690&comma; in _load_unlocked\n  File "<frozen importlib._bootstrap_external>"&comma; line 940&comma; in exec_module\n  File "<frozen importlib._bootstrap>"&comma; line 241&comma; in _call_with_frames_removed\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/contrib/auth/models.py"&comma; line 5&comma; in <module>\n    from django.contrib.auth.base_user import AbstractBaseUser&comma; BaseUserManager\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/contrib/auth/base_user.py"&comma; line 43&comma; in <module>\n    class AbstractBaseUser(models.Model):\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/base.py"&comma; line 145&comma; in __new__\n    new_class.add_to_class("_meta"&comma; Options(meta&comma; app_label))\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/base.py"&comma; line 373&comma; in add_to_class\n    value.contribute_to_class(cls&comma; name)\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/models/options.py"&comma; line 238&comma; in contribute_to_class\n    self.db_table&comma; connection.ops.max_name_length()\n                   ^^^^^^^^^^^^^^\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/utils/connection.py"&comma; line 15&comma; in __getattr__\n    return getattr(self._connections[self._alias]&comma; item)\n                   ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/utils/connection.py"&comma; line 62&comma; in __getitem__\n    conn = self.create_connection(alias)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/utils.py"&comma; line 193&comma; in create_connection\n    backend = load_backend(db["ENGINE"])\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/utils.py"&comma; line 113&comma; in load_backend\n    return import_module("%s.base" % backend_name)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/tmp/oryx/platforms/python/3.11.14/lib/python3.11/importlib/__init__.py"&comma; line 126&comma; in import_module\n    return _bootstrap._gcd_import(name[level:]&comma; package&comma; level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File "/tmp/8de17ab7b71a508/antenv/lib/python3.11/site-packages/django/db/backends/postgresql/base.py"&comma; line 29&comma; in <module>\n    raise ImproperlyConfigured("Error loading psycopg2 or psycopg module")\ndjango.core.exceptions.ImproperlyConfigured: Error loading psycopg2 or psycopg module  ,ece2751a-440f-47ea-9a31-ffd930cf97b0,0
+2025-10-30T11:59:31.3005174Z,-  Next Steps: Please review message,baa7ddf0-c381-4798-b656-14109c057f1e,0
+2025-10-30T11:59:31.4356490Z,-  For more details you can browse to https://aka.ms/troubleshoot-python,a05a2542-f364-41d7-bb0e-3751645668dd,0
+2025-10-30T11:59:31.5737011Z,,2ac39686-67ac-48f1-9e93-74fcd1172d5d,0
+2025-10-30T11:59:31.7135400Z,,1af17085-97e1-4358-8638-ef836cec0b4b,0
+2025-10-30T11:59:32.4784526Z,Triggering recycle (preview mode disabled).,2445620a-a2fc-4e55-b299-4250e529f1c0,0
+2025-10-30T11:59:32.7060574Z,Deployment successful. deployer = Push-Deployer deploymentPath = ZipDeploy. Extract zip. Remote build.,204c1a61-8fa3-444f-b0a4-554cd0091708,0
