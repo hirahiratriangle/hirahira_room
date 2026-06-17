@@ -63,5 +63,4 @@ EMAIL_USE_TLS = True
 
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')  # Gmail アドレス
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')  # アプリパスワード
-DEFAULT_FROM_EMAIL = 'Diary<EMAIL_HOST_USER>'
-
+DEFAULT_FROM_EMAIL = 'Hirahira Room<EMAIL_HOST_USER>'  # 送信元メールアドレス
