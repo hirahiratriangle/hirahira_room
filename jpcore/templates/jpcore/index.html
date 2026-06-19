@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}JP Core Issue 改善支援 - Hirahira Room{% endblock %}
+
+{% block nav_items_left %}{% include 'jpcore/_nav.html' with active='jpcore' %}{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h2 fw-bold mb-2">JP Core Issue 改善支援</h1>
+            <p class="mb-1">HL7&reg; FHIR&reg; JP Core 実装ガイド開発に向けた GitHub Issue 対応支援</p>
+            <p class="mb-3 small">資料で手順を学び、ツールでSWG別Issueの着手順とspec-kitプロンプトを生成する</p>
+            <div class="mt-3">
+                <a href="{% url 'jpcore:materials' %}" class="btn btn-light me-2">資料を見る</a>
+                <a href="{% url 'jpcore:tool' %}" class="btn btn-outline-light">ツールを試す</a>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+
+    <section class="mb-5">
+        <h2 class="h4 mb-3" style="color: #2c5aa0;">これは何？</h2>
+        <p class="text-muted">
+            <strong>JP Core</strong> は、日本医療情報学会 FHIR 国内実装基盤研究会が開発している
+            日本版 HL7&reg; FHIR&reg; 実装ガイドです（公式:
+            <a href="https://jpfhir.jp/fhir/core/" target="_blank" rel="noopener">jpfhir.jp/fhir/core</a>）。
+            その開発リポジトリに集まる多数の Issue を、所属 SWG ごとに効率よく改善していくための
+            手順書（資料）と支援ツール（issue_improver）をまとめた紹介ページです。
+        </p>
+        <p class="text-muted mb-0">
+            ツールは GitHub の Issue を一覧化し、内容から <strong>ケース A/B/C/D</strong> を判定して
+            着手順と <code>spec-kit</code> の処理プロンプトを生成します。1 Issue = 1 サイクルで、
+            Claude Code と spec-kit を使った改善作業をスムーズに始められます。
+        </p>
+    </section>
+
+    <section class="mb-5">
+        <h2 class="h4 mb-4" style="color: #2c5aa0;">2つのコンテンツ</h2>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h3 class="h5 card-title"><i class="fas fa-book-open me-2" style="color:#2c5aa0;"></i>資料の閲覧</h3>
+                        <p class="card-text text-muted small">
+                            Claude の準備から Spec Kit / VS Code 環境構築、Issue のケース別手動改善、
+                            一括処理ツールの使い方まで、導入〜運用の解説スライド（全{{ decks|length }}本）を
+                            ブラウザ内でそのままプレゼン表示できます。
+                        </p>
+                        <a href="{% url 'jpcore:materials' %}" class="btn btn-sm btn-outline-primary">資料一覧へ</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h3 class="h5 card-title"><i class="fas fa-flask me-2" style="color:#2c5aa0;"></i>ツールの模擬実行</h3>
+                        <p class="card-text text-muted small">
+                            <code>issue_improver</code> の読み取り専用部分をブラウザ上で体験できます。
+                            リポジトリと SWG ラベルを入れると、Issue 一覧・ケース分類・着手順・
+                            spec-kit プロンプトを生成します。サンプルデータでも試せます。
+                        </p>
+                        <a href="{% url 'jpcore:tool' %}" class="btn btn-sm btn-outline-primary">模擬実行へ</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mb-2">
+        <h2 class="h4 mb-3" style="color: #2c5aa0;">収録スライド</h2>
+        <div class="list-group">
+            {% for d in decks %}
+            <a href="{% url 'jpcore:materials' %}?deck={{ d.slug }}" class="list-group-item list-group-item-action d-flex align-items-start">
+                <span class="badge bg-primary rounded-pill me-3 mt-1">{{ d.no }}</span>
+                <span>
+                    <span class="fw-semibold">{{ d.title }}</span><br>
+                    <small class="text-muted">{{ d.subtitle }}</small>
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+
+</div>
+{% endblock %}

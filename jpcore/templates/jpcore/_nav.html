@@ -1,0 +1,13 @@
+{% load static %}
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'home:home' %}">HOME</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'diary:index' %}">DIARY</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'iris_classifier:index' %}">IRIS CLASSIFIER</a>
+</li>
+<li class="nav-item">
+    <a class="nav-link {% if active == 'jpcore' %}active{% endif %}" href="{% url 'jpcore:index' %}">JP CORE</a>
+</li>

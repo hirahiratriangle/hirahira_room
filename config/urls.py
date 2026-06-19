@@ -17,6 +17,9 @@ urlpatterns = [
 
     # Iris Classifier アプリ
     path('iris/', include('iris_classifier.urls', namespace='iris_classifier')),
+
+    # JP Core Issue 改善支援アプリ
+    path('jpcore/', include('jpcore.urls', namespace='jpcore')),
 ]
 
 # メディアファイルの配信設定

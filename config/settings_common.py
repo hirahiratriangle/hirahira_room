@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     'home',
     'diary',
     'iris_classifier',
+    'jpcore',
 ]
 
 MIDDLEWARE = [

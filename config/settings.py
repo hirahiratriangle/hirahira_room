@@ -20,6 +20,14 @@ CSRF_TRUSTED_ORIGINS = ['https://hirahira-room.azurewebsites.net']
 # Azure App Service 用の設定
 if 'WEBSITE_HOSTNAME' in os.environ:
     ALLOWED_HOSTS.append(os.environ['WEBSITE_HOSTNAME'])
+    _origin = f"https://{os.environ['WEBSITE_HOSTNAME']}"
+    if _origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_origin)
+
+# Azure はフロントで HTTPS を終端し X-Forwarded-Proto で転送する。
+# これを認識させることで request.build_absolute_uri() / is_secure() が
+# 正しく https になり、Office Online ビューアへ渡す PPTX の公開URLも https で生成される。
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # 静的ファイルの設定
 STATIC_URL = '/static/'

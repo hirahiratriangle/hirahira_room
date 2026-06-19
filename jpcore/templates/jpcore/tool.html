@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}ツール模擬実行 - JP Core | Hirahira Room{% endblock %}
+
+{% block nav_items_left %}{% include 'jpcore/_nav.html' with active='jpcore' %}{% endblock %}
+
+{% block head %}
+<style>
+    .case-A { background:#e7f1ff; color:#0a58ca; }
+    .case-B { background:#fff3cd; color:#997404; }
+    .case-C { background:#f8d7da; color:#b02a37; }
+    .case-D { background:#e2e3e5; color:#41464b; }
+    .prompt-box { background:#0d1117; color:#e6edf3; border-radius:.4rem;
+                  padding:1rem; font-size:.82rem; white-space:pre-wrap;
+                  word-break:break-word; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .sev-Critical { color:#b02a37; font-weight:600; }
+    .sev-High { color:#d63384; font-weight:600; }
+    .sev-Med { color:#997404; }
+    .sev-Low, .sev-- { color:#6c757d; }
+</style>
+{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-3">
+        <div class="text-white d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <h1 class="h3 fw-bold mb-1">ツール模擬実行エリア</h1>
+                <p class="mb-0 small">issue_improver の読み取り専用部分（一覧化・ケース分類・spec-kit プロンプト生成）を体験</p>
+            </div>
+            <a href="{% url 'jpcore:index' %}" class="btn btn-sm btn-light mt-2 mt-md-0">&larr; 紹介ページ</a>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-4">
+
+    <div class="alert alert-info small">
+        <i class="fas fa-shield-alt"></i>
+        これは<strong>模擬実行（読み取り専用）</strong>です。GitHub 公開 API から Issue を取得して一覧化・分類・
+        プロンプト生成のみ行います。実際の <code>--run/--execute</code>（Claude Code 起動・ファイル編集・git commit）は
+        ブラウザからは実行しません。
+    </div>
+
+    <div class="row g-4">
+        <!-- 入力フォーム -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header fw-semibold">実行設定</div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">リポジトリ</label>
+                            <input type="text" name="repo" class="form-control form-control-sm"
+                                   value="{{ form.repo }}" placeholder="owner/name または GitHub URL">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">SWG ラベル <span class="text-danger">*</span></label>
+                            <input type="text" name="label" class="form-control form-control-sm"
+                                   value="{{ form.label }}" placeholder="例: 検査診療WG">
+                            <div class="form-text">GitHub 上の表記（半角カナ等）と完全一致。</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">マイルストーン（任意）</label>
+                            <input type="text" name="milestone" class="form-control form-control-sm"
+                                   value="{{ form.milestone }}" placeholder="例: 1.3-release">
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold">状態</label>
+                                <select name="state" class="form-select form-select-sm">
+                                    <option value="open" {% if form.state == 'open' %}selected{% endif %}>open</option>
+                                    <option value="closed" {% if form.state == 'closed' %}selected{% endif %}>closed</option>
+                                    <option value="all" {% if form.state == 'all' %}selected{% endif %}>all</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold">並び順</label>
+                                <select name="order" class="form-select form-select-sm">
+                                    <option value="severity" {% if form.order == 'severity' %}selected{% endif %}>深刻度</option>
+                                    <option value="file" {% if form.order == 'file' %}selected{% endif %}>ファイル</option>
+                                    <option value="number" {% if form.order == 'number' %}selected{% endif %}>番号</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold">ケース（絞り込み）</label>
+                            <select name="case" class="form-select form-select-sm">
+                                <option value="" {% if not form.case %}selected{% endif %}>全ケース</option>
+                                <option value="A" {% if form.case == 'A' %}selected{% endif %}>A（軽量：タイポ・文言等）</option>
+                                <option value="B" {% if form.case == 'B' %}selected{% endif %}>B（構造：cardinality・slicing 等）</option>
+                                <option value="C" {% if form.case == 'C' %}selected{% endif %}>C（制度：保険制度設計 等）</option>
+                                <option value="D" {% if form.case == 'D' %}selected{% endif %}>D（矛盾：記述の食い違い）</option>
+                            </select>
+                            <div class="form-text">元ツールの <code>--case</code> 相当。指定ケースのみ表示します。</div>
+                        </div>
+                        <button type="submit" name="mode" value="live" class="btn btn-primary w-100 mb-2">
+                            <i class="fas fa-play"></i> 模擬実行（GitHub）
+                        </button>
+                        <button type="submit" name="mode" value="sample" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-vial"></i> サンプルデータで試す
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 結果 -->
+        <div class="col-lg-8">
+            {% if error %}
+            <div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> {{ error }}</div>
+            {% endif %}
+
+            {% if executed and rows %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between flex-wrap">
+                    <span class="fw-semibold">
+                        着手順 Issue 一覧（{{ rows|length }}件）
+                        {% if use_sample %}<span class="badge bg-secondary ms-2">サンプル</span>{% endif %}
+                    </span>
+                    <span class="small text-muted">
+                        repo: <code>{{ repo }}</code> / label: <code>{{ form.label }}</code>
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3 small">
+                        ケース内訳：
+                        <span class="badge case-A">A 軽量 {{ counts.A }}</span>
+                        <span class="badge case-B">B 構造 {{ counts.B }}</span>
+                        <span class="badge case-C">C 制度 {{ counts.C }}</span>
+                        <span class="badge case-D">D 矛盾 {{ counts.D }}</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>順</th><th>Issue</th><th>深刻度</th><th>ケース</th>
+                                    <th>対象ファイル</th><th>タイトル</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in rows %}
+                                <tr>
+                                    <td>{{ r.order }}</td>
+                                    <td><a href="{{ r.url }}" target="_blank" rel="noopener">#{{ r.num }}</a></td>
+                                    <td class="sev-{{ r.severity }}">{{ r.severity }}</td>
+                                    <td><span class="badge case-{{ r.case }}">{{ r.case }}</span></td>
+                                    <td class="small">
+                                        {% for f in r.files %}{{ f }}<br>{% empty %}-{% endfor %}
+                                    </td>
+                                    <td class="small">{{ r.title }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="h5 mb-1" style="color:#2c5aa0;">着手順 処理プロンプト（specify〜checklist 全工程・貼り付け用）</h2>
+            <p class="small text-muted mb-3">各 Issue ごとに、Claude Code に上から順に貼り付ける全工程を出力します。</p>
+            {% for r in rows %}
+            <div class="card shadow-sm mb-3">
+                <div class="card-header small d-flex justify-content-between flex-wrap">
+                    <span class="fw-semibold">[{{ r.order }}] #{{ r.num }}
+                        <span class="badge case-{{ r.case }}">ケース{{ r.case }}</span>
+                        <span class="sev-{{ r.severity }}">{{ r.severity }}</span></span>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-1">{{ r.title }}</p>
+                    <p class="small mb-3"><span class="text-muted">工程:</span> {{ r.steps }}</p>
+
+                    {% for s in r.steps_list %}
+                    <div class="step mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-semibold small">
+                                {{ s.no }}. {{ s.title }}
+                                {% if s.kind == 'gate' or s.kind == 'gate-prompt' %}
+                                <span class="badge bg-warning text-dark">手動ゲート</span>
+                                {% elif s.kind == 'shell' %}
+                                <span class="badge bg-dark">シェル</span>
+                                {% endif %}
+                            </span>
+                            {% if s.text %}
+                            <button class="btn btn-sm btn-outline-secondary py-0 copy-btn" type="button">コピー</button>
+                            {% endif %}
+                        </div>
+                        {% if s.hint %}<p class="small text-muted mb-1">{{ s.hint }}</p>{% endif %}
+                        {% if s.text %}<div class="prompt-box">{{ s.text }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+
+            {% elif executed and not error %}
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle"></i> 条件に一致する Issue がありません。
+                {% if form.case %}ケース「{{ form.case }}」の絞り込みを外すか、{% endif %}ラベル・状態を見直してください。
+            </div>
+            {% elif not executed %}
+            <div class="card shadow-sm">
+                <div class="card-body text-muted">
+                    <p class="mb-2"><i class="fas fa-arrow-left"></i> 左の設定で <strong>模擬実行</strong> を押すと、
+                        指定 SWG の Issue を取得して一覧・ケース分類・着手順・spec-kit プロンプトを表示します。</p>
+                    <p class="mb-0">まずは <strong>「サンプルデータで試す」</strong> で動きを確認できます（GitHub 接続不要）。</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var box = btn.closest('.step').querySelector('.prompt-box');
+        navigator.clipboard.writeText(box.innerText).then(function () {
+            var t = btn.textContent; btn.textContent = 'コピーしました';
+            setTimeout(function () { btn.textContent = t; }, 1500);
+        });
+    });
+});
+</script>
+{% endblock %}

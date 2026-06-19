@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}資料の閲覧 - JP Core | Hirahira Room{% endblock %}
+
+{% block nav_items_left %}{% include 'jpcore/_nav.html' with active='jpcore' %}{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-3">
+        <div class="text-white d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <h1 class="h3 fw-bold mb-1">資料の閲覧</h1>
+                <p class="mb-0 small">JP Core Issue 改善の導入〜運用 解説スライド</p>
+            </div>
+            <a href="{% url 'jpcore:index' %}" class="btn btn-sm btn-light mt-2 mt-md-0">&larr; 紹介ページ</a>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-4">
+    <div class="row g-4">
+        <!-- 左: デッキ一覧 -->
+        <div class="col-lg-4">
+            <div class="list-group shadow-sm">
+                {% for d in decks %}
+                <a href="?deck={{ d.slug }}"
+                   class="list-group-item list-group-item-action {% if d.slug == current.slug %}active{% endif %}">
+                    <div class="d-flex align-items-start">
+                        <span class="badge {% if d.slug == current.slug %}bg-light text-primary{% else %}bg-primary{% endif %} rounded-pill me-2">{{ d.no }}</span>
+                        <span>
+                            <span class="fw-semibold">{{ d.title }}</span><br>
+                            <small class="{% if d.slug == current.slug %}text-white-50{% else %}text-muted{% endif %}">{{ d.subtitle }}</small>
+                        </span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 右: ビューア -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                    <span class="fw-semibold">{{ current.no }}. {{ current.title }}</span>
+                    <span>
+                        <a class="btn btn-sm btn-outline-primary" target="_blank" href="{{ office_embed }}">
+                            <i class="fas fa-external-link-alt"></i> 全画面プレゼン
+                        </a>
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    {% if is_localhost %}
+                    <div class="p-4 text-center text-muted">
+                        <p class="mb-2"><i class="fas fa-info-circle fa-2x" style="color:#2c5aa0;"></i></p>
+                        <p class="mb-1">Office Online ビューアは Microsoft 側がファイルを取得して描画するため、
+                            <strong>localhost では表示できません</strong>（本番の公開URLで表示されます）。</p>
+                        <p class="mb-0 small">本番環境（HTTPS公開）でプレゼン表示されます。</p>
+                    </div>
+                    {% else %}
+                    <iframe src="{{ office_embed }}"
+                            title="{{ current.title }}"
+                            style="width:100%; height:75vh; border:0;"
+                            allowfullscreen></iframe>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-muted small mt-2 mb-0">
+                ※ スライドは PowerPoint のまま Microsoft Office Online ビューアで表示しています。
+                表示には PPTX が公開URLである必要があるため、本番環境（HTTPS公開）で有効です。
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
