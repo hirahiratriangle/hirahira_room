@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ form_title }} - カウントアップ＆ダウン | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h3 fw-bold mb-0">出来事・予定の{{ form_title }}</h1>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <form method="post">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="mb-3">
+                    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    {% for error in field.errors %}
+                    <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+                <p class="text-muted small">
+                    今日より後の日付は残り日数のカウントダウン、今日より前の日付は経過日数のカウントアップになります。
+                </p>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <a href="{% url 'countdown:event_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-list"></i> 一覧に戻る
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'diary',
     'iris_classifier',
     'jpcore',
+    'countdown',
 ]
 
 MIDDLEWARE = [
@@ -33,6 +34,10 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # 既定で全ページをログイン必須にする。公開したいビューだけ
+    # django.contrib.auth.decorators.login_not_required を付けて除外する
+    # （allauth のログイン/サインアップ等と admin のログイン画面は除外済み）。
+    'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
@@ -137,3 +142,16 @@ AUTH_USER_MODEL = 'accounts.CustomUser'
 # ログアウト設定
 ACCOUNT_LOGOUT_ON_GET = False  # GETでログアウトを無効化（セキュリティ向上）
 ACCOUNT_LOGOUT_REDIRECT_URL = 'account_login'  # ログアウト後のリダイレクト先
+
+# ==================================
+# サイト名（ブラウザのタイトル・送信メールの差出人／件名で使用）
+# ==================================
+SITE_DISPLAY_NAME = 'HirahiraRoom'
+
+# 差出人の既定値。本番では settings.py が Gmail アドレスを埋めて上書きする。
+DEFAULT_FROM_EMAIL = f'{SITE_DISPLAY_NAME} <no-reply@hirahira-room.local>'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# allauth のメール件名の接頭辞。未指定だと Site の名前（例: [example.com]）が
+# 使われてしまうため明示する。
+ACCOUNT_EMAIL_SUBJECT_PREFIX = f'[{SITE_DISPLAY_NAME}] '

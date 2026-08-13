@@ -5,10 +5,12 @@ import urllib.error
 from urllib.parse import quote
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core import signing
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView, View
 
 from .materials_meta import DECKS, DECKS_BY_SLUG
@@ -50,7 +52,7 @@ def _public_pptx_embed(request, deck):
 def _attach_steps(rows):
     """各 Issue 行に、工程概要(steps)と全工程プロンプト(steps_list)を付与する。"""
     for r in rows:
-        r["steps"] = tool.STEPS[r["path"]]
+        r["steps"] = tool.steps_overview(r["case"])
         r["steps_list"] = tool.build_steps(r)
 
 
@@ -106,8 +108,13 @@ class MaterialsView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
+@method_decorator(login_not_required, name="dispatch")
 class PublicMaterialFileView(View):
     """PPTX を配信する公開エンドポイント（署名付き・期限つきトークン必須）。
+
+    サイト全体は LoginRequiredMiddleware でログイン必須だが、Microsoft 側サーバ
+    からの取得を通すためこのビューだけ login_not_required で除外する。保護は
+    下記の署名トークン検証が担う。
 
     Office Online ビューア(view.officeapps.live.com)は Microsoft 側サーバが
     ファイルを取得して描画するため、ユーザーのログインCookieが届かない。そこで

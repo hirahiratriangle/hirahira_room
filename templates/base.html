@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="description" content="">
     <meta name="author" content="">
-    <title>{% block title %}{% endblock %}</title>
+    <title>{% block title %}HirahiraRoom{% endblock %}</title>
     <link rel="icon" type="image/x-icon" href="{% static 'assets/favicon.ico' %}"/>
 
     <!-- Font Awesome icons (free version)-->
@@ -30,14 +30,18 @@
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
         <div class="container px-5">
-            <a class="navbar-brand" href="{% url 'home:home' %}">{% block brand_name %}HIRAHIRA ROOM{% endblock %}</a>
+            <a class="navbar-brand" href="{% url 'home:home' %}">{% block brand_name %}HIRAHIRAROOM{% endblock %}</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive"
                     aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation"><span
                     class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="navbarResponsive">
                 <ul class="navbar-nav me-auto">
                     {% block nav_items_left %}
-                    <!-- 各ページで独自のナビゲーション項目を追加 -->
+                    <!-- 全ページ共通。アプリ間の移動は HOME のアプリ一覧から行う -->
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.view_name == 'home:home' %}active{% endif %}"
+                           href="{% url 'home:home' %}">HOME</a>
+                    </li>
                     {% endblock %}
                 </ul>
                 <ul class="navbar-nav ms-auto">
@@ -94,7 +98,7 @@
     <!-- Footer -->
     <footer class="py-5 bg-black">
         <div class="container px-5">
-            <p class="m-0 text-center text-white small">Copyright &copy; {% block footer_text %}Hirahira Room{% endblock %} {% now "Y" %}</p>
+            <p class="m-0 text-center text-white small">Copyright &copy; {% block footer_text %}HirahiraRoom{% endblock %} {% now "Y" %}</p>
         </div>
     </footer>
 

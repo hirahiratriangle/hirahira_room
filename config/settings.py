@@ -71,4 +71,8 @@ EMAIL_USE_TLS = True
 
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')  # Gmail アドレス
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')  # アプリパスワード
-DEFAULT_FROM_EMAIL = 'Hirahira Room<EMAIL_HOST_USER>'  # 送信元メールアドレス
+# 差出人は「HirahiraRoom <実際のGmailアドレス>」。EMAIL_HOST_USER 未設定時は
+# settings_common の既定値をそのまま使う。
+if EMAIL_HOST_USER:
+    DEFAULT_FROM_EMAIL = f'{SITE_DISPLAY_NAME} <{EMAIL_HOST_USER}>'
+    SERVER_EMAIL = DEFAULT_FROM_EMAIL

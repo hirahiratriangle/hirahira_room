@@ -1,13 +1,8 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load django_bootstrap5 %}
 
-{% block title %}メール設定 - Hirahira Room{% endblock %}
-
-{% block nav_items_left %}
-<li class="nav-item">
-    <a class="nav-link" href="{% url 'home:home' %}">HOME</a>
-</li>
-{% endblock %}
+{% block title %}メール設定 - HirahiraRoom{% endblock %}
 
 {% block header %}
 <header style="background-color: #2c5aa0; padding-top: 5rem;">
@@ -55,7 +50,8 @@
                                         {% endif %}
                                     </div>
                                     <div>
-                                        <input type="radio" name="email" value="{{ emailaddress.email }}" 
+                                        <input class="form-check-input" type="radio" name="email"
+                                               value="{{ emailaddress.email }}"
                                                {% if emailaddress.primary %}checked{% endif %}>
                                     </div>
                                 </div>
@@ -86,7 +82,7 @@
                 <div class="card-body">
                     <form method="post" action="{% url 'account_email' %}">
                         {% csrf_token %}
-                        {{ form.as_p }}
+                        {% bootstrap_form form %}
                         <button type="submit" name="action_add" class="btn btn-primary">
                             メールアドレスを追加
                         </button>

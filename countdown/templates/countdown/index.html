@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}カウントアップ＆ダウン | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h2 fw-bold mb-2">カウントアップ＆ダウン</h1>
+            <p class="mb-1">出来事や予定を名前と日付で登録するだけ</p>
+            <p class="mb-3 small">過ぎた日は「経過日数」を数え上げ、これからの日は「残り日数」を数え下げます</p>
+            <div class="mt-3">
+                {% if user.is_authenticated %}
+                <a href="{% url 'countdown:event_list' %}" class="btn btn-light me-2">一覧を見る</a>
+                <a href="{% url 'countdown:event_create' %}" class="btn btn-outline-light">新規登録</a>
+                {% else %}
+                <a href="{% url 'account_login' %}" class="btn btn-light me-2">ログイン</a>
+                <a href="{% url 'account_signup' %}" class="btn btn-outline-light">アカウント作成</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+
+    <section class="mb-5">
+        <h2 class="h4 mb-3" style="color: #2c5aa0;">これは何？</h2>
+        <p class="text-muted mb-0">
+            記念日・入社日・禁煙開始日などの<strong>過去の出来事</strong>と、試験日・旅行・締切などの
+            <strong>これからの予定</strong>を、ひとつの画面でまとめて管理できるアプリです。
+            登録するのは「名前」と「日付」だけ。あとは毎日アクセスするたびに、
+            経過日数と残り日数が自動で更新されます。
+        </p>
+    </section>
+
+    <section class="mb-5">
+        <h2 class="h4 mb-4" style="color: #2c5aa0;">2つの数え方</h2>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h3 class="h5 card-title"><i class="fas fa-arrow-up me-2" style="color:#2c5aa0;"></i>カウントアップ</h3>
+                        <p class="card-text text-muted small mb-0">
+                            日付が今日より前なら、その日からの<strong>経過日数</strong>を数え上げます。
+                            週数や周年もあわせて表示するので、記念日や継続日数の確認に便利です。
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h3 class="h5 card-title"><i class="fas fa-arrow-down me-2" style="color:#2c5aa0;"></i>カウントダウン</h3>
+                        <p class="card-text text-muted small mb-0">
+                            日付が今日より後なら、その日までの<strong>残り日数</strong>を数え下げます。
+                            当日になると「本日」と表示され、翌日からは自動的にカウントアップに切り替わります。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mb-2">
+        <h2 class="h4 mb-3" style="color: #2c5aa0;">使い方</h2>
+        <ul class="list-unstyled text-muted">
+            <li class="mb-2"><i class="fas fa-check-circle me-2" style="color:#2c5aa0;"></i>「新規登録」から名前と日付を入力して保存します。</li>
+            <li class="mb-2"><i class="fas fa-check-circle me-2" style="color:#2c5aa0;"></i>一覧画面で、予定（カウントダウン）と出来事（カウントアップ）が別々に並びます。</li>
+            <li class="mb-2"><i class="fas fa-check-circle me-2" style="color:#2c5aa0;"></i>登録したデータはログインユーザー本人だけが閲覧・編集できます。</li>
+        </ul>
+        {% if user.is_authenticated %}
+        <a href="{% url 'countdown:event_list' %}" class="btn btn-primary mt-2">一覧へ進む</a>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

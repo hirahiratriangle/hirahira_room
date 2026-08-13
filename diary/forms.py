@@ -1,6 +1,7 @@
 import os
 
 from django import forms
+from django.conf import settings
 from django.core.mail import EmailMessage
 
 from .models import Diary
@@ -35,12 +36,14 @@ class InquiryForm(forms.Form):
 
         subject = 'お問い合わせ {}'.format(title)
         message = '送信者名: {0}\nメールアドレス: {1}\nメッセージ:\n{2}'.format(name, email, message)
-        from_email = os.environ.get('FROM_EMAIL')
+        # 差出人は「HirahiraRoom <アドレス>」で統一する（settings の既定値）。
+        from_email = settings.DEFAULT_FROM_EMAIL
         to_list = [
             email
         ]
+        # 控えの送り先。未設定なら bcc なしで送る。
         bcc_list = [
-            os.environ.get('FROM_EMAIL')
+            addr for addr in [os.environ.get('FROM_EMAIL')] if addr
         ]
 
         message = EmailMessage(subject=subject, body=message, from_email=from_email, to=to_list, bcc=bcc_list)

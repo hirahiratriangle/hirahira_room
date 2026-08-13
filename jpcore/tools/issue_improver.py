@@ -5,8 +5,8 @@ issue_improver.py — JP Core Issue Improver（SWG別 Issue改善支援ツール
 
 1回の実行で次を行う:
   (1) 所属SWG(ラベル)のオープンIssueを取得し、深刻度・対象ファイル・
-      処理パス(フル/軽量)・推奨着手順を付けて一覧表示する
-  (2) 着手順に各Issueへ最適なspec-kit処理(パス)を判定し、
+      ケース(A/B/C/D)・推奨着手順を付けて一覧表示する
+  (2) 着手順に各Issueのケースを判定し、
       貼り付け用 /speckit.specify プロンプトと工程・ブランチ名を生成する
 
 任意のSWGに対応: --label "<ラベル名>"。
@@ -25,12 +25,6 @@ CONFIG_NAME = "issue_improver.config.json"   # スクリプトと同じディレ
 
 SEV_RANK = {"Critical": 0, "High": 1, "Med": 2, "Low": 3, "-": 4}
 
-FULL_KW = ["slic", "cardinality", "discriminator", "保険者番号", "マイナ", "後期高齢者",
-           "共済", "船員", "ConceptMap", "CodeSystem", "partOf", "associatedEncounter",
-           "体系", "未整備", "未定義", "未明示", "binding", "invariant", "資格確認"]
-LIGHT_KW = ["typo", "タイポ", "ゴミ文字", "孤立行", "用語", "統一", "コメント", "重複",
-            "OID", "ケース違い", "誤導", "別人", "同一", "綴り", "short", "矛盾"]
-
 # ケース分類（スライドの ケースA/B/C/D に対応）。判定優先度 D > C > B > A(既定)
 CASE_KW = {
     "D": ["矛盾", "食い違い", "食違い", "不一致", "齟齬", "相違", "conflict", "inconsistent"],
@@ -38,22 +32,38 @@ CASE_KW = {
     "B": ["slic", "cardinality", "discriminator", "binding", "invariant", "partOf",
           "associatedEncounter", "ConceptMap", "CodeSystem", "Extension", "構造", "体系"],
 }
-# ケース → (処理パス, 説明)
-CASE_INFO = {
-    "A": ("軽量", "タイポ・文言・コメント等の単純修正（clarify/analyze 省略）"),
-    "B": ("フル", "構造・cardinality など仕様変更（破壊的注意）"),
-    "C": ("フル", "保険制度などの設計（clarify で PM が回答）"),
-    "D": ("軽量", "記述の矛盾・食い違いの解消（先に『正』を1つ決める）"),
+# ケースの説明（A/B/C/D）
+CASE_DESC = {
+    "A": "タイポ・文言・コメント等の単純修正（clarify/analyze 省略）",
+    "B": "構造・cardinality など仕様変更（破壊的注意）",
+    "C": "保険制度などの設計（clarify で PM が回答）",
+    "D": "記述の矛盾・食い違いの解消（先に『正』を1つ決める）",
 }
 CASE_ORDER = ["A", "B", "C", "D"]
 
+# clarify/analyze（と手動ゲート）を伴うケース。A/D はそれらを省く。
+FULL_CASES = ("B", "C")
+
+
+def is_full(case):
+    """ケースが clarify/analyze と手動ゲートを伴うか（B/C）。"""
+    return case in FULL_CASES
+
+
+def rest_steps(case):
+    """specify の後に回す spec-kit 工程（ケースで決まる）。"""
+    return ["plan", "tasks", "analyze", "implement"] if is_full(case) else ["plan", "tasks", "implement"]
+
+
+def steps_overview(case):
+    """工程概要（表示用）。ケースから生成する。"""
+    if is_full(case):
+        return "specify → clarify → plan → tasks → analyze → implement → sushi build → checklist →〔人間レビュー/コミット〕"
+    return "specify → plan → tasks → implement → sushi build → checklist →〔人間レビュー/コミット〕 (clarify/analyze 省略)"
+
+
 PATH_PATTERN = re.compile(r"input/[\w/\.\-]+\.(?:fsh|md)")
 PROFILE_PATTERN = re.compile(r"JP_[A-Za-z]+")
-
-STEPS = {
-    "フル": "specify → clarify → plan → tasks → analyze → implement → sushi build → checklist →〔人間レビュー/コミット〕",
-    "軽量": "specify → plan → tasks → implement → sushi build → checklist →〔人間レビュー/コミット〕 (clarify/analyze 省略)",
-}
 
 
 def parse_repo(value):
@@ -152,16 +162,6 @@ def target_files(body, title):
     return files[:3]
 
 
-def classify_path(title, body, sev):
-    hay = title + " " + (body or "")
-    low = hay.lower()
-    if any(k.lower() in low or k in hay for k in FULL_KW):
-        return "フル"
-    if any(k.lower() in low or k in hay for k in LIGHT_KW):
-        return "軽量"
-    return "フル" if sev in ("High", "Med") else "軽量"
-
-
 def classify_case(title, body):
     """スライドの ケースA/B/C/D に分類。判定優先度 D > C > B > A(既定)。"""
     hay = title + " " + (body or "")
@@ -180,7 +180,7 @@ def enrich(items):
         case = classify_case(title, body)
         rows.append({"num": it["number"], "title": title, "severity": sev,
                      "files": target_files(body, title),
-                     "case": case, "path": CASE_INFO[case][0],
+                     "case": case,
                      "url": it["html_url"], "body": body})
     return rows
 
@@ -219,14 +219,14 @@ def out_md(rows, label):
 def out_csv(rows):
     import csv
     w = csv.writer(sys.stdout)
-    w.writerow(["order", "num", "severity", "path", "files", "title", "url"])
+    w.writerow(["order", "num", "severity", "case", "files", "title", "url"])
     for r in rows:
-        w.writerow([r["order"], r["num"], r["severity"], r["path"],
+        w.writerow([r["order"], r["num"], r["severity"], r["case"],
                     " ; ".join(r["files"]), r["title"], r["url"]])
 
 
 def out_json(rows):
-    slim = [{k: r[k] for k in ("order", "num", "severity", "path", "files", "title", "url")} for r in rows]
+    slim = [{k: r[k] for k in ("order", "num", "severity", "case", "files", "title", "url")} for r in rows]
     print(json.dumps(slim, ensure_ascii=False, indent=2))
 
 
@@ -245,10 +245,14 @@ def specify_prompt(r):
     タイトル/ケース等は一覧表で人間が確認できる。注意書き・GUARD は付けない
     （JP Core 規約は repo の constitution、Serena は MCP 接続が担保。GUARD は --run のみ）。
     """
+    # ケースD で人間が決めた『正』があれば specify に注入し、それに従わせる
+    decision = r.get("decision")
+    extra = (f"\n【確定した正】{decision}\nこの決定に従って記述を統一し、矛盾を解消すること。"
+             if decision else "")
     return f"""/speckit.specify
 
 Issue #{r['num']} の指摘を解消する最小変更の仕様を策定する。着手前に Issue 本文を必ず参照すること（`gh issue view {r['num']}`、または下記URL）。
-{r['url']}
+{r['url']}{extra}
 """
 
 
@@ -263,12 +267,12 @@ def build_steps(r):
     GUARD は自動実行(--run / run_one)でのみ各プロンプトに付与される。
 
     ケース(A/B/C/D)から決まる工程に従う（run_one の自動実行と同じ並び）:
-      - 軽量(A/D): specify → plan → tasks → implement → sushi build → checklist
-      - フル(B/C): specify → clarify(手動) → plan → tasks → analyze → implement → sushi build → checklist
+      - A/D: specify → plan → tasks → implement → sushi build → checklist
+      - B/C: specify → clarify(手動) → plan → tasks → analyze → implement → sushi build → checklist
       - ケースD は specify の前に『正』を1つ決める手動ゲートを挟む
     各要素は dict: {no, kind('prompt'|'gate'|'gate-prompt'|'shell'), title, text, hint}
     """
-    full = (r["path"] == "フル")
+    full = is_full(r["case"])
     steps = []
 
     def add(title, text, kind="prompt", hint=""):
@@ -281,7 +285,7 @@ def build_steps(r):
     if full:
         add("要件確認 /speckit.clarify（手動ゲート）", "/speckit.clarify",
             kind="gate-prompt", hint="Claude の質問に PM が回答し、内容をレビューしてから次へ。")
-    for st in REST_STEPS[r["path"]]:
+    for st in rest_steps(r["case"]):
         add(f"{STEP_LABEL[st]} /speckit.{st}", f"/speckit.{st}")
     add("FSH検証 sushi build", "sushi build", kind="shell",
         hint="FSH をビルドしてエラーが無いか検証する。")
@@ -299,7 +303,7 @@ def emit_prompts(rows, out_dir):
     for r in rows:
         steps = build_steps(r)
         print(f"{'='*70}\n[{r['order']:02d}] #{r['num']}  (ケース{r['case']} / {r['severity']})\n"
-              f"  {r['title']}\n  工程: {STEPS[r['path']]}\n{'-'*70}")
+              f"  {r['title']}\n  工程: {steps_overview(r['case'])}\n{'-'*70}")
         for s in steps:
             tag = {"gate": "［手動ゲート］", "gate-prompt": "［手動ゲート］",
                    "shell": "［シェル］", "prompt": ""}[s["kind"]]
@@ -313,7 +317,7 @@ def emit_prompts(rows, out_dir):
             with open(fn, "w", encoding="utf-8") as f:
                 f.write(f"# [{r['order']}] #{r['num']} {r['title']}\n\n")
                 f.write(f"- ケース: {r['case']}\n- 深刻度: {r['severity']}\n- URL: {r['url']}\n")
-                f.write(f"- 工程: {STEPS[r['path']]}\n\n")
+                f.write(f"- 工程: {steps_overview(r['case'])}\n\n")
                 for s in steps:
                     f.write(f"## {s['no']}. {s['title']}\n")
                     if s["hint"]:
@@ -325,9 +329,8 @@ def emit_prompts(rows, out_dir):
 
 
 # ---------- 自動実行（Claude Code ヘッドレス経由で spec-kit を回す） ----------
-# specify の後に実行する /speckit ステップ（clarify は手動ゲートで人間が対応）
-REST_STEPS = {"軽量": ["plan", "tasks", "implement"],
-              "フル": ["plan", "tasks", "analyze", "implement"]}
+# specify の後に実行する /speckit ステップはケースで決まる（rest_steps()）。
+# clarify は手動ゲートで人間が対応。
 
 # 全プロンプトに付与するガード（claude には commit/push をさせない。コミットは正常完了時にツールが実施）
 GUARD = ("【厳守】git の commit / push は実行しないこと（コミットは正常完了時にツールが行う）。"
@@ -335,71 +338,259 @@ GUARD = ("【厳守】git の commit / push は実行しないこと（コミッ
          "PR／マージは人間が別工程で実施する。")
 
 
-# 自動承認してよい安全なツール（編集・ビルド・読取/ブランチ系）。commit/push は含めない
+# 自動承認するツール（方針: bash・Serena は広く自動YES。ブランチ作成/commit も自動）。
+# push だけは人間が行うため、下の DISALLOW_TOOLS でハード拒否する。
 ALLOW_TOOLS = [
     "Edit", "Write", "MultiEdit",
-    "Bash(sushi build)", "Bash(sushi:*)",
-    "Bash(git status:*)", "Bash(git diff:*)", "Bash(git switch:*)",
-    "Bash(git branch:*)", "Bash(git checkout:*)", "Bash(git rev-parse:*)",
-    # Serena（MCP）のコード探索・編集系のみ自動承認。
-    # ※ mcp__serena__execute_shell_command は任意シェル実行のため意図的に含めない
-    #   （使う場合は対話承認 or --yes）。
-    "mcp__serena__get_symbols_overview",
-    "mcp__serena__find_symbol",
-    "mcp__serena__find_referencing_symbols",
-    "mcp__serena__search_for_pattern",
-    "mcp__serena__read_file",
-    "mcp__serena__list_dir",
-    "mcp__serena__find_file",
-    "mcp__serena__replace_symbol_body",
-    "mcp__serena__insert_after_symbol",
-    "mcp__serena__insert_before_symbol",
-    "mcp__serena__replace_regex",
-    "mcp__serena__write_memory",
-    "mcp__serena__read_memory",
-    "mcp__serena__list_memories",
+    "Bash",          # 任意の bash を自動承認（検証・ビルド・git等。push は下で拒否）
+    "mcp__serena",   # Serena の全ツールを自動承認（探索・編集・シェル含む）
+]
+
+# 自動承認しないツール（許可より優先）。push は人間の別工程なのでハード拒否する。
+# ※ Serena の execute_shell_command 経由の push までは塞げないため、最終防壁として
+#   GitHub 側で develop/main のブランチ保護を併用すること。
+DISALLOW_TOOLS = [
+    "Bash(git push:*)", "Bash(git push)",
 ]
 
 
-def _invoke(claude_bin, perm, label, prompt, execute, allow_tools=None, skip=False):
+# ---- 計測（各工程の所要時間を記録して原因切り分けに使う）----
+import time as _time
+TIMING_LOG = []            # [{"num":int|None, "step":str, "sec":float, "ok":bool}]
+_TIMING_CTX = {"num": None}  # 現在処理中のIssue番号（run_one が設定）
+_CAPTURED = {"text": ""}     # capture=True で実行した工程の出力（analyze ゲート再表示用）
+
+
+# ---- 画面ログ（--log）。ツールの print 出力をファイルへも複製する ----
+class _Tee:
+    """sys.stdout/stderr をラップし、元ストリームとログファイルの両方へ書く。"""
+    def __init__(self, stream, fh):
+        self._stream = stream
+        self._fh = fh
+
+    def write(self, s):
+        self._stream.write(s)
+        try:
+            self._fh.write(s)
+            self._fh.flush()
+        except Exception:
+            pass
+        return len(s)
+
+    def flush(self):
+        self._stream.flush()
+        try:
+            self._fh.flush()
+        except Exception:
+            pass
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+def _start_logging(path):
+    """以降の stdout/stderr を path にも追記する（claude本体のライブ出力は対象外）。"""
+    fh = open(path, "a", encoding="utf-8")
+    fh.write(f"\n===== {datetime.datetime.now():%Y-%m-%d %H:%M:%S} issue_improver 実行ログ =====\n")
+    fh.write("$ " + " ".join(shlex.quote(c) for c in sys.argv) + "\n\n")
+    fh.flush()
+    sys.stdout = _Tee(sys.stdout, fh)
+    sys.stderr = _Tee(sys.stderr, fh)
+    print(f"[ログ] 画面出力を {path} に追記します。", file=sys.stderr)
+
+
+def _gate_record(label, value):
+    """ゲートで確定した入力をログに残すためエコーバックする（空なら何もしない）。"""
+    if value:
+        print(f"  → 記録【{label}】{value}")
+
+
+def _record(step, sec, ok):
+    TIMING_LOG.append({"num": _TIMING_CTX["num"], "step": step, "sec": round(sec, 1), "ok": ok})
+    print(f"  ⏱ {step}: {sec:.1f}s", file=sys.stderr)
+
+
+def _invoke(claude_bin, perm, label, prompt, execute, allow_tools=None, skip=False, capture=False):
+    """1 工程を claude -p で実行。capture=True のときは出力を取り込み _CAPTURED に保持し
+    （ライブ表示はせず）、ゲートでの再表示に使う。それ以外は従来どおりストリーム表示。"""
     cmd = [claude_bin, "-p", prompt]
     if skip:
         cmd += ["--dangerously-skip-permissions"]   # 全プロンプトを自動承認（--yes）
     else:
         cmd += ["--permission-mode", perm]          # 編集を自動承認
         if allow_tools:
-            cmd += ["--allowedTools", *allow_tools]  # 安全なものだけ自動承認
+            cmd += ["--allowedTools", *allow_tools]  # bash・Serena 等を自動承認
+            cmd += ["--disallowedTools", *DISALLOW_TOOLS]  # push だけは拒否（許可より優先）
     if not execute:
         shown = " ".join(shlex.quote(c) for c in cmd)
         print("DRY-RUN >", (shown[:150] + " …") if len(shown) > 150 else shown)
         return True
     print(f"  ▶ {label} …")
-    if subprocess.run(cmd).returncode != 0:
-        print(f"  ✖ {label} が異常終了。このIssueを中断します。", file=sys.stderr)
+    t0 = _time.monotonic()
+    if capture:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        rc = proc.returncode
+        _CAPTURED["text"] = proc.stdout or ""
+        if rc != 0 and proc.stderr:
+            print(proc.stderr, file=sys.stderr, end="")
+    else:
+        rc = subprocess.run(cmd).returncode
+    _record(label, _time.monotonic() - t0, rc == 0)
+    if rc != 0:
+        print(f"  ✖ {label} が異常終了。このIssueをスキップして次へ進みます。", file=sys.stderr)
         return False
     return True
 
 
+def _show_issue(r):
+    """ゲートで判断材料を出すため、Issue のタイトル・本文・URL を表示する。
+    （矛盾の選択肢はツールが自動抽出できないため、本文を見て人間が判断する）"""
+    print(f"\n  Issue #{r['num']}: {r.get('title','')}")
+    if r.get("files"):
+        print(f"  対象ファイル: {', '.join(r['files'])}")
+    print(f"  URL: {r.get('url','')}")
+    body = (r.get("body") or "").strip()
+    if body:
+        limit = 2000
+        excerpt = body if len(body) <= limit else body[:limit] + "\n  …（以下省略。全文は上記URL参照）"
+        print("  ── Issue本文 ──")
+        for line in excerpt.splitlines():
+            print(f"  | {line}")
+    print()
+
+
+def _latest_specfile(name):
+    """直近に更新された specs/*/<name> を返す（無ければ None）。"""
+    import glob
+    if not os.path.isdir("specs"):
+        return None
+    files = glob.glob(f"specs/*/{name}")
+    if not files:
+        return None
+    return max(files, key=lambda p: os.path.getmtime(p))
+
+
+def _show_spec(r):
+    """clarify ゲートで specify の成果物 spec.md を表示する（レビュー対象）。"""
+    p = _latest_specfile("spec.md")
+    if not p:
+        print("  （spec.md が見つかりません。specify の出力／直前ログを確認してください）\n")
+        return
+    try:
+        txt = open(p, encoding="utf-8").read().strip()
+    except Exception:
+        print(f"  （{p} を読めませんでした）\n")
+        return
+    ncl = txt.count("[NEEDS CLARIFICATION")
+    print(f"  ── specify 生成の spec（{p}） ──"
+          + (f"  ※[NEEDS CLARIFICATION] {ncl}件" if ncl else ""))
+    limit = 3000
+    if len(txt) > limit:
+        txt = txt[:limit] + "\n  …（省略。全文は上記ファイル）"
+    for line in txt.splitlines():
+        print(f"  | {line}")
+    print()
+
+
 def manual_gate(r, execute):
-    """フル（複雑）Issueで人間の手動入力を求める。Enterで続行 / s でスキップ。"""
+    """ケースB/C（複雑）Issueで人間の手動入力を求める。Enterで続行 / s でスキップ。
+
+    続行時は clarify での確定事項をテキスト入力させ、r['clarification'] に保持して
+    plan 以降の工程プロンプトに注入する（空Enterなら未指定）。"""
     if not execute:
-        print("DRY-RUN > ［手動ゲート］複雑Issueのため一旦停止。Claude Codeで /speckit.clarify を手動実行→回答→レビュー後に続行。")
+        print("DRY-RUN > ［手動ゲート/要件確認］確定事項を入力 → plan 以降に注入（clarifyの手動実行は任意）。")
         return "go"
-    print("\n  ── 複雑なIssueです（フルパス）──")
-    print("  Claude Code で /speckit.clarify を手動実行し、AIの質問にPMが回答 → 内容をレビューしてください。")
+    print("\n  ── 複雑なIssueです（ケースB/C：要件確認）──")
+    _show_issue(r)
+    _show_spec(r)   # specify の成果物（レビュー対象）
+    print("  ↑ Issue と spec を確認し、実装方針として確定すべき事項を下に入力してください（plan 以降に反映されます）。")
+    print("  ※ AIの質問を見たい場合のみ、別途 Claude Code で /speckit.clarify を回し、その結論をここに記入（任意・必須ではありません）。")
     ans = input("  続行する=Enter / このIssueをスキップ=s / 全体を中止=q : ").strip().lower()
-    return {"s": "skip", "q": "quit"}.get(ans, "go")
+    if ans == "s":
+        return "skip"
+    if ans == "q":
+        return "quit"
+    # 続行 → clarify での確定事項を入力させ、plan 以降に渡す
+    notes = input("  clarify での確定事項（plan以降に反映。空Enter=なし）:\n  > ").strip()
+    if notes:
+        r["clarification"] = notes
+        _gate_record("clarify確定事項", notes)
+    return "go"
 
 
 def decide_gate(r, execute):
-    """ケースD（記述の矛盾）で、specifyの前に『正』を1つ決める人間ゲート。"""
+    """ケースD（記述の矛盾）で、specifyの前に『正』を1つ決める人間ゲート。
+
+    続行時は『正』の内容をテキスト入力させ、r['decision'] に保持して specify に渡す
+    （空Enterなら未指定＝AI判断）。"""
     if not execute:
-        print("DRY-RUN > ［手動ゲート/ケースD］食い違いを確認し『正』を1つ決める（必要ならPM確認）→ specifyへ。")
+        print("DRY-RUN > ［手動ゲート/ケースD］食い違いを確認し『正』を入力 → specify に注入。")
         return "go"
     print("\n  ── ケースD（記述の矛盾・食い違い）──")
-    print("  食い違う箇所を確認し、どれを『正』にするかを先に1つ決めてください（必要ならPM確認）。")
-    ans = input("  正を決めた=Enter / このIssueをスキップ=s / 全体を中止=q : ").strip().lower()
-    return {"s": "skip", "q": "quit"}.get(ans, "go")
+    _show_issue(r)
+    print("  ↑ 本文の食い違いを確認し、どれを『正』にするかを決めてください（必要ならPM確認）。")
+    ans = input("  続行=Enter / このIssueをスキップ=s / 全体を中止=q : ").strip().lower()
+    if ans == "s":
+        return "skip"
+    if ans == "q":
+        return "quit"
+    # 続行 → 『正』の内容を入力させ、specify プロンプトへ渡す
+    decision = input("  『正』の内容（どちらを正とし、どう統一するか。空Enter=AI判断）:\n  > ").strip()
+    if decision:
+        r["decision"] = decision
+        _gate_record("確定した正", decision)
+    return "go"
+
+
+def _show_analysis(r):
+    """analyze の結果を実装前レビュー用に表示する。
+    優先: analyze 工程の取り込み出力(r['analysis_output']) → specs/*/analysis*.md → 案内。"""
+    import glob
+    txt = (r.get("analysis_output") or "").strip()
+    src = "analyze 出力"
+    if not txt:
+        files = (sorted(glob.glob("specs/*/analysis*.md") + glob.glob("specs/*/analysis*.txt"),
+                        key=lambda p: os.path.getmtime(p), reverse=True)
+                 if os.path.isdir("specs") else [])
+        if files:
+            src = files[0]
+            try:
+                txt = open(files[0], encoding="utf-8").read().strip()
+            except Exception:
+                txt = ""
+    if txt:
+        print(f"  ── analyze 結果（{src}） ──")
+        limit = 3500
+        if len(txt) > limit:
+            txt = txt[:limit] + "\n  …（省略）"
+        for line in txt.splitlines():
+            print(f"  | {line}")
+    else:
+        print("  （analyze の出力は直前のログを確認してください）")
+    print()
+
+
+def analyze_gate(r, execute):
+    """ケースB/C で analyze の後、implement の前に置く実装前レビューゲート。
+
+    続行時は『実装前の修正指示』をテキスト入力させ、r['impl_note'] に保持して
+    implement プロンプトに注入する（空Enterなら未指定）。"""
+    if not execute:
+        print("DRY-RUN > ［手動ゲート/analyze後］整合性チェック結果を確認し、実装に進むか判断 → implement に注入。")
+        return "go"
+    print("\n  ── analyze 結果レビュー（実装前ゲート）──")
+    _show_analysis(r)
+    print("  ↑ analyze の指摘を確認し、実装に進めてよいか判断してください。")
+    ans = input("  実装へ進む=Enter / このIssueをスキップ=s / 全体を中止=q : ").strip().lower()
+    if ans == "s":
+        return "skip"
+    if ans == "q":
+        return "quit"
+    note = input("  実装前の修正指示（implementに反映。空Enter=なし）:\n  > ").strip()
+    if note:
+        r["impl_note"] = note
+        _gate_record("実装前の修正指示", note)
+    return "go"
 
 
 def current_branch():
@@ -422,18 +613,27 @@ def git_commit(r, execute):
 
 
 def git_clean(execute):
-    """失敗/スキップIssueの未完変更を破棄してツリーをクリーンにする（次Issueを汚さない）。"""
+    """失敗/スキップIssueの未完変更を破棄してツリーをクリーンにする（次Issueを汚さない）。
+
+    重要: `git clean -fd` は未追跡ファイル/ディレクトリを削除する。ツール自身が
+    対象repo内の未追跡 `tools/` 等に置かれていると、これがツール本体やレポートを
+    巻き込んで消してしまう。そこでツールのあるディレクトリを -e で除外し、自滅を防ぐ。
+    （gitignore 済みファイルは元々 git clean の対象外。）
+    """
+    tool_dir = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
     if not execute:
-        print("DRY-RUN > git reset --hard && git clean -fd （未完変更を破棄）")
+        print(f"DRY-RUN > git reset --hard && git clean -fd -e {tool_dir} （未完変更を破棄。ツール自身のディレクトリは除外）")
         return
     subprocess.run(["git", "reset", "--hard"])
-    subprocess.run(["git", "clean", "-fd"])
+    subprocess.run(["git", "clean", "-fd", "-e", tool_dir])
 
 
 def run_one(r, claude_bin, perm, do_build, execute, auto_complex, do_commit, allow_tools, skip):
     """1 Issueを Claude Code ヘッドレスで spec-kit 実行。
     ブランチは /speckit.specify が作成。正常完了時のみツールがコミット（push はしない）。"""
-    print(f"\n{'='*70}\n[{r['order']:02d}] #{r['num']} (ケース{r['case']}/{r['severity']}/{r['path']}) {r['title']}\n{'-'*70}")
+    print(f"\n{'='*70}\n[{r['order']:02d}] #{r['num']} (ケース{r['case']}/{r['severity']}) {r['title']}\n{'-'*70}")
+    _TIMING_CTX["num"] = r["num"]
+    _issue_t0 = _time.monotonic()
     def fail(step): return {"status": "fail", "step": step, "branch": None}
     # 0) ケースD は specify の前に『正』を1つ決める人間ゲート（--auto-complex で無効化）
     if r["case"] == "D" and not auto_complex:
@@ -446,31 +646,52 @@ def run_one(r, claude_bin, perm, do_build, execute, auto_complex, do_commit, all
     if not _invoke(claude_bin, perm, "/speckit.specify", specify_prompt(r) + "\n" + GUARD,
                    execute, allow_tools, skip):
         return fail("specify")
-    # 2) フル（ケースB/C）は clarify 手動ゲート（--auto-complex で無効化）
-    if r["path"] == "フル" and not auto_complex:
+    # 2) ケースB/C は clarify 手動ゲート（--auto-complex で無効化）
+    if is_full(r["case"]) and not auto_complex:
         g = manual_gate(r, execute)
         if g == "skip":
             print("  → スキップ"); return {"status": "skip", "step": "clarify", "branch": None}
         if g == "quit":
             return {"status": "quit"}
+    # clarify ゲートで入力された確定事項を plan 以降の各工程プロンプトに注入する
+    clar = r.get("clarification")
+    clar_block = (f"\n\n【clarifyでの確定事項】{clar}\nこの内容に従って進めること。" if clar else "")
     # 3) 残り工程
-    for st in REST_STEPS[r["path"]]:
-        if not _invoke(claude_bin, perm, f"/speckit.{st}", f"/speckit.{st}\n\n{GUARD}",
-                       execute, allow_tools, skip):
+    for st in rest_steps(r["case"]):
+        extra = clar_block
+        if st == "implement" and r.get("impl_note"):
+            extra += f"\n\n【analyze後の修正指示】{r['impl_note']}\nこれを反映して実装すること。"
+        # analyze はゲート再表示用に出力を取り込む（ライブ表示せず、ゲートで再掲）
+        cap = (st == "analyze" and not auto_complex)
+        if not _invoke(claude_bin, perm, f"/speckit.{st}", f"/speckit.{st}\n\n{GUARD}{extra}",
+                       execute, allow_tools, skip, capture=cap):
             return fail(st)
+        # analyze の後に実装前レビューゲート（ケースB/C・--auto-complex なし）
+        if st == "analyze" and not auto_complex:
+            r["analysis_output"] = _CAPTURED["text"]
+            g = analyze_gate(r, execute)
+            if g == "skip":
+                print("  → スキップ"); return {"status": "skip", "step": "analyze-review", "branch": None}
+            if g == "quit":
+                return {"status": "quit"}
     # 4) ビルド検証
     if do_build:
         if not execute:
             print("DRY-RUN > sushi build （FSH検証）")
         else:
             print("  ▶ sushi build …")
-            if subprocess.run(["sushi", "build"]).returncode != 0:
+            t0 = _time.monotonic()
+            rc = subprocess.run(["sushi", "build"]).returncode
+            _record("sushi build", _time.monotonic() - t0, rc == 0)
+            if rc != 0:
                 print("  ✖ sushi build 失敗。", file=sys.stderr)
                 return fail("sushi build")
     # 5) checklist（品質チェックリスト生成）
-    if not _invoke(claude_bin, perm, "/speckit.checklist", "/speckit.checklist\n\n" + GUARD,
+    if not _invoke(claude_bin, perm, "/speckit.checklist", "/speckit.checklist\n\n" + GUARD + clar_block,
                    execute, allow_tools, skip):
         return fail("checklist")
+    if execute:
+        _record(f"#{r['num']} 合計", _time.monotonic() - _issue_t0, True)
     # 6) 正常完了 → 作業ブランチへコミット（push はしない）
     branch = current_branch() if execute else "(specifyが作成)"
     if do_commit:
@@ -483,8 +704,9 @@ def run_one(r, claude_bin, perm, do_build, execute, auto_complex, do_commit, all
 def write_report(results, mode):
     """成功/スキップ/失敗を Markdown レポートに書き出す（後から追跡できるように）。"""
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        f"issue_improver_report_{ts}.md")
+    out_dir = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(out_dir, exist_ok=True)  # ディレクトリが消えていても落ちないように
+    path = os.path.join(out_dir, f"issue_improver_report_{ts}.md")
     label = {"ok": "✅ 成功(コミット済)", "skip": "⏭ スキップ", "fail": "❌ 失敗(スキップ)", "quit": "⛔ 中止"}
     lines = [f"# issue_improver 実行レポート（{mode}） {ts}\n",
              "| Issue | ケース | 結果 | 失敗/停止工程 | ブランチ |",
@@ -498,9 +720,55 @@ def write_report(results, mode):
     return path
 
 
+def write_timing(mode):
+    """各工程の所要時間を CSV に書き出し、工程種別ごとの集計を表示する（原因切り分け用）。"""
+    if not TIMING_LOG:
+        return None
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_dir = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"issue_improver_timing_{ts}.csv")
+    import csv
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["issue", "step", "seconds", "ok"])
+        for t in TIMING_LOG:
+            w.writerow([t["num"] if t["num"] is not None else "-", t["step"], t["sec"], t["ok"]])
+    # 工程種別ごとの集計（合計行は除く）
+    agg = {}
+    for t in TIMING_LOG:
+        if str(t["step"]).endswith("合計"):
+            continue
+        a = agg.setdefault(t["step"], [0, 0.0])
+        a[0] += 1
+        a[1] += t["sec"]
+    print("\n[計測] 工程別 所要時間（回数 / 合計s / 平均s）", file=sys.stderr)
+    for step, (n, tot) in sorted(agg.items(), key=lambda kv: -kv[1][1]):
+        print(f"  {step:28s} {n:3d}回  合計{tot:7.1f}s  平均{tot/n:6.1f}s", file=sys.stderr)
+    return path
+
+
+def probe_startup(claude_bin, skip):
+    """Claude Code（+MCP/Serena）の素の起動コストを計測する。
+
+    自明なプロンプトを 1 回 `claude -p` するだけ。生成はほぼ無いので、所要時間は
+    おおむね「セッション起動 + MCP サーバ起動（Serena の activate/index 等）」に相当。
+    実工程の時間からこれを引くと、起動オーバーヘッドと実作業を切り分けられる。
+    """
+    cmd = [claude_bin, "-p", "OK とだけ返答してください。"]
+    cmd += ["--dangerously-skip-permissions"] if skip else []
+    print("[probe] 起動コスト計測のため自明プロンプトを1回実行します …", file=sys.stderr)
+    t0 = _time.monotonic()
+    subprocess.run(cmd, stdout=subprocess.DEVNULL)
+    dt = _time.monotonic() - t0
+    print(f"[probe] 起動+MCP(Serena含む)のおおよその素コスト: {dt:.1f}s", file=sys.stderr)
+    print("       （各工程の時間からこの値を引いた分が概ね実作業時間）", file=sys.stderr)
+    return dt
+
+
 def run_speckit(rows, a):
+    # rows は main で --case 適用済み。ここでは --only / --limit のみ。
     targets = [r for r in rows if (a.only is None or r["num"] == a.only)]
-    targets = filter_case(targets, a.case)
     if a.limit:
         targets = targets[:a.limit]
     if not targets:
@@ -508,7 +776,8 @@ def run_speckit(rows, a):
     # ケース種別でまとめる（A→B→C→D）。同ケース内は着手順。
     targets.sort(key=lambda r: (CASE_ORDER.index(r["case"]), r["order"]))
     mode = "実行(EXECUTE)" if a.execute else "ドライラン(表示のみ)"
-    gate = "全自動（D/フルも停止しない）" if a.auto_complex else "ケースD=正の決定／フル(B/C)=clarify で手動ゲート停止"
+    gate = ("全自動（ケースD/B/Cも停止しない）" if a.auto_complex
+            else "ケースD=正の決定（specify前）／ケースB/C=clarify（specify後）＋analyze後の実装前レビュー で手動ゲート停止")
     perm_desc = "全プロンプト自動承認（--yes）" if a.yes else f"編集は自動承認＋安全な許可リスト（permission={a.permission_mode}）"
     commit_desc = "コミットしない（--no-commit）" if a.no_commit else "正常完了時はツールが自動コミット"
     print(f"\n[自動実行モード] {mode} / 対象 {len(targets)}件 / claude='{a.claude_bin}'", file=sys.stderr)
@@ -516,6 +785,8 @@ def run_speckit(rows, a):
     print(f"[方針] ブランチは /speckit.specify が作成。ケース種別ごと(A→B→C→D)にまとめて実行。{gate}。エラーは停止せずスキップ。", file=sys.stderr)
     if a.execute:
         print("[注意] Claude Code を実際に起動し、ファイルを編集します（プラン利用量を消費）。", file=sys.stderr)
+    if a.probe and a.execute:
+        probe_startup(a.claude_bin, a.yes)
     allow = None if a.yes else ALLOW_TOOLS
     results = []
     cur_case = None
@@ -523,7 +794,7 @@ def run_speckit(rows, a):
         if r["case"] != cur_case:
             cur_case = r["case"]
             cnt = sum(1 for x in targets if x["case"] == cur_case)
-            print(f"\n{'#'*70}\n# ケース{cur_case}（{CASE_INFO[cur_case][1]}） {cnt}件 — まとめて実行\n{'#'*70}", file=sys.stderr)
+            print(f"\n{'#'*70}\n# ケース{cur_case}（{CASE_DESC[cur_case]}） {cnt}件 — まとめて実行\n{'#'*70}", file=sys.stderr)
         res = run_one(r, a.claude_bin, a.permission_mode, not a.no_build, a.execute,
                       a.auto_complex, not a.no_commit, allow, a.yes)
         results.append((r, res))
@@ -538,6 +809,9 @@ def run_speckit(rows, a):
     ng = sum(1 for _, x in results if x["status"] == "fail")
     print(f"\n[完了] 成功 {ok} / スキップ {skip} / 失敗 {ng}（{mode}）", file=sys.stderr)
     print(f"[レポート] {write_report(results, mode)}", file=sys.stderr)
+    tpath = write_timing(mode)
+    if tpath:
+        print(f"[計測CSV] {tpath}", file=sys.stderr)
     if not a.execute:
         print("実際に実行するには --execute を付けてください（まず --only <番号> で1件試すのを推奨）。", file=sys.stderr)
 
@@ -561,14 +835,20 @@ def main():
     ap.add_argument("--execute", action="store_true", help="--run時に実際に実行する（未指定はドライラン）")
     ap.add_argument("--only", type=int, default=None, help="指定Issue番号のみ自動実行（まず1件試す用）")
     ap.add_argument("--limit", type=int, default=None, help="自動実行する件数の上限")
-    ap.add_argument("--auto-complex", action="store_true", help="手動ゲート(ケースD=正の決定／フル=clarify)を無効化し全自動にする")
-    ap.add_argument("--case", choices=["A", "B", "C", "D"], default=None, help="指定ケースのみ実行（A=軽量/B=構造/C=制度/D=矛盾）")
+    ap.add_argument("--auto-complex", action="store_true", help="手動ゲート(ケースD=正の決定／ケースB/C=clarify・実装前)を無効化し全自動にする")
+    ap.add_argument("--case", choices=["A", "B", "C", "D"], default=None, help="指定ケースのみ実行（A=タイポ等/B=構造/C=制度/D=矛盾）")
     ap.add_argument("--yes", action="store_true", help="権限プロンプトを全て自動承認(--dangerously-skip-permissions)。既定は編集+安全な許可リストのみ")
     ap.add_argument("--no-commit", action="store_true", help="正常完了してもコミットしない（既定はツールが自動コミット）")
     ap.add_argument("--no-build", action="store_true", help="implement後の sushi build を行わない")
+    ap.add_argument("--probe", action="store_true", help="実行前に自明プロンプトを1回流し、Claude Code+MCP(Serena)の素の起動コストを計測する")
+    ap.add_argument("--log", default=None, help="画面出力（設定・ゲート表示・入力・analyzeレポート・計測・サマリ）をこのファイルにも追記する")
     ap.add_argument("--claude-bin", default="claude", help="claude 実行ファイル（既定: claude）")
     ap.add_argument("--permission-mode", default="acceptEdits", help="Claude Codeの権限モード（既定: acceptEdits）")
     a = ap.parse_args()
+
+    # 画面ログ: ツールの出力(stdout/stderr)を指定ファイルへも複製する（claude本体のライブ出力は対象外）
+    if a.log:
+        _start_logging(a.log)
 
     # ---- 設定の解決（優先順: CLI > 設定ファイル > git origin自動検出 > 組込み既定）----
     cfg_path = a.config or os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_NAME)

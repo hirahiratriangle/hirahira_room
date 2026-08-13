@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}一覧 - カウントアップ＆ダウン | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h3 fw-bold mb-2">カウントアップ＆ダウン</h1>
+            <p class="mb-0 small">本日 {{ today|date:"Y年n月j日 (D)" }}</p>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h5 mb-0" style="color: #2c5aa0;">登録した出来事・予定</h2>
+        <a href="{% url 'countdown:event_create' %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus me-1"></i>新規登録
+        </a>
+    </div>
+
+    <section class="mb-5">
+        <h3 class="h6 text-muted mb-3">
+            <i class="fas fa-arrow-down me-2" style="color:#2c5aa0;"></i>これからの予定（カウントダウン）
+        </h3>
+        {% for event in upcoming_events %}
+        <div class="card shadow-sm mb-3">
+            <div class="card-body d-flex flex-wrap justify-content-between align-items-center">
+                <div class="me-3">
+                    <h4 class="h5 mb-1">{{ event.name }}</h4>
+                    <p class="text-muted small mb-1">{{ event.date|date:"Y年n月j日 (D)" }}</p>
+                    {% if event.memo %}<p class="text-muted small mb-0">{{ event.memo|linebreaksbr }}</p>{% endif %}
+                </div>
+                <div class="text-end">
+                    {% if event.is_today %}
+                    <span class="badge bg-primary fs-6">本日</span>
+                    {% else %}
+                    <div>
+                        <span class="fs-2 fw-bold" style="color:#2c5aa0;">{{ event.count_days }}</span>
+                        <span class="text-muted">日</span>
+                    </div>
+                    <p class="text-muted small mb-0">
+                        あと{{ event.count_days }}日
+                        {% with wd=event.weeks_and_days %}
+                        {% if wd.0 %}（{{ wd.0 }}週{% if wd.1 %}と{{ wd.1 }}日{% endif %}）{% endif %}
+                        {% endwith %}
+                    </p>
+                    {% endif %}
+                    <div class="mt-2">
+                        <a href="{% url 'countdown:event_update' event.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+                        <a href="{% url 'countdown:event_delete' event.pk %}" class="btn btn-sm btn-outline-secondary">削除</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-muted small">これからの予定はまだありません。</p>
+        {% endfor %}
+    </section>
+
+    <section>
+        <h3 class="h6 text-muted mb-3">
+            <i class="fas fa-arrow-up me-2" style="color:#2c5aa0;"></i>過ぎた出来事（カウントアップ）
+        </h3>
+        {% for event in past_events %}
+        <div class="card shadow-sm mb-3">
+            <div class="card-body d-flex flex-wrap justify-content-between align-items-center">
+                <div class="me-3">
+                    <h4 class="h5 mb-1">{{ event.name }}</h4>
+                    <p class="text-muted small mb-1">{{ event.date|date:"Y年n月j日 (D)" }}</p>
+                    {% if event.memo %}<p class="text-muted small mb-0">{{ event.memo|linebreaksbr }}</p>{% endif %}
+                </div>
+                <div class="text-end">
+                    <div>
+                        <span class="fs-2 fw-bold" style="color:#2c5aa0;">{{ event.count_days }}</span>
+                        <span class="text-muted">日</span>
+                    </div>
+                    <p class="text-muted small mb-0">
+                        経過{{ event.count_days }}日
+                        {% if event.years_passed %}（{{ event.years_passed }}周年経過）{% endif %}
+                    </p>
+                    <div class="mt-2">
+                        <a href="{% url 'countdown:event_update' event.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+                        <a href="{% url 'countdown:event_delete' event.pk %}" class="btn btn-sm btn-outline-secondary">削除</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-muted small">過ぎた出来事はまだありません。</p>
+        {% endfor %}
+    </section>
+</div>
+{% endblock %}

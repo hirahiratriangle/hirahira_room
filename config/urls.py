@@ -20,6 +20,9 @@ urlpatterns = [
 
     # JP Core Issue 改善支援アプリ
     path('jpcore/', include('jpcore.urls', namespace='jpcore')),
+
+    # カウントアップ＆ダウンアプリ
+    path('countdown/', include('countdown.urls', namespace='countdown')),
 ]
 
 # メディアファイルの配信設定

@@ -1,19 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}データ分析 - Iris Classifier{% endblock %}
-
-{% block nav_items_left %}
-<li class="nav-item">
-    <a class="nav-link" href="{% url 'home:home' %}">HOME</a>
-</li>
-<li class="nav-item">
-    <a class="nav-link" href="{% url 'diary:index' %}">DIARY</a>
-</li>
-<li class="nav-item">
-    <a class="nav-link active" href="{% url 'iris_classifier:index' %}">IRIS CLASSIFIER</a>
-</li>
-{% endblock %}
+{% block title %}データ分析 - Iris Classifier | HirahiraRoom{% endblock %}
 
 {% block header %}
 <header style="background-color: #2c5aa0; padding-top: 5rem;">
