@@ -6,13 +6,10 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    # ローカル開発では config.settings_dev（DEBUG/SQLite）を既定にする。
-    # Azure App Service 上（WEBSITE_HOSTNAME あり）では従来どおり本番設定を使う。
-    # DJANGO_SETTINGS_MODULE を明示すればそちらが優先される。
-    default_settings = (
-        'config.settings' if 'WEBSITE_HOSTNAME' in os.environ else 'config.settings_dev'
-    )
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', default_settings)
+    # 本番設定（PostgreSQL / DEBUG=False）を既定にする。
+    # ローカル開発で動かすときは開発用設定を明示的に指定する:
+    #   python manage.py runserver --settings=config.settings_dev
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
