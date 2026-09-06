@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     'iris_classifier',
     'jpcore',
     'countdown',
+    'fe',
 ]
 
 MIDDLEWARE = [

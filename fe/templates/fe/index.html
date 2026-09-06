@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+
+{% block title %}FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h3 fw-bold mb-2">基本情報技術者試験 対策</h1>
+            <p class="mb-0 small">科目A 60問／90分・科目B 20問／100分　合格には両科目とも 600点／1,000点 以上が必要</p>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+
+    <!-- 総合成績 -->
+    <section class="mb-5">
+        <div class="row g-3">
+            <div class="col-6 col-lg-3">
+                <div class="border rounded p-3 h-100">
+                    <div class="small text-muted">総合正答率</div>
+                    <div class="h3 mb-0" style="color:#2c5aa0;">
+                        {% if overall.rate_percent is not None %}{{ overall.rate_percent }}<span class="fs-6">％</span>{% else %}—{% endif %}
+                    </div>
+                    <div class="small text-muted">{{ overall.correct }} / {{ overall.total }} 問正解</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="border rounded p-3 h-100">
+                    <div class="small text-muted">直近{{ overall.recent_total }}問の正答率</div>
+                    <div class="h3 mb-0" style="color:#2c5aa0;">
+                        {% if overall.recent_rate_percent is not None %}{{ overall.recent_rate_percent }}<span class="fs-6">％</span>{% else %}—{% endif %}
+                    </div>
+                    <div class="small text-muted">目安は {{ overall.pass_line_percent }}％以上</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="border rounded p-3 h-100">
+                    <div class="small text-muted">学習した日数</div>
+                    <div class="h3 mb-0" style="color:#2c5aa0;">{{ overall.study_days }}<span class="fs-6"> 日</span></div>
+                    <div class="small text-muted">継続が一番効く</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="border rounded p-3 h-100">
+                    <div class="small text-muted">収録問題</div>
+                    <div class="h3 mb-0" style="color:#2c5aa0;">{{ question_total }}<span class="fs-6"> 問</span></div>
+                    <div class="small text-muted">＋ 計算問題 {{ template_total }} 型（毎回数値が変わる）</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 出題設定と開始 -->
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">出題</h2>
+        <div class="border rounded p-3">
+            {% include 'fe/_settings_form.html' %}
+            <hr class="my-3">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <a href="{% url 'fe:quiz' %}" class="btn btn-primary">
+                    <i class="fas fa-play me-1"></i>いまの設定で解く（{{ study_session.get_mode_display }}）
+                </a>
+                <a href="{% url 'fe:stats' %}" class="btn btn-outline-primary btn-sm">分野別の正答率</a>
+                <a href="{% url 'fe:history' %}?result=wrong" class="btn btn-outline-primary btn-sm">まちがえた問題</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- 苦手分野 -->
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">苦手分野</h2>
+        {% if weak %}
+        <p class="small text-muted">
+            解答数が少ないうちに極端な判定にならないよう，正答率は 60％ に寄せて平滑化してから比較しています。
+            「おまかせ」モードでは，ここに挙がった分野が本番の出題比率より高い頻度で出ます。
+        </p>
+        <div class="list-group">
+            {% for row in weak %}
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <span class="badge bg-secondary me-2">{{ row.category.get_field_display }}</span>
+                        <strong>{{ row.category.label }}</strong>
+                        <span class="small text-muted ms-2">本番の想定出題数 {{ row.category.exam_weight }} 問／60問</span>
+                    </div>
+                    <div class="text-end">
+                        <span class="h6 mb-0 {% if row.rate_percent < 50 %}text-danger{% else %}text-warning{% endif %}">
+                            {{ row.rate_percent }}％
+                        </span>
+                        <span class="small text-muted">（{{ row.correct }}/{{ row.total }}）</span>
+                    </div>
+                </div>
+                <div class="progress mt-2" style="height:6px;">
+                    <div class="progress-bar {% if row.rate_percent < 50 %}bg-danger{% else %}bg-warning{% endif %}"
+                         role="progressbar" style="width: {{ row.rate_percent }}%;"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">まだ判定できるだけの解答がありません。各分野を3問以上解くと，ここに苦手な順で表示されます。</p>
+        {% endif %}
+    </section>
+
+    <!-- 未着手 -->
+    {% if untouched %}
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">まだ手を付けていない分野</h2>
+        <div class="d-flex flex-wrap gap-2">
+            {% for row in untouched %}
+            <span class="badge bg-light text-dark border">{{ row.category.label }}</span>
+            {% endfor %}
+        </div>
+        <p class="small text-muted mt-2">実力が分からない分野は，おまかせモードで優先的に出題されます。</p>
+    </section>
+    {% endif %}
+
+    <!-- 分野別 -->
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">分野別の正答率</h2>
+        <div class="row g-3">
+            {% for field in fields %}
+            <div class="col-12 col-md-4">
+                <div class="border rounded p-3 h-100">
+                    <div class="d-flex justify-content-between">
+                        <strong>{{ field.field_label }}</strong>
+                        <span>{% if field.rate_percent is not None %}{{ field.rate_percent }}％{% else %}—{% endif %}</span>
+                    </div>
+                    <div class="progress mt-2" style="height:8px;">
+                        <div class="progress-bar" role="progressbar"
+                             style="width: {% if field.rate_percent %}{{ field.rate_percent }}{% else %}0{% endif %}%; background-color:#2c5aa0;"></div>
+                    </div>
+                    <div class="small text-muted mt-1">
+                        {{ field.correct }} / {{ field.total }} 問　本番の想定 {{ field.weight }} 問／60問
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- 直近の学習量 -->
+    <section>
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">直近14日の解答数</h2>
+        <div class="d-flex align-items-end gap-1 border rounded p-3" style="height:120px;">
+            {% for day in daily %}
+            <div class="flex-fill d-flex flex-column justify-content-end align-items-center h-100"
+                 title="{{ day.date|date:'n月j日' }} {{ day.total }}問（正解 {{ day.correct }}）">
+                <div class="w-100 rounded-top"
+                     style="background-color:#2c5aa0; height: {% widthratio day.total max_daily 100 %}%; min-height:{% if day.total %}4{% else %}0{% endif %}px;"></div>
+                <div class="small text-muted mt-1" style="font-size:0.65rem;">{{ day.date|date:'j' }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+</div>
+{% endblock %}

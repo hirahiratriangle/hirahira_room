@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block title %}演習 - FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block head %}
+<style>
+    /* 擬似言語のプログラムは改行と字下げを保ったまま表示する */
+    .fe-stem { white-space: pre-wrap; line-height: 1.9; }
+    .fe-stem-b { font-family: "SFMono-Regular", Consolas, "Courier New", monospace; font-size: 0.95rem; }
+    .fe-choice { cursor: pointer; }
+    .fe-choice:hover { background-color: #f4f7fb; }
+    .fe-choice-label { min-width: 1.8rem; font-weight: 700; color: #2c5aa0; }
+</style>
+{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="d-flex justify-content-between align-items-center text-white flex-wrap gap-2">
+            <h1 class="h5 fw-bold mb-0">1問1答</h1>
+            <div class="small">
+                <a class="text-white text-decoration-none me-3" href="{% url 'fe:index' %}">ダッシュボード</a>
+                <a class="text-white text-decoration-none me-3" href="{% url 'fe:stats' %}">分野別正答率</a>
+                <a class="text-white text-decoration-none" href="{% url 'fe:history' %}">履歴</a>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 900px;">
+
+    {% if no_question %}
+    <div class="alert alert-warning">
+        いまの設定で出題できる問題がありません。出題モードか科目を変えてください。
+    </div>
+    <div class="border rounded p-3">{% include 'fe/_settings_form.html' %}</div>
+
+    {% else %}
+
+    <!-- 問題の属性 -->
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <span class="badge" style="background-color:#2c5aa0;">
+                {{ question.get_subject_display }}
+            </span>
+            <span class="badge bg-secondary">{{ question.category.get_field_display }}</span>
+            <span class="ms-2 small text-muted">
+                {{ question.category.label }}{% if question.topic %} ／ {{ question.topic }}{% endif %}
+            </span>
+        </div>
+        {% if reason %}
+        <span class="small text-muted"><i class="fas fa-bullseye me-1"></i>{{ reason }}</span>
+        {% endif %}
+    </div>
+
+    <!-- 問題文 -->
+    <div class="border rounded p-4 mb-4 bg-white">
+        <div class="fe-stem {% if question.subject == 'B' %}fe-stem-b{% endif %}">{{ question.stem }}</div>
+    </div>
+
+    {% if answered %}
+    <!-- 採点結果 -->
+    <div class="alert {% if is_correct %}alert-success{% else %}alert-danger{% endif %} d-flex align-items-center">
+        <span class="h4 mb-0 me-3">{% if is_correct %}○{% else %}×{% endif %}</span>
+        <div>
+            <strong>{% if is_correct %}正解{% else %}不正解{% endif %}</strong>
+            <span class="ms-2">正解は <strong>{{ question.answer_label }}</strong></span>
+            {% if not is_correct %}
+            <span class="ms-2 small">（選んだのは {{ selected_label }}）</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="list-group mb-4">
+        {% for index, label, text in question.labeled_choices %}
+        <div class="list-group-item d-flex
+                    {% if index == question.answer_index %}list-group-item-success{% elif index == selected %}list-group-item-danger{% endif %}">
+            <span class="fe-choice-label">{{ label }}</span>
+            <span class="flex-fill">{{ text }}</span>
+            {% if index == question.answer_index %}<span class="small text-success ms-2">正解</span>
+            {% elif index == selected %}<span class="small text-danger ms-2">あなたの解答</span>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if question.explanation %}
+    <div class="border-start border-4 ps-3 mb-4" style="border-color:#2c5aa0 !important;">
+        <h2 class="h6" style="color:#2c5aa0;">解説</h2>
+        <p class="mb-2" style="line-height:1.9;">{{ question.explanation }}</p>
+        {% if question.source %}<p class="small text-muted mb-0">出典・根拠：{{ question.source }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="small text-muted">
+            {{ progress.category.name }}：{{ progress.correct }}/{{ progress.total }} 問正解
+            {% if progress.rate_percent is not None %}（{{ progress.rate_percent }}％）{% endif %}
+            {% if elapsed_ms %}　所要 {{ elapsed_ms|floatformat:0 }} ミリ秒{% endif %}
+        </div>
+        <a href="{% url 'fe:quiz' %}" class="btn btn-primary">
+            次の問題へ<i class="fas fa-arrow-right ms-2"></i>
+        </a>
+    </div>
+
+    {% else %}
+    <!-- 解答フォーム -->
+    <form method="post" action="{% url 'fe:quiz' %}">
+        {% csrf_token %}
+        <input type="hidden" name="question_id" value="{{ question.id }}">
+        <div class="list-group mb-4">
+            {% for index, label, text in question.labeled_choices %}
+            <label class="list-group-item d-flex align-items-start fe-choice">
+                <input class="form-check-input me-3 mt-1" type="radio" name="choice" value="{{ index }}" required>
+                <span class="fe-choice-label">{{ label }}</span>
+                <span class="flex-fill">{{ text }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="small text-muted">
+                {{ progress.category.name }}：これまで {{ progress.correct }}/{{ progress.total }} 問正解
+            </div>
+            <button type="submit" class="btn btn-primary">解答する</button>
+        </div>
+    </form>
+    {% endif %}
+
+    <hr class="my-5">
+    <div class="border rounded p-3">
+        <div class="small text-muted mb-2">出題設定</div>
+        {% include 'fe/_settings_form.html' %}
+    </div>
+
+    {% endif %}
+</div>
+{% endblock %}

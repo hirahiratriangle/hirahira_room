@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+{% block title %}解答履歴 - FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="d-flex justify-content-between align-items-center text-white flex-wrap gap-2">
+            <h1 class="h5 fw-bold mb-0">解答履歴</h1>
+            <div class="small">
+                <a class="text-white text-decoration-none me-3" href="{% url 'fe:index' %}">ダッシュボード</a>
+                <a class="text-white text-decoration-none" href="{% url 'fe:quiz' %}">演習にもどる</a>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+
+    <form method="get" class="row g-2 align-items-end mb-4">
+        <div class="col-6 col-md-3">
+            <label for="result" class="form-label small text-muted mb-1">正誤</label>
+            <select class="form-select form-select-sm" id="result" name="result">
+                <option value="">すべて</option>
+                <option value="wrong" {% if result_filter == 'wrong' %}selected{% endif %}>まちがえた問題</option>
+                <option value="correct" {% if result_filter == 'correct' %}selected{% endif %}>正解した問題</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-4">
+            <label for="category" class="form-label small text-muted mb-1">分野</label>
+            <select class="form-select form-select-sm" id="category" name="category">
+                <option value="">すべて</option>
+                {% for category in categories %}
+                <option value="{{ category.code }}" {% if category_filter == category.code|stringformat:'s' %}selected{% endif %}>
+                    {{ category.label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-2 d-grid">
+            <button type="submit" class="btn btn-sm btn-outline-primary">絞り込む</button>
+        </div>
+    </form>
+
+    {% if attempts %}
+    <div class="list-group">
+        {% for attempt in attempts %}
+        <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div class="flex-fill">
+                    <div class="small text-muted mb-1">
+                        <span class="badge {% if attempt.is_correct %}bg-success{% else %}bg-danger{% endif %} me-2">
+                            {% if attempt.is_correct %}○{% else %}×{% endif %}
+                        </span>
+                        {{ attempt.category.label }}
+                        {% if attempt.question.topic %} ／ {{ attempt.question.topic }}{% endif %}
+                        <span class="ms-2">{{ attempt.answered_at|date:"Y/m/d H:i" }}</span>
+                    </div>
+                    <div>{{ attempt.question.stem|truncatechars:110 }}</div>
+                    {% if not attempt.is_correct %}
+                    <div class="small text-muted mt-1">
+                        正解：{{ attempt.question.answer_label }}
+                        ／ あなたの解答：{{ attempt.selected_label }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if is_paginated %}
+    <nav class="mt-4">
+        <ul class="pagination pagination-sm justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if result_filter %}&result={{ result_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">前へ</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled">
+                <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if result_filter %}&result={{ result_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">次へ</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <p class="text-muted">該当する解答履歴がありません。</p>
+    {% endif %}
+
+</div>
+{% endblock %}

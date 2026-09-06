@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}分野別正答率 - FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="d-flex justify-content-between align-items-center text-white flex-wrap gap-2">
+            <h1 class="h5 fw-bold mb-0">分野別の正答率</h1>
+            <div class="small">
+                <a class="text-white text-decoration-none me-3" href="{% url 'fe:index' %}">ダッシュボード</a>
+                <a class="text-white text-decoration-none" href="{% url 'fe:quiz' %}">演習にもどる</a>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+
+    <div class="mb-4">
+        <a href="{% url 'fe:stats' %}" class="btn btn-sm {% if not subject %}btn-primary{% else %}btn-outline-primary{% endif %}">両科目</a>
+        {% for value, label in subject_choices %}
+        <a href="{% url 'fe:stats' %}?subject={{ value }}"
+           class="btn btn-sm {% if subject == value %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+            <tr class="small text-muted">
+                <th style="width:8%;">分野</th>
+                <th>中分類</th>
+                <th class="text-end" style="width:9%;">本番<br>想定</th>
+                <th class="text-end" style="width:9%;">解答数</th>
+                <th class="text-end" style="width:9%;">正答率</th>
+                <th style="width:22%;">習得度</th>
+                <th class="text-end" style="width:11%;">重点出題<br>の比率</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+            <tr {% if row.is_weak %}class="table-warning"{% endif %}>
+                <td class="small text-muted">{{ row.category.get_field_display }}</td>
+                <td>
+                    {{ row.category.label }}
+                    {% if row.is_weak %}<span class="badge bg-danger ms-1">苦手</span>{% endif %}
+                    {% if row.is_untouched and row.question_count %}<span class="badge bg-secondary ms-1">未着手</span>{% endif %}
+                    <div class="small text-muted">出題可能 {{ row.question_count }} 問</div>
+                </td>
+                <td class="text-end">{{ row.category.exam_weight }}</td>
+                <td class="text-end">{{ row.total }}</td>
+                <td class="text-end">
+                    {% if row.rate_percent is not None %}{{ row.rate_percent }}％{% else %}—{% endif %}
+                </td>
+                <td>
+                    <div class="progress" style="height:8px;">
+                        <div class="progress-bar {% if row.rate_percent is None %}bg-light{% elif row.rate_percent < 50 %}bg-danger{% elif row.rate_percent < 70 %}bg-warning{% else %}bg-success{% endif %}"
+                             role="progressbar"
+                             style="width: {% if row.rate_percent %}{{ row.rate_percent }}{% else %}0{% endif %}%;"></div>
+                    </div>
+                </td>
+                <td class="text-end small text-muted">{{ row.focus_share }}％</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="row g-3 mt-2">
+        {% for field in fields %}
+        <div class="col-12 col-md-4">
+            <div class="border rounded p-3">
+                <div class="d-flex justify-content-between">
+                    <strong>{{ field.field_label }}</strong>
+                    <span>{% if field.rate_percent is not None %}{{ field.rate_percent }}％{% else %}—{% endif %}</span>
+                </div>
+                <div class="small text-muted">{{ field.correct }} / {{ field.total }} 問　本番 {{ field.weight }} 問／60問</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="alert alert-light border mt-4 small">
+        <strong>「重点出題の比率」の読み方：</strong>
+        「おまかせ（苦手を重点出題）」モードで，次の1問がその分野から出る確率です。
+        本番の出題比率（＝本番想定の問数）を土台に，苦手なほど最大で約 2.3 倍まで重みを上げ，
+        得意な分野は 0.3 倍まで下げています。本番で8問出るセキュリティを軽視しないための設計です。
+    </div>
+
+</div>
+{% endblock %}

@@ -23,6 +23,9 @@ urlpatterns = [
 
     # カウントアップ＆ダウンアプリ
     path('countdown/', include('countdown.urls', namespace='countdown')),
+
+    # 基本情報技術者試験（FE）対策アプリ
+    path('fe/', include('fe.urls', namespace='fe')),
 ]
 
 # メディアファイルの配信設定

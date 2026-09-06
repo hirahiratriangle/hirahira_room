@@ -1,0 +1,33 @@
+{% comment %}出題モードの切替フォーム。quiz 画面とダッシュボードで共有する。{% endcomment %}
+<form method="post" action="{% url 'fe:quiz_settings' %}" class="row g-2 align-items-end">
+    {% csrf_token %}
+    <div class="col-12 col-md-4">
+        <label for="mode" class="form-label small text-muted mb-1">出題モード</label>
+        <select class="form-select form-select-sm" id="mode" name="mode">
+            {% for value, label in study_session.MODE_CHOICES %}
+            <option value="{{ value }}" {% if study_session.mode == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-6 col-md-3">
+        <label for="subject" class="form-label small text-muted mb-1">科目</label>
+        <select class="form-select form-select-sm" id="subject" name="subject">
+            <option value="A" {% if study_session.subject == 'A' %}selected{% endif %}>科目A（知識）</option>
+            <option value="B" {% if study_session.subject == 'B' %}selected{% endif %}>科目B（技能）</option>
+        </select>
+    </div>
+    <div class="col-6 col-md-3">
+        <label for="category" class="form-label small text-muted mb-1">分野（分野指定のとき）</label>
+        <select class="form-select form-select-sm" id="category" name="category">
+            <option value="">指定なし</option>
+            {% for category in categories %}
+            <option value="{{ category.code }}" {% if study_session.category_id == category.id %}selected{% endif %}>
+                {{ category.label }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-12 col-md-2 d-grid">
+        <button type="submit" class="btn btn-sm btn-outline-primary">この設定で出題</button>
+    </div>
+</form>
