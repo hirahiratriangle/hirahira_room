@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from .models import Attempt, Category, Question, QuestionTemplate, StudySession
+from .models import (Attempt, Category, CategoryProgress, DailyProgress,
+                     Question, QuestionTemplate, StudySession)
 
 
 @admin.register(Category)
@@ -12,10 +13,10 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('key', 'subject', 'category', 'topic', 'difficulty', 'is_active')
+    list_display = ('__str__', 'owner', 'subject', 'category', 'topic', 'difficulty')
     list_filter = ('subject', 'category', 'difficulty', 'is_active')
-    search_fields = ('key', 'stem', 'topic')
-    ordering = ('key',)
+    search_fields = ('stem', 'topic')
+    ordering = ('category__code', 'id')
 
 
 @admin.register(QuestionTemplate)
@@ -29,6 +30,18 @@ class AttemptAdmin(admin.ModelAdmin):
     list_display = ('user', 'question', 'category', 'is_correct', 'answered_at')
     list_filter = ('is_correct', 'category')
     date_hierarchy = 'answered_at'
+
+
+@admin.register(CategoryProgress)
+class CategoryProgressAdmin(admin.ModelAdmin):
+    list_display = ('user', 'category', 'subject', 'answered', 'correct', 'last_answered_at')
+    list_filter = ('subject', 'category')
+
+
+@admin.register(DailyProgress)
+class DailyProgressAdmin(admin.ModelAdmin):
+    list_display = ('user', 'date', 'answered', 'correct')
+    date_hierarchy = 'date'
 
 
 admin.site.register(StudySession)

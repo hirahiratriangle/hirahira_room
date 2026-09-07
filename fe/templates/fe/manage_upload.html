@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+
+{% block title %}JSONを取り込む - FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="d-flex justify-content-between align-items-center text-white flex-wrap gap-2">
+            <h1 class="h5 fw-bold mb-0">JSONを取り込む</h1>
+            <a class="text-white text-decoration-none small" href="{% url 'fe:manage_list' %}">一覧に戻る</a>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 960px;">
+
+    <p class="text-muted">
+        取り込んだ問題は<strong>あなたのアカウントの問題</strong>になります。他の人の出題や成績には影響しません。
+        取り込みは<strong>常に一括差し替え</strong>で、ファイルの内容がそのままあなたの問題集になります。
+    </p>
+
+    {% if not has_questions and bundled_count %}
+    <div class="border rounded p-4 mb-4" style="background-color:#eef3fa;">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <div class="fw-bold" style="color:#2c5aa0;">まずはここから</div>
+                <div class="small text-muted">
+                    アプリに同梱している問題バンク（{{ bundled_count }}問）を取り込めます。
+                    中身は fe/data/questions_*.json そのものです。
+                </div>
+            </div>
+            <form method="post" action="{% url 'fe:manage_bundled' %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-sm">同梱の{{ bundled_count }}問を取り込む</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+
+    <div class="border rounded p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div>
+                <span class="fw-bold" style="color:#2c5aa0;">問題を作ってもらうプロンプト</span>
+                <span class="small text-muted ms-2">
+                    自分の Claude Code に貼り付けると、この画面に取り込める形式で返ってきます
+                </span>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="copyPrompt">
+                <i class="far fa-copy me-1"></i>コピー
+            </button>
+        </div>
+        <details>
+            <summary class="small text-muted" style="cursor:pointer;">プロンプトを表示する</summary>
+{% verbatim %}<pre id="promptText" class="small mt-2 mb-0 p-3 rounded" style="white-space: pre-wrap; background-color:#f6f8fb; max-height: 22rem; overflow-y: auto;">基本情報技術者試験の対策アプリ用に、問題をJSONで作ってください。
+出力はJSON配列だけ。説明文は不要です。
+
+[
+  {
+    "category": 11,
+    "subject": "A",
+    "topic": "情報セキュリティ",
+    "difficulty": 2,
+    "stem": "問題文",
+    "choices": ["ア の本文", "イ の本文", "ウ の本文", "エ の本文"],
+    "answer": 0,
+    "explanation": "正解の理由と、他の選択肢がなぜ違うか",
+    "source": "出典（過去問の問番号、またはシラバスの小分類）"
+  }
+]
+
+【規則】
+- category は中分類の番号（下表）。必須
+- subject は "A"（知識）か "B"（技能・擬似言語）。既定は "A"
+- choices にア／イ／ウ／エの記号は入れない（表示側が付ける）
+- answer は 0 から数える
+- 科目Aは必ず4択。科目Bは本番同様6〜10択にする（4択だと消去法が効きすぎる）
+- 擬似言語は stem に改行と全角スペースの字下げでそのまま書く
+- キーは書かない
+
+【中分類（括弧内は本番60問での想定出題数）】
+1 基礎理論(3) / 2 アルゴリズムとプログラミング(5) / 3 コンピュータ構成要素(3) /
+4 システム構成要素(3) / 5 ソフトウェア(2) / 6 ハードウェア(1) /
+7 ユーザーインタフェース(1) / 8 情報メディア(1) / 9 データベース(4) /
+10 ネットワーク(5) / 11 セキュリティ(8) / 12 システム開発技術(3) /
+13 ソフトウェア開発管理技術(2) / 14 プロジェクトマネジメント(3) /
+15 サービスマネジメント(2) / 16 システム監査(2) / 17 システム戦略(2) /
+18 システム企画(1) / 19 経営戦略マネジメント(3) / 20 技術戦略マネジメント(1) /
+21 ビジネスインダストリ(2) / 22 企業活動(2) / 23 法務(1)
+
+【誤答の作り方】
+混同しやすい近い概念を誤答に置く。でたらめな誤答にすると消去法で解けてしまい学習にならない。
+計算問題なら「式を取り違えたときに出る値」を並べる。
+
+【依頼】
+セキュリティ（category 11）を20問、科目Aで作ってください。</pre>{% endverbatim %}
+        </details>
+        <div class="form-text mt-2">
+            最後の【依頼】の行を書き換えれば、分野・問数・科目を変えられます。
+            返ってきたJSONを下の欄に貼り付けるか、ファイルに保存して選んでください。
+        </div>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+        {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="mb-4">
+            <label for="{{ form.upload.id_for_label }}" class="form-label small fw-bold">JSONファイル</label>
+            {{ form.upload }}
+            <div class="form-text">{{ form.upload.help_text }}</div>
+            {% for e in form.upload.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="text-center text-muted small mb-3">— または —</div>
+
+        <div class="mb-4">
+            <label for="{{ form.payload.id_for_label }}" class="form-label small fw-bold">貼り付け</label>
+            {{ form.payload }}
+            <div class="form-text">{{ form.payload.help_text }}</div>
+            {% for e in form.payload.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="alert alert-warning">
+            <strong>取り込むと、いまの問題集はこのファイルの内容に入れ替わります。</strong>
+            これまでの問題は削除されます。ただし<strong>解答履歴は問題とは別に保存している</strong>ので、
+            過去の記録は消えません。分野ごとの正答率と苦手分野の判定もそのまま続きます。
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'fe:manage_list' %}" class="btn btn-outline-secondary btn-sm">キャンセル</a>
+            <button type="submit" class="btn btn-primary">取り込む</button>
+        </div>
+    </form>
+
+    <div class="border rounded p-3 mt-4 bg-light">
+        <div class="small fw-bold mb-2" style="color:#2c5aa0;">書式</div>
+<pre class="small mb-0" style="white-space: pre-wrap;">[
+ {
+  "category": 11,
+  "subject": "A",
+  "topic": "情報セキュリティ",
+  "difficulty": 2,
+  "stem": "問題文",
+  "choices": ["ア の本文", "イ の本文", "ウ の本文", "エ の本文"],
+  "answer": 0,
+  "explanation": "解説",
+  "source": "出典・根拠"
+ }
+]</pre>
+        <div class="small text-muted mt-2">
+            キーはアプリが払い出すので書く必要はありません。
+            choices に記号（ア／イ）は入れない。answer は 0 から数える。category は中分類の番号（1〜23）。
+            科目Aは四肢択一、科目Bは本番でも6〜10択が普通。
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// プロンプトをクリップボードへ。各自の Claude Code に貼って使う。
+(function () {
+    var button = document.getElementById('copyPrompt');
+    var source = document.getElementById('promptText');
+    if (!button || !source) { return; }
+    button.addEventListener('click', function () {
+        var text = source.textContent;
+        var done = function () {
+            var original = button.innerHTML;
+            button.innerHTML = 'コピーしました';
+            setTimeout(function () { button.innerHTML = original; }, 1600);
+        };
+        // 選択してコピーする方法。http のときや、クリップボードの許可が
+        // 下りなかったときはこちらに落とす。
+        var fallback = function () {
+            var area = document.createElement('textarea');
+            area.value = text;
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            try { document.execCommand('copy'); done(); } finally { document.body.removeChild(area); }
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done).catch(fallback);
+            return;
+        }
+        fallback();
+    });
+})();
+</script>
+{% endblock %}

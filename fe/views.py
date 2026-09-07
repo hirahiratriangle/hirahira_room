@@ -6,17 +6,26 @@
 
 import logging
 
+import json
+
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
-from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.db.models import Count, Q, Sum
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import generic
 
-from .models import Attempt, Category, Question, QuestionTemplate, StudySession
+from .forms import QuestionUploadForm
+from .importer import (ImportError_, bundled_records, export_records,
+                       replace_all, validate)
+from .models import (Attempt, Category, CategoryProgress, Question,
+                     QuestionTemplate, StudySession)
 from .selection import pick_question
-from .stats import category_stats, daily_counts, field_stats, overall_stats, weak_categories
+from .stats import (category_stats, daily_counts, field_stats, overall_stats,
+                    record_progress, weak_categories)
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +166,8 @@ class QuizView(LoginRequiredMixin, generic.View):
             is_correct=is_correct,
             elapsed_ms=elapsed_ms,
         )
+        # 問題が入れ替わっても残る記録。分野別の正答率と苦手判定はこちらを見る。
+        record_progress(request.user, question, is_correct)
 
         # 採点済みなので保留を落とし，直近履歴に積む
         request.session.pop(SESSION_PENDING, None)
@@ -180,9 +191,11 @@ class QuizView(LoginRequiredMixin, generic.View):
     @staticmethod
     def _progress(user, category):
         """その中分類の現在の成績（解答直後に見せる）。"""
-        attempts = Attempt.objects.filter(user=user, category=category)
-        total = attempts.count()
-        correct = attempts.filter(is_correct=True).count()
+        totals = CategoryProgress.objects.filter(user=user, category=category).aggregate(
+            total=Sum('answered'), correct=Sum('correct')
+        )
+        total = totals['total'] or 0
+        correct = totals['correct'] or 0
         return {
             'category': category,
             'total': total,
@@ -248,3 +261,109 @@ class HistoryView(LoginRequiredMixin, generic.ListView):
         context['result_filter'] = self.request.GET.get('result', '')
         context['category_filter'] = self.request.GET.get('category', '')
         return context
+
+
+# ================================================================ 問題の管理
+# 問題はアカウントごとに持ち、JSON の取り込みが唯一の作成・更新経路。
+# 画面に入力フォームを置かないので、手元の JSON と画面の内容がずれない。
+
+
+class ManageListView(LoginRequiredMixin, generic.ListView):
+    """自分の問題の一覧。中身の確認と、出題対象の切り替えだけを行う。"""
+
+    template_name = 'fe/manage_list.html'
+    context_object_name = 'questions'
+    paginate_by = 25
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = (
+            Question.objects.select_related('category', 'template')
+            .filter(owner=user)
+            .annotate(attempt_count=Count('attempts'))
+        )
+        params = self.request.GET
+        if params.get('subject') in (Question.SUBJECT_A, Question.SUBJECT_B):
+            queryset = queryset.filter(subject=params['subject'])
+        if params.get('category', '').isdigit():
+            queryset = queryset.filter(category__code=params['category'])
+        keyword = params.get('q', '').strip()
+        if keyword:
+            queryset = queryset.filter(stem__icontains=keyword)
+        if params.get('generated') != 'on':
+            queryset = queryset.filter(template__isnull=True)
+        return queryset.order_by('category__code', 'id')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        mine = Question.objects.filter(owner=self.request.user, template__isnull=True)
+        context['categories'] = Category.objects.all()
+        context['filters'] = self.request.GET
+        context['query_string'] = self.request.GET.urlencode()
+        context['summary'] = {
+            'total': mine.count(),
+            'subject_a': mine.filter(subject=Question.SUBJECT_A).count(),
+            'subject_b': mine.filter(subject=Question.SUBJECT_B).count(),
+            'generated': Question.objects.filter(
+                owner=self.request.user, template__isnull=False
+            ).count(),
+        }
+        return context
+
+
+class QuestionUploadView(LoginRequiredMixin, generic.FormView):
+    """JSON を取り込んで、自分の問題にする。"""
+
+    template_name = 'fe/manage_upload.html'
+    form_class = QuestionUploadForm
+    success_url = reverse_lazy('fe:manage_list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['bundled_count'] = len(bundled_records())
+        context['has_questions'] = Question.objects.filter(
+            owner=self.request.user
+        ).exists()
+        return context
+
+    def form_valid(self, form):
+        created, removed = replace_all(self.request.user, form.cleaned_data['records'])
+        note = '問題集を {} 問に差し替えました。'.format(created)
+        if removed:
+            note += ' これまでの {} 問は削除しました（解答履歴は残っています）。'.format(removed)
+        messages.success(self.request, note)
+        return super().form_valid(form)
+
+
+class BundledImportView(LoginRequiredMixin, generic.View):
+    """アプリに同梱している問題バンクを、自分の問題として取り込む。
+
+    最初の1回でつまずかないための入口。中身はリポジトリの
+    fe/data/questions_*.json そのもので、扱いは手元の JSON と変わらない。
+    """
+
+    def post(self, request, *args, **kwargs):
+        records = bundled_records()
+        try:
+            validate(records)
+        except ImportError_ as exc:
+            messages.error(request, '同梱の問題バンクを読み込めませんでした：{}'.format(exc))
+            return redirect(reverse('fe:manage_upload'))
+
+        created, removed = replace_all(request.user, records)
+        note = '同梱の問題バンク {} 問を取り込みました。'.format(created)
+        if removed:
+            note += ' これまでの {} 問は削除しました（解答履歴は残っています）。'.format(removed)
+        messages.success(request, note)
+        return redirect(reverse('fe:manage_list'))
+
+
+class QuestionExportView(LoginRequiredMixin, generic.View):
+    """自分の問題を、取り込みと同じ形式の JSON で書き出す。"""
+
+    def get(self, request, *args, **kwargs):
+        records = export_records(request.user, request.GET.get('subject'))
+        body = json.dumps(records, ensure_ascii=False, indent=1)
+        response = HttpResponse(body, content_type='application/json; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="fe_questions.json"'
+        return response

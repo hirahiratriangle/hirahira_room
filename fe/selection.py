@@ -97,7 +97,7 @@ def _last_result_map(user, question_ids):
 def _pick_from_category(user, category, subject, exclude_ids):
     """中分類の中から1問を選ぶ。未出題 → 前回不正解 → 久しく解いていない順。"""
     questions = list(
-        Question.objects.active().for_subject(subject)
+        Question.objects.active().for_subject(subject).owned_by(user)
         .filter(category=category).exclude(id__in=exclude_ids)
     )
     # 計算問題のテンプレートは科目A用なので，科目Bのときは使わない
@@ -114,7 +114,7 @@ def _pick_from_category(user, category, subject, exclude_ids):
 
     # 未出題の固定問題が無い中分類では、テンプレートがあれば新しい数値で作る
     if generators and (not unseen or random.random() < TEMPLATE_RATIO):
-        question = generate_question(random.choice(generators))
+        question = generate_question(random.choice(generators), user)
         if question and question.id not in exclude_ids:
             return question, 'テンプレートから新しい数値で生成'
 
@@ -147,7 +147,8 @@ def _pick_review(user, subject, exclude_ids):
         return None, None
 
     questions = list(
-        Question.objects.active().for_subject(subject).filter(id__in=wrong_ids)
+        Question.objects.active().for_subject(subject).owned_by(user)
+        .filter(id__in=wrong_ids)
     )
     if not questions:
         return None, None

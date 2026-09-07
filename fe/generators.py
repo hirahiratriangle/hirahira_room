@@ -6,8 +6,6 @@
 使い回すので，テンプレート由来の問題にも正答率が積み上がる。
 """
 
-import hashlib
-import json
 import math
 import random
 
@@ -568,13 +566,12 @@ def generators_for_category(category):
     ]
 
 
-def _params_hash(params):
-    payload = json.dumps(params, sort_keys=True, ensure_ascii=False)
-    return hashlib.md5(payload.encode('utf-8')).hexdigest()[:10]
+def generate_question(template, user, rng=None):
+    """テンプレートから Question を1件作る。
 
-
-def generate_question(template, rng=None):
-    """テンプレートから Question を1件作る（同じパラメータなら使い回す）。"""
+    問題はアカウントごとに持つので、生成した問題も利用者のものになる。
+    同じ人が同じ数値を引いたときは、同じ問題を使い回す。
+    """
     spec = REGISTRY.get(template.key)
     if spec is None:
         return None
@@ -590,9 +587,8 @@ def generate_question(template, rng=None):
     rng.shuffle(options)
     answer_index = options.index(built['correct'])
 
-    key = '{}-{}'.format(template.key, _params_hash(built['params']))
     question, created = Question.objects.get_or_create(
-        key=key,
+        owner=user, template=template, params=built['params'],
         defaults={
             'subject': Question.SUBJECT_A,
             'category': template.category,
@@ -603,8 +599,6 @@ def generate_question(template, rng=None):
             'explanation': built['explanation'],
             'difficulty': 2,
             'source': 'テンプレート「{}」による自動生成'.format(template.title),
-            'template': template,
-            'params': built['params'],
         },
     )
     return question

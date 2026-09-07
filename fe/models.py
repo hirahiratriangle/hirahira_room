@@ -76,6 +76,10 @@ class QuestionQuerySet(models.QuerySet):
             return self.filter(subject=subject)
         return self
 
+    def owned_by(self, user):
+        """その利用者の問題。問題はアカウントごとに持ち、他人の分は混ざらない。"""
+        return self.filter(owner=user)
+
 
 class Question(models.Model):
     """1問1答で出題する問題。"""
@@ -86,9 +90,9 @@ class Question(models.Model):
 
     DIFFICULTY_CHOICES = [(1, '基本'), (2, '標準'), (3, '応用')]
 
-    key = models.CharField(
-        verbose_name='問題キー', max_length=60, unique=True,
-        help_text='再投入しても重複しないようにするための安定キー',
+    owner = models.ForeignKey(
+        CustomUser, verbose_name='所有者', on_delete=models.CASCADE,
+        related_name='fe_questions',
     )
     subject = models.CharField(
         verbose_name='科目', max_length=1, choices=SUBJECT_CHOICES, default=SUBJECT_A
@@ -107,6 +111,7 @@ class Question(models.Model):
     )
     source = models.CharField(verbose_name='出典・根拠', max_length=120, blank=True)
 
+
     template = models.ForeignKey(
         QuestionTemplate, verbose_name='生成元テンプレート', on_delete=models.CASCADE,
         null=True, blank=True, related_name='questions',
@@ -115,16 +120,17 @@ class Question(models.Model):
 
     is_active = models.BooleanField(verbose_name='有効', default=True)
     created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+    updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
 
     objects = QuestionQuerySet.as_manager()
 
     class Meta:
         verbose_name = verbose_name_plural = 'FE 問題'
-        ordering = ['category__code', 'key']
-        indexes = [models.Index(fields=['subject', 'category'])]
+        ordering = ['category__code', 'id']
+        indexes = [models.Index(fields=['owner', 'subject', 'category'])]
 
     def __str__(self):
-        return '[{}] {}'.format(self.key, self.stem[:30])
+        return self.stem[:40]
 
     @property
     def is_generated(self):
@@ -147,7 +153,13 @@ class Question(models.Model):
 
 
 class Attempt(models.Model):
-    """1問1答の解答履歴。正答率と苦手分野はすべてここから集計する。"""
+    """1問1答の詳細な解答ログ。
+
+    出題の組み立て（未出題か、前回まちがえたか）に使う短期的な記録で、
+    問題が取り込みで入れ替わると一緒に消える。
+    分野ごとの理解度は CategoryProgress に別途積み上げているので、
+    ここが消えても正答率や苦手分野の判定は失われない。
+    """
 
     user = models.ForeignKey(
         CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE, related_name='fe_attempts'
@@ -155,7 +167,6 @@ class Attempt(models.Model):
     question = models.ForeignKey(
         Question, verbose_name='問題', on_delete=models.CASCADE, related_name='attempts'
     )
-    # 出題時点の中分類を写し取っておく（問題の分類を後で直しても履歴は壊れない）
     category = models.ForeignKey(
         Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='attempts'
     )
@@ -165,7 +176,7 @@ class Attempt(models.Model):
     answered_at = models.DateTimeField(verbose_name='解答日時', auto_now_add=True)
 
     class Meta:
-        verbose_name = verbose_name_plural = 'FE 解答履歴'
+        verbose_name = verbose_name_plural = 'FE 解答ログ'
         ordering = ['-answered_at']
         indexes = [
             models.Index(fields=['user', '-answered_at']),
@@ -173,14 +184,71 @@ class Attempt(models.Model):
         ]
 
     def __str__(self):
-        return '{} {} {}'.format(
-            self.user, self.question.key, '○' if self.is_correct else '×'
-        )
+        return '{} {}'.format(self.user, '○' if self.is_correct else '×')
 
     @property
     def selected_label(self):
         """選んだ選択肢の記号（ア／イ／…）。"""
         return Question.choice_label(self.selected_index)
+
+
+class CategoryProgress(models.Model):
+    """分野ごとの理解度。問題を入れ替えても残る、この人の到達点。
+
+    問題そのものは取り込みのたびに消えるが、「セキュリティを何問解いて
+    何問正解したか」は残す。苦手分野の判定と重点出題はここを見る。
+    """
+
+    user = models.ForeignKey(
+        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
+        related_name='fe_progress',
+    )
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='progress'
+    )
+    subject = models.CharField(
+        verbose_name='科目', max_length=1, choices=Question.SUBJECT_CHOICES,
+        default=Question.SUBJECT_A,
+    )
+    answered = models.PositiveIntegerField(verbose_name='解答数', default=0)
+    correct = models.PositiveIntegerField(verbose_name='正解数', default=0)
+    last_answered_at = models.DateTimeField(verbose_name='最終解答日時', null=True, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE 分野別の理解度'
+        ordering = ['category__code']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'category', 'subject'], name='fe_unique_progress'
+            ),
+        ]
+
+    def __str__(self):
+        return '{} {} {}/{}'.format(
+            self.user, self.category.name, self.correct, self.answered
+        )
+
+
+class DailyProgress(models.Model):
+    """日ごとの解答数。学習の継続を見るための記録で、問題とは独立している。"""
+
+    user = models.ForeignKey(
+        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
+        related_name='fe_daily_progress',
+    )
+    date = models.DateField(verbose_name='日付')
+    answered = models.PositiveIntegerField(verbose_name='解答数', default=0)
+    correct = models.PositiveIntegerField(verbose_name='正解数', default=0)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE 日別の学習記録'
+        ordering = ['-date']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'date'], name='fe_unique_daily_progress'),
+        ]
+
+    def __str__(self):
+        return '{} {} {}問'.format(self.user, self.date, self.answered)
 
 
 class StudySession(models.Model):

@@ -30,7 +30,7 @@
             </div>
             <div class="col-6 col-lg-3">
                 <div class="border rounded p-3 h-100">
-                    <div class="small text-muted">直近{{ overall.recent_total }}問の正答率</div>
+                    <div class="small text-muted">直近{{ overall.recent_days }}日の正答率</div>
                     <div class="h3 mb-0" style="color:#2c5aa0;">
                         {% if overall.recent_rate_percent is not None %}{{ overall.recent_rate_percent }}<span class="fs-6">％</span>{% else %}—{% endif %}
                     </div>
@@ -66,6 +66,9 @@
                 </a>
                 <a href="{% url 'fe:stats' %}" class="btn btn-outline-primary btn-sm">分野別の正答率</a>
                 <a href="{% url 'fe:history' %}?result=wrong" class="btn btn-outline-primary btn-sm">まちがえた問題</a>
+                <a href="{% url 'fe:manage_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-pen me-1"></i>自分の問題を管理
+                </a>
             </div>
         </div>
     </section>
