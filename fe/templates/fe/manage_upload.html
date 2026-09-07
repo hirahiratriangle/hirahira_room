@@ -40,6 +40,27 @@
     {% endif %}
 
 
+
+    <div class="border rounded p-3 mb-4" style="background-color:#eef3fa;">
+        <div class="fw-bold mb-1" style="color:#2c5aa0;">問題を作るのに必要な資料</div>
+        <p class="small text-muted mb-2">
+            このアプリは{{ exam.name }}の資料を同梱していません。{{ exam.note }}
+            資料を見ずに作らせると、範囲外の問題や誤った正解が混ざります。
+        </p>
+        <ul class="small mb-2">
+            {% for m in exam.materials %}
+            <li>
+                <strong>{{ m.name }}</strong>
+                {% if m.required %}<span class="badge bg-secondary ms-1">必須</span>{% endif %}
+                <span class="text-muted">— {{ m.purpose }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="{{ exam.url }}" target="_blank" rel="noopener" class="small">
+            {{ exam.authority }}の配布ページを開く <i class="fas fa-external-link-alt"></i>
+        </a>
+    </div>
+
     <div class="border rounded p-3 mb-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
             <div>
@@ -54,48 +75,7 @@
         </div>
         <details>
             <summary class="small text-muted" style="cursor:pointer;">プロンプトを表示する</summary>
-{% verbatim %}<pre id="promptText" class="small mt-2 mb-0 p-3 rounded" style="white-space: pre-wrap; background-color:#f6f8fb; max-height: 22rem; overflow-y: auto;">基本情報技術者試験の対策アプリ用に、問題をJSONで作ってください。
-出力はJSON配列だけ。説明文は不要です。
-
-[
-  {
-    "category": 11,
-    "subject": "A",
-    "topic": "情報セキュリティ",
-    "difficulty": 2,
-    "stem": "問題文",
-    "choices": ["ア の本文", "イ の本文", "ウ の本文", "エ の本文"],
-    "answer": 0,
-    "explanation": "正解の理由と、他の選択肢がなぜ違うか",
-    "source": "出典（過去問の問番号、またはシラバスの小分類）"
-  }
-]
-
-【規則】
-- category は中分類の番号（下表）。必須
-- subject は "A"（知識）か "B"（技能・擬似言語）。既定は "A"
-- choices にア／イ／ウ／エの記号は入れない（表示側が付ける）
-- answer は 0 から数える
-- 科目Aは必ず4択。科目Bは本番同様6〜10択にする（4択だと消去法が効きすぎる）
-- 擬似言語は stem に改行と全角スペースの字下げでそのまま書く
-- キーは書かない
-
-【中分類（括弧内は本番60問での想定出題数）】
-1 基礎理論(3) / 2 アルゴリズムとプログラミング(5) / 3 コンピュータ構成要素(3) /
-4 システム構成要素(3) / 5 ソフトウェア(2) / 6 ハードウェア(1) /
-7 ユーザーインタフェース(1) / 8 情報メディア(1) / 9 データベース(4) /
-10 ネットワーク(5) / 11 セキュリティ(8) / 12 システム開発技術(3) /
-13 ソフトウェア開発管理技術(2) / 14 プロジェクトマネジメント(3) /
-15 サービスマネジメント(2) / 16 システム監査(2) / 17 システム戦略(2) /
-18 システム企画(1) / 19 経営戦略マネジメント(3) / 20 技術戦略マネジメント(1) /
-21 ビジネスインダストリ(2) / 22 企業活動(2) / 23 法務(1)
-
-【誤答の作り方】
-混同しやすい近い概念を誤答に置く。でたらめな誤答にすると消去法で解けてしまい学習にならない。
-計算問題なら「式を取り違えたときに出る値」を並べる。
-
-【依頼】
-セキュリティ（category 11）を20問、科目Aで作ってください。</pre>{% endverbatim %}
+<pre id="promptText" class="small mt-2 mb-0 p-3 rounded" style="white-space: pre-wrap; background-color:#f6f8fb; max-height: 22rem; overflow-y: auto;">{{ prompt }}</pre>
         </details>
         <div class="form-text mt-2">
             最後の【依頼】の行を書き換えれば、分野・問数・科目を変えられます。

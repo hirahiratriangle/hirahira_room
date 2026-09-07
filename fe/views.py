@@ -18,6 +18,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import generic
 
+from .exam import EXAM, build_prompt
 from .forms import QuestionUploadForm
 from .importer import (ImportError_, bundled_records, export_records,
                        replace_all, validate)
@@ -57,7 +58,8 @@ class IndexView(LoginRequiredMixin, generic.TemplateView):
         context['untouched'] = [r for r in rows if r['is_untouched'] and r['question_count']]
         context['study_session'] = _get_study_session(user)
         context['daily'] = daily_counts(user, days=14)
-        context['question_total'] = Question.objects.active().filter(
+        context['exam'] = EXAM
+        context['question_total'] = Question.objects.active().owned_by(user).filter(
             template__isnull=True
         ).count()
         context['template_total'] = QuestionTemplate.objects.filter(is_active=True).count()
@@ -324,6 +326,8 @@ class QuestionUploadView(LoginRequiredMixin, generic.FormView):
         context['has_questions'] = Question.objects.filter(
             owner=self.request.user
         ).exists()
+        context['exam'] = EXAM
+        context['prompt'] = build_prompt()
         return context
 
     def form_valid(self, form):

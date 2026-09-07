@@ -146,6 +146,47 @@
         </div>
     </section>
 
+    <!-- 問題を作るのに必要な資料 -->
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">問題を作るのに必要な資料</h2>
+        {% if question_total == 0 %}
+        <div class="border rounded p-4" style="background-color:#eef3fa;">
+            <p class="mb-3">
+                まだ問題がありません。{{ exam.name }}の問題は、
+                <strong>ご自身で用意した資料をもとに作って取り込みます</strong>。
+                このアプリは資料を同梱していません。
+            </p>
+        {% else %}
+        <div class="border rounded p-3">
+        {% endif %}
+            <div class="row g-3">
+                {% for m in exam.materials %}
+                <div class="col-12 col-md-4">
+                    <div class="border rounded p-3 bg-white h-100">
+                        <div class="fw-bold small" style="color:#2c5aa0;">
+                            {{ m.name }}{% if m.required %}<span class="badge bg-secondary ms-1">必須</span>{% endif %}
+                        </div>
+                        <div class="small text-muted mt-1">{{ m.purpose }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="small text-muted mt-3">
+                {{ exam.note }}
+                <a href="{{ exam.url }}" target="_blank" rel="noopener">
+                    {{ exam.authority }}の配布ページ <i class="fas fa-external-link-alt"></i>
+                </a>
+            </div>
+            {% if question_total == 0 %}
+            <div class="mt-3">
+                <a href="{% url 'fe:manage_upload' %}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-upload me-1"></i>取り込み画面へ
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
     <!-- 直近の学習量 -->
     <section>
         <h2 class="h5 mb-3" style="color:#2c5aa0;">直近14日の解答数</h2>

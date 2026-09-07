@@ -14,6 +14,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
+from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
 from .importer import bundled_records, replace_all, validate
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
@@ -541,3 +542,52 @@ class SeedCommandTests(TestCase):
         self.assertEqual(
             Question.objects.filter(owner=user).count(), len(bundled_records()),
         )
+
+
+class ExamDefinitionTests(TestCase):
+    """試験ごとにアプリを作る前提なので、対象試験と必要資料は1か所で定義する。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+
+    def test_required_materials_are_declared(self):
+        self.assertTrue(EXAM['name'])
+        self.assertTrue(EXAM['url'])
+        self.assertTrue(EXAM['materials'], '必要な資料が1つも書かれていない')
+        for material in EXAM['materials']:
+            with self.subTest(name=material.get('name')):
+                self.assertTrue(material['name'])
+                self.assertTrue(material['purpose'], '何に使う資料かを書く')
+
+    def test_prompt_lists_the_required_materials(self):
+        """資料を見ずに推測で作らせないよう、プロンプトに資料名を並べる。"""
+        prompt = build_prompt()
+        for material in EXAM['materials']:
+            self.assertIn(material['name'], prompt)
+        self.assertIn('推測で作らないでください', prompt)
+
+    def test_prompt_lists_every_category(self):
+        """分野を増やしてもプロンプトが追随すること。"""
+        prompt = build_prompt()
+        for category in Category.objects.all():
+            with self.subTest(category=category.name):
+                self.assertIn(category.name, prompt)
+
+    def test_upload_screen_shows_the_materials(self):
+        user = make_user('materials')
+        self.client.force_login(user)
+        response = self.client.get(reverse('fe:manage_upload'))
+        self.assertEqual(response.status_code, 200)
+        for material in EXAM['materials']:
+            self.assertContains(response, material['name'])
+        self.assertContains(response, EXAM['url'])
+
+    def test_dashboard_shows_the_materials(self):
+        user = make_user('materials_dash')
+        self.client.force_login(user)
+        response = self.client.get(reverse('fe:index'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '問題を作るのに必要な資料')
+        for material in EXAM['materials']:
+            self.assertContains(response, material['name'])
