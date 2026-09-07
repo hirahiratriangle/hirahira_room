@@ -20,8 +20,7 @@ from django.views import generic
 
 from .exam import EXAM, build_prompt
 from .forms import QuestionUploadForm
-from .importer import (ImportError_, bundled_records, export_records,
-                       replace_all, validate)
+from .importer import export_records, replace_all
 from .models import (Attempt, Category, CategoryProgress, Question,
                      QuestionTemplate, StudySession)
 from .selection import pick_question
@@ -322,10 +321,6 @@ class QuestionUploadView(LoginRequiredMixin, generic.FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['bundled_count'] = len(bundled_records())
-        context['has_questions'] = Question.objects.filter(
-            owner=self.request.user
-        ).exists()
         context['exam'] = EXAM
         context['prompt'] = build_prompt()
         return context
@@ -337,29 +332,6 @@ class QuestionUploadView(LoginRequiredMixin, generic.FormView):
             note += ' これまでの {} 問は削除しました（解答履歴は残っています）。'.format(removed)
         messages.success(self.request, note)
         return super().form_valid(form)
-
-
-class BundledImportView(LoginRequiredMixin, generic.View):
-    """アプリに同梱している問題バンクを、自分の問題として取り込む。
-
-    最初の1回でつまずかないための入口。中身はリポジトリの
-    fe/data/questions_*.json そのもので、扱いは手元の JSON と変わらない。
-    """
-
-    def post(self, request, *args, **kwargs):
-        records = bundled_records()
-        try:
-            validate(records)
-        except ImportError_ as exc:
-            messages.error(request, '同梱の問題バンクを読み込めませんでした：{}'.format(exc))
-            return redirect(reverse('fe:manage_upload'))
-
-        created, removed = replace_all(request.user, records)
-        note = '同梱の問題バンク {} 問を取り込みました。'.format(created)
-        if removed:
-            note += ' これまでの {} 問は削除しました（解答履歴は残っています）。'.format(removed)
-        messages.success(request, note)
-        return redirect(reverse('fe:manage_list'))
 
 
 class QuestionExportView(LoginRequiredMixin, generic.View):

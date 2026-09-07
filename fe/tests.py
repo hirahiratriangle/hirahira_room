@@ -16,7 +16,7 @@ from django.urls import reverse
 
 from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
-from .importer import bundled_records, replace_all, validate
+from .importer import replace_all, validate
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
                      Question, QuestionTemplate, StudySession)
 from .selection import pick_question
@@ -35,9 +35,31 @@ def make_user(username):
     )
 
 
-def give_bundled_questions(user):
-    """同梱の問題バンクをそのアカウントに取り込む。"""
-    return replace_all(user, validate(bundled_records()))
+def build_questions(user, per_category=4):
+    """テスト用の問題を全中分類に作る。
+
+    アプリは問題を同梱しないので、テストも配布物に依存させない。
+    科目Bは要綱の内訳に合わせて中分類2と11にだけ置き、本番同様6択にする。
+    """
+    records = []
+    for category in Category.objects.all():
+        for i in range(per_category):
+            is_subject_b = category.code in (2, 11) and i == 0
+            size = 6 if is_subject_b else 4
+            records.append({
+                'category': category.code,
+                'subject': Question.SUBJECT_B if is_subject_b else Question.SUBJECT_A,
+                'topic': category.name,
+                'difficulty': 2,
+                'stem': '{}の問題{}'.format(category.name, i),
+                'choices': [
+                    '選択肢{}-{}-{}'.format(j, category.code, i) for j in range(size)
+                ],
+                'answer': 0,
+                'explanation': '解説',
+                'source': 'テスト用',
+            })
+    return replace_all(user, validate(records))
 
 
 def answer(user, question, correct):
@@ -48,72 +70,6 @@ def answer(user, question, correct):
     )
     record_progress(user, question, correct)
     return attempt
-
-
-class QuestionBankTests(TestCase):
-    """同梱している問題バンクそのものの検査。"""
-
-    @classmethod
-    def setUpTestData(cls):
-        seed_masters()
-        cls.user = make_user('bank')
-        give_bundled_questions(cls.user)
-
-    def test_categories_cover_the_whole_syllabus(self):
-        self.assertEqual(Category.objects.count(), 23)
-        self.assertEqual(
-            sum(Category.objects.values_list('exam_weight', flat=True)), 60,
-            '科目Aの想定出題数の合計は60問でなければならない',
-        )
-
-    def test_bundled_bank_passes_validation(self):
-        """同梱の JSON が、画面からの取り込みと同じ検証を通ること。"""
-        self.assertTrue(validate(bundled_records()))
-
-    def test_every_question_has_a_valid_answer(self):
-        for question in Question.objects.filter(owner=self.user):
-            with self.subTest(stem=question.stem[:30]):
-                self.assertGreaterEqual(len(question.choices), 2)
-                self.assertEqual(len(set(question.choices)), len(question.choices))
-                self.assertTrue(0 <= question.answer_index < len(question.choices))
-                self.assertTrue(question.explanation, '解説のない問題があってはならない')
-
-    def test_every_category_has_questions(self):
-        """出題できない中分類があると、重点出題がその分野で空回りする。"""
-        for category in Category.objects.all():
-            with self.subTest(category=category.name):
-                has_question = Question.objects.filter(
-                    owner=self.user, category=category
-                ).exists()
-                has_template = QuestionTemplate.objects.filter(category=category).exists()
-                self.assertTrue(has_question or has_template)
-
-    def test_subject_b_covers_the_published_breakdown(self):
-        codes = set(
-            Question.objects.filter(owner=self.user, subject=Question.SUBJECT_B)
-            .values_list('category__code', flat=True)
-        )
-        self.assertEqual(codes, {2, 11})
-
-    def test_choice_counts_match_the_real_exam(self):
-        """科目Aは四肢択一。科目Bは要綱に択一の指定がなく、実際は6〜10択が普通。"""
-        for q in Question.objects.filter(owner=self.user, subject=Question.SUBJECT_A):
-            with self.subTest(stem=q.stem[:30]):
-                self.assertEqual(len(q.choices), 4, '科目Aは常に四肢択一')
-        for q in Question.objects.filter(owner=self.user, subject=Question.SUBJECT_B):
-            with self.subTest(stem=q.stem[:30]):
-                self.assertGreaterEqual(
-                    len(q.choices), 5,
-                    '科目Bを4択にすると本番より易しくなる（消去法が効きすぎる）',
-                )
-                self.assertLessEqual(len(q.choices), 10)
-
-    def test_choice_labels_cover_the_longest_answer_group(self):
-        longest = max(Question.objects.filter(owner=self.user), key=lambda q: len(q.choices))
-        labels = [label for _, label, _ in longest.labeled_choices()]
-        self.assertEqual(len(labels), len(longest.choices))
-        self.assertNotIn('?', labels)
-        self.assertEqual(labels[:5], list('アイウエオ'))
 
 
 class GeneratorTests(TestCase):
@@ -159,7 +115,7 @@ class StatsTests(TestCase):
     def setUpTestData(cls):
         seed_masters()
         cls.user = make_user('stats')
-        give_bundled_questions(cls.user)
+        build_questions(cls.user)
 
     def test_smoothing_pulls_small_samples_toward_the_prior(self):
         self.assertAlmostEqual(smoothed_rate(0, 1), 3.0 / 6.0)
@@ -187,7 +143,7 @@ class StatsTests(TestCase):
     def test_stats_count_only_the_users_own_questions(self):
         other = make_user('stats_other')
         rows_before = {r['category'].code: r['question_count'] for r in category_stats(self.user)}
-        give_bundled_questions(other)
+        build_questions(other)
         rows_after = {r['category'].code: r['question_count'] for r in category_stats(self.user)}
         self.assertEqual(rows_before, rows_after, '他人の問題が出題可能数に混ざってはいけない')
 
@@ -197,7 +153,7 @@ class SelectionTests(TestCase):
     def setUpTestData(cls):
         seed_masters()
         cls.user = make_user('picker')
-        give_bundled_questions(cls.user)
+        build_questions(cls.user)
 
     def _answer(self, category, correct, count):
         questions = list(Question.objects.filter(owner=self.user, category=category)[:count])
@@ -279,7 +235,7 @@ class SelectionTests(TestCase):
 
     def test_other_peoples_questions_are_never_served(self):
         other = make_user('picker_other')
-        give_bundled_questions(other)
+        build_questions(other)
         session = StudySession.objects.create(
             user=self.user, mode=StudySession.MODE_FOCUS, subject=Question.SUBJECT_A
         )
@@ -302,7 +258,7 @@ class ViewTests(TestCase):
     def setUpTestData(cls):
         seed_masters()
         cls.user = make_user('viewer')
-        give_bundled_questions(cls.user)
+        build_questions(cls.user)
 
     def setUp(self):
         self.client.force_login(self.user)
@@ -452,7 +408,7 @@ class ManageTests(TestCase):
         self.assertEqual(overall['study_days'], 1, '学習した日数も残る')
 
     def test_progress_is_kept_per_account(self):
-        give_bundled_questions(self.other)
+        build_questions(self.other)
         self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(2)})
         mine = Question.objects.filter(owner=self.user).first()
         theirs = Question.objects.filter(owner=self.other).first()
@@ -467,7 +423,7 @@ class ManageTests(TestCase):
         )
 
     def test_upload_does_not_touch_other_accounts(self):
-        give_bundled_questions(self.other)
+        build_questions(self.other)
         before = Question.objects.filter(owner=self.other).count()
         self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(2)})
         after = Question.objects.filter(owner=self.other).count()
@@ -498,19 +454,13 @@ class ManageTests(TestCase):
                 self.assertTrue(response.context['form'].errors)
                 self.assertEqual(Question.objects.filter(owner=self.user).count(), 0)
 
-    def test_bundled_import_fills_an_empty_account(self):
-        response = self.client.post(reverse('fe:manage_bundled'))
-        self.assertRedirects(response, reverse('fe:manage_list'))
-        self.assertEqual(
-            Question.objects.filter(owner=self.user).count(), len(bundled_records()),
-        )
-
     def test_export_round_trips_through_upload(self):
-        self.client.post(reverse('fe:manage_bundled'))
+        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(4)})
         response = self.client.get(reverse('fe:manage_export'))
         self.assertEqual(response.status_code, 200)
         records = json.loads(response.content.decode('utf-8'))
-        self.assertEqual(len(records), len(bundled_records()))
+        self.assertEqual(len(records), 4)
+        self.assertNotIn('key', records[0], '書き出しにキーは含めない')
 
         # 書き出したものをそのまま取り込み直せる
         response = self.client.post(reverse('fe:manage_upload'), {
@@ -519,8 +469,21 @@ class ManageTests(TestCase):
         self.assertRedirects(response, reverse('fe:manage_list'))
         self.assertEqual(Question.objects.filter(owner=self.user).count(), len(records))
 
+    def test_choice_labels_cover_a_long_answer_group(self):
+        """選択肢が多くても記号が割り当たること。"""
+        payload = json.dumps([{
+            'category': 2, 'subject': 'B', 'stem': 'x',
+            'choices': ['選択肢{}'.format(i) for i in range(9)], 'answer': 8,
+            'explanation': '解説',
+        }], ensure_ascii=False)
+        self.client.post(reverse('fe:manage_upload'), {'payload': payload})
+        question = Question.objects.get(owner=self.user)
+        labels = [label for _, label, _ in question.labeled_choices()]
+        self.assertEqual(labels, list('アイウエオカキクケ'))
+        self.assertEqual(question.answer_label, 'ケ')
+
     def test_list_shows_only_my_questions(self):
-        give_bundled_questions(self.other)
+        build_questions(self.other)
         self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(3)})
         response = self.client.get(reverse('fe:manage_list'))
         self.assertEqual(response.context['summary']['total'], 3)
@@ -529,19 +492,12 @@ class ManageTests(TestCase):
 
 
 class SeedCommandTests(TestCase):
-    def test_seed_without_user_only_loads_masters(self):
+    def test_seed_loads_masters_but_no_questions(self):
+        """アプリは問題を同梱しないので、コマンドでも問題は入らない。"""
         seed_masters()
         self.assertEqual(Category.objects.count(), 23)
         self.assertEqual(QuestionTemplate.objects.count(), len(REGISTRY))
-        self.assertEqual(Question.objects.count(), 0, '問題はアカウント指定なしでは入らない')
-
-    def test_seed_with_user_fills_that_account(self):
-        seed_masters()
-        user = make_user('seeded')
-        call_command('seed_fe', '--user', 'seeded', verbosity=0)
-        self.assertEqual(
-            Question.objects.filter(owner=user).count(), len(bundled_records()),
-        )
+        self.assertEqual(Question.objects.count(), 0)
 
 
 class ExamDefinitionTests(TestCase):

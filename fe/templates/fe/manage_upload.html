@@ -21,30 +21,10 @@
         取り込みは<strong>常に一括差し替え</strong>で、ファイルの内容がそのままあなたの問題集になります。
     </p>
 
-    {% if not has_questions and bundled_count %}
-    <div class="border rounded p-4 mb-4" style="background-color:#eef3fa;">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-            <div>
-                <div class="fw-bold" style="color:#2c5aa0;">まずはここから</div>
-                <div class="small text-muted">
-                    アプリに同梱している問題バンク（{{ bundled_count }}問）を取り込めます。
-                    中身は fe/data/questions_*.json そのものです。
-                </div>
-            </div>
-            <form method="post" action="{% url 'fe:manage_bundled' %}">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-primary btn-sm">同梱の{{ bundled_count }}問を取り込む</button>
-            </form>
-        </div>
-    </div>
-    {% endif %}
-
-
-
     <div class="border rounded p-3 mb-4" style="background-color:#eef3fa;">
         <div class="fw-bold mb-1" style="color:#2c5aa0;">問題を作るのに必要な資料</div>
         <p class="small text-muted mb-2">
-            このアプリは{{ exam.name }}の資料を同梱していません。{{ exam.note }}
+            このアプリは{{ exam.name }}の資料も問題も同梱していません。{{ exam.note }}
             資料を見ずに作らせると、範囲外の問題や誤った正解が混ざります。
         </p>
         <ul class="small mb-2">

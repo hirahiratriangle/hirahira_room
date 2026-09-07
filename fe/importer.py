@@ -10,24 +10,12 @@
 """
 
 import json
-from pathlib import Path
-
 from django.db import transaction
 
 from .models import Category, Question
 
-DATA_DIR = Path(__file__).resolve().parent / 'data'
 LABELS = 'アイウエオカキクケコ'
 MAX_CHOICES = len(LABELS)
-
-BUNDLED_FILES = [
-    'questions_tech_a.json',
-    'questions_tech_b.json',
-    'questions_management.json',
-    'questions_strategy.json',
-    'questions_subject_b.json',
-]
-
 
 class ImportError_(ValueError):
     """取り込めない JSON だったことを表す。利用者に見せる文言を持つ。"""
@@ -130,18 +118,6 @@ def replace_all(user, records):
         ))
     Question.objects.bulk_create(created)
     return len(created), removed
-
-
-def bundled_records():
-    """リポジトリに同梱している問題バンクを読み込む。"""
-    records = []
-    for name in BUNDLED_FILES:
-        path = DATA_DIR / name
-        if not path.exists():
-            continue
-        with path.open(encoding='utf-8') as fp:
-            records.extend(json.load(fp))
-    return records
 
 
 def export_records(user, subject=None):
