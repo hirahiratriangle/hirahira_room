@@ -15,6 +15,18 @@ def drop_orphan_attempts(apps, schema_editor):
     Attempt.objects.filter(question__isnull=True).delete()
 
 
+def flush_pending_triggers(apps, schema_editor):
+    """保留中のトリガーイベントを先に処理させる。
+
+    PostgreSQL は外部キー制約を DEFERRABLE INITIALLY DEFERRED で作るため、
+    行を削除するとカスケードのトリガーがトランザクション終了まで保留される。
+    保留が残ったままでは同じテーブルを ALTER TABLE できないので、
+    ここで確定させてから型を変える。SQLite には該当する仕組みが無い。
+    """
+    if schema_editor.connection.vendor == 'postgresql':
+        schema_editor.execute('SET CONSTRAINTS ALL IMMEDIATE')
+
+
 def noop(apps, schema_editor):
     """巻き戻しでは何もしない。"""
 
@@ -85,6 +97,7 @@ class Migration(migrations.Migration):
             name='key',
         ),
         migrations.RunPython(drop_orphan_attempts, noop),
+        migrations.RunPython(flush_pending_triggers, noop),
         migrations.AlterField(
             model_name='attempt',
             name='question',
