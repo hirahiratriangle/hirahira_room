@@ -326,10 +326,11 @@ class QuestionUploadView(LoginRequiredMixin, generic.FormView):
         return context
 
     def form_valid(self, form):
-        created, removed = replace_all(self.request.user, form.cleaned_data['records'])
+        created, removed = replace_all(self.request.user, form.records)
         note = '問題集を {} 問に差し替えました。'.format(created)
         if removed:
-            note += ' これまでの {} 問は削除しました（解答履歴は残っています）。'.format(removed)
+            note += ' これまでの {} 問と、その解答履歴は削除しました' \
+                    '（分野ごとの正答率と苦手分野の判定は残ります）。'.format(removed)
         messages.success(self.request, note)
         return super().form_valid(form)
 

@@ -10,6 +10,7 @@ import json
 import random
 
 from accounts.models import CustomUser
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -336,6 +337,19 @@ class ManageTests(TestCase):
     def setUp(self):
         self.client.force_login(self.user)
 
+    def _upload(self, n=3, prefix='問題'):
+        """取り込みは JSON ファイル1本だけなので、テストもファイルで投げる。"""
+        return {'upload': SimpleUploadedFile(
+            'q.json', self._payload(n, prefix).encode('utf-8'),
+            content_type='application/json',
+        )}
+
+    def _json_upload(self, records):
+        return {'upload': SimpleUploadedFile(
+            'q.json', json.dumps(records, ensure_ascii=False).encode('utf-8'),
+            content_type='application/json',
+        )}
+
     def _payload(self, n=3, prefix='問題'):
         return json.dumps([
             {
@@ -352,31 +366,32 @@ class ManageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'まだ問題がありません')
 
-    def test_upload_by_pasting_creates_the_question_set(self):
-        response = self.client.post(reverse('fe:manage_upload'), {
-            'payload': self._payload(3),
-        })
+    def test_upload_by_file_creates_the_question_set(self):
+        response = self.client.post(reverse('fe:manage_upload'), self._upload(3))
         self.assertRedirects(response, reverse('fe:manage_list'))
         questions = Question.objects.filter(owner=self.user)
         self.assertEqual(questions.count(), 3)
         self.assertTrue(all(q.owner_id == self.user.pk for q in questions))
 
-    def test_upload_by_file_works(self):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        payload = self._payload(2).encode('utf-8')
-        response = self.client.post(reverse('fe:manage_upload'), {
-            'upload': SimpleUploadedFile('q.json', payload, content_type='application/json'),
-        })
-        self.assertRedirects(response, reverse('fe:manage_list'))
-        self.assertEqual(Question.objects.filter(owner=self.user).count(), 2)
+    def test_pasting_is_not_offered(self):
+        """取り込み経路はファイル1本。貼り付け欄は置かない。"""
+        response = self.client.get(reverse('fe:manage_upload'))
+        self.assertNotIn('payload', response.context['form'].fields)
+        self.assertNotContains(response, 'id_payload')
+        self.assertNotContains(response, '<textarea')
+
+    def test_upload_is_required(self):
+        response = self.client.post(reverse('fe:manage_upload'), {})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['form'].errors)
 
     def test_upload_deletes_the_old_set_and_its_logs(self):
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(3, '旧')})
+        self.client.post(reverse('fe:manage_upload'), self._upload(3, '旧'))
         old = list(Question.objects.filter(owner=self.user))
         old_ids = [q.id for q in old]
         answer(self.user, old[0], correct=True)
 
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(2, '新')})
+        self.client.post(reverse('fe:manage_upload'), self._upload(2, '新'))
 
         self.assertEqual(
             Question.objects.filter(owner=self.user).count(), 2,
@@ -390,13 +405,13 @@ class ManageTests(TestCase):
 
     def test_understanding_survives_the_replacement(self):
         """問題を入れ替えても、分野ごとの理解度は残る。"""
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(3, '旧')})
+        self.client.post(reverse('fe:manage_upload'), self._upload(3, '旧'))
         security = Category.objects.get(code=11)
         questions = list(Question.objects.filter(owner=self.user))
         answer(self.user, questions[0], correct=True)
         answer(self.user, questions[1], correct=False)
 
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(2, '新')})
+        self.client.post(reverse('fe:manage_upload'), self._upload(2, '新'))
 
         row = next(r for r in category_stats(self.user) if r['category'] == security)
         self.assertEqual(row['total'], 2, '解答数は残る')
@@ -409,7 +424,7 @@ class ManageTests(TestCase):
 
     def test_progress_is_kept_per_account(self):
         build_questions(self.other)
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(2)})
+        self.client.post(reverse('fe:manage_upload'), self._upload(2))
         mine = Question.objects.filter(owner=self.user).first()
         theirs = Question.objects.filter(owner=self.other).first()
         answer(self.user, mine, correct=True)
@@ -425,14 +440,15 @@ class ManageTests(TestCase):
     def test_upload_does_not_touch_other_accounts(self):
         build_questions(self.other)
         before = Question.objects.filter(owner=self.other).count()
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(2)})
+        self.client.post(reverse('fe:manage_upload'), self._upload(2))
         after = Question.objects.filter(owner=self.other).count()
         self.assertEqual(before, after, '他人の問題集は差し替えの影響を受けない')
 
     def test_broken_json_is_rejected_without_touching_anything(self):
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(2)})
+        self.client.post(reverse('fe:manage_upload'), self._upload(2))
         before = list(Question.objects.filter(owner=self.user).values_list('id', flat=True))
-        response = self.client.post(reverse('fe:manage_upload'), {'payload': '{ not json'})
+        response = self.client.post(reverse('fe:manage_upload'), {'upload': SimpleUploadedFile(
+            'q.json', b'{ not json', content_type='application/json')})
         self.assertEqual(response.status_code, 200)
         after = list(Question.objects.filter(owner=self.user).values_list('id', flat=True))
         self.assertEqual(before, after, '取り込みに失敗したら既存の問題は変わらない')
@@ -447,15 +463,14 @@ class ManageTests(TestCase):
         }
         for label, records in cases.items():
             with self.subTest(label=label):
-                response = self.client.post(reverse('fe:manage_upload'), {
-                    'payload': json.dumps(records, ensure_ascii=False),
-                })
+                response = self.client.post(
+                    reverse('fe:manage_upload'), self._json_upload(records))
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.context['form'].errors)
                 self.assertEqual(Question.objects.filter(owner=self.user).count(), 0)
 
     def test_export_round_trips_through_upload(self):
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(4)})
+        self.client.post(reverse('fe:manage_upload'), self._upload(4))
         response = self.client.get(reverse('fe:manage_export'))
         self.assertEqual(response.status_code, 200)
         records = json.loads(response.content.decode('utf-8'))
@@ -463,20 +478,18 @@ class ManageTests(TestCase):
         self.assertNotIn('key', records[0], '書き出しにキーは含めない')
 
         # 書き出したものをそのまま取り込み直せる
-        response = self.client.post(reverse('fe:manage_upload'), {
-            'payload': json.dumps(records, ensure_ascii=False),
-        })
+        response = self.client.post(
+            reverse('fe:manage_upload'), self._json_upload(records))
         self.assertRedirects(response, reverse('fe:manage_list'))
         self.assertEqual(Question.objects.filter(owner=self.user).count(), len(records))
 
     def test_choice_labels_cover_a_long_answer_group(self):
         """選択肢が多くても記号が割り当たること。"""
-        payload = json.dumps([{
+        self.client.post(reverse('fe:manage_upload'), self._json_upload([{
             'category': 2, 'subject': 'B', 'stem': 'x',
             'choices': ['選択肢{}'.format(i) for i in range(9)], 'answer': 8,
             'explanation': '解説',
-        }], ensure_ascii=False)
-        self.client.post(reverse('fe:manage_upload'), {'payload': payload})
+        }]))
         question = Question.objects.get(owner=self.user)
         labels = [label for _, label, _ in question.labeled_choices()]
         self.assertEqual(labels, list('アイウエオカキクケ'))
@@ -484,7 +497,7 @@ class ManageTests(TestCase):
 
     def test_list_shows_only_my_questions(self):
         build_questions(self.other)
-        self.client.post(reverse('fe:manage_upload'), {'payload': self._payload(3)})
+        self.client.post(reverse('fe:manage_upload'), self._upload(3))
         response = self.client.get(reverse('fe:manage_list'))
         self.assertEqual(response.context['summary']['total'], 3)
         for question in response.context['questions']:

@@ -58,8 +58,8 @@
 <pre id="promptText" class="small mt-2 mb-0 p-3 rounded" style="white-space: pre-wrap; background-color:#f6f8fb; max-height: 22rem; overflow-y: auto;">{{ prompt }}</pre>
         </details>
         <div class="form-text mt-2">
-            最後の【依頼】の行を書き換えれば、分野・問数・科目を変えられます。
-            返ってきたJSONを下の欄に貼り付けるか、ファイルに保存して選んでください。
+            最後の【依頼】に、作ってほしい分野と問数を書き足してから渡してください。
+            問題は JSON ファイルに書き出させ、そのファイルを下で選びます。
         </div>
     </div>
 
@@ -79,19 +79,11 @@
             {% for e in form.upload.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
         </div>
 
-        <div class="text-center text-muted small mb-3">— または —</div>
-
-        <div class="mb-4">
-            <label for="{{ form.payload.id_for_label }}" class="form-label small fw-bold">貼り付け</label>
-            {{ form.payload }}
-            <div class="form-text">{{ form.payload.help_text }}</div>
-            {% for e in form.payload.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-        </div>
-
         <div class="alert alert-warning">
             <strong>取り込むと、いまの問題集はこのファイルの内容に入れ替わります。</strong>
-            これまでの問題は削除されます。ただし<strong>解答履歴は問題とは別に保存している</strong>ので、
-            過去の記録は消えません。分野ごとの正答率と苦手分野の判定もそのまま続きます。
+            これまでの問題と、その解答履歴は削除されます。
+            ただし<strong>分野ごとの理解度は問題とは別に積み上げている</strong>ので、
+            正答率と苦手分野の判定は取り込み後もそのまま続きます。
         </div>
 
         <div class="d-flex justify-content-between">
@@ -99,28 +91,6 @@
             <button type="submit" class="btn btn-primary">取り込む</button>
         </div>
     </form>
-
-    <div class="border rounded p-3 mt-4 bg-light">
-        <div class="small fw-bold mb-2" style="color:#2c5aa0;">書式</div>
-<pre class="small mb-0" style="white-space: pre-wrap;">[
- {
-  "category": 11,
-  "subject": "A",
-  "topic": "情報セキュリティ",
-  "difficulty": 2,
-  "stem": "問題文",
-  "choices": ["ア の本文", "イ の本文", "ウ の本文", "エ の本文"],
-  "answer": 0,
-  "explanation": "解説",
-  "source": "出典・根拠"
- }
-]</pre>
-        <div class="small text-muted mt-2">
-            キーはアプリが払い出すので書く必要はありません。
-            choices に記号（ア／イ）は入れない。answer は 0 から数える。category は中分類の番号（1〜23）。
-            科目Aは四肢択一、科目Bは本番でも6〜10択が普通。
-        </div>
-    </div>
 </div>
 {% endblock %}
 
