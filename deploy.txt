@@ -8,6 +8,9 @@ az webapp up --name hirahira-room --runtime "PYTHON|3.11" --resource-group hirah
 
 # ポータル画面でVNETを追加する。
 
+# 起動プローブの待ち時間を延ばす（既定230秒。B1では起動が間に合わずコンテナが落とされる）
+az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings WEBSITES_CONTAINER_START_TIME_LIMIT=600
+
 # マイグレーション
 python manage.py migrate
 python manage.py train_iris_model （初期モデルのトレーニング）
