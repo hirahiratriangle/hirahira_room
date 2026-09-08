@@ -7,9 +7,10 @@
 1問しか出ない法務ばかり出題されては困るため、苦手度だけでは決めない。
 """
 
+import bisect
 import random
 
-from django.db.models import Max
+from django.db.models import Count, Max, Q
 
 from .generators import generate_question, generators_for_category
 from .models import Attempt, Category, Question
@@ -26,6 +27,21 @@ UNTOUCHED_BONUS = 1.6
 # テンプレート（計算問題）から新規生成する確率。未出題の固定問題が
 # 尽きている場合はこの値によらず生成に倒す。
 TEMPLATE_RATIO = 0.3
+
+# まちがえた問題を復習に戻すまでに、ほかの問題を最低何問はさむか。
+# 直後に同じ問題を出すと答えを覚えているだけで解けてしまうので間をあける。
+# 何度も落としている問題ほど間隔を詰める（REVIEW_SHORTEN ずつ、下限 REVIEW_MIN_GAP）。
+REVIEW_DUE_GAP = 5
+REVIEW_SHORTEN = 2
+REVIEW_MIN_GAP = 2
+
+# 期限が来た復習を、未出題より優先して出す割合。
+# 1.0 にすると新しい問題に進めなくなるので、新規と混ぜる。
+REVIEW_RATIO = 0.4
+
+# 「何問前に解いたか」を数えるためにさかのぼる解答数。
+# これより古い解答は、十分に間があいたものとして扱う。
+REVIEW_WINDOW = 60
 
 
 def _category_weights(user, subject, mode):
@@ -71,15 +87,16 @@ def _weighted_choice(weights):
 
 
 def _last_result_map(user, question_ids):
-    """問題ごとの「直近の解答が正解だったか」と最終解答日時。"""
+    """問題ごとの「直近の解答が正解だったか」「最終解答日時」「落とした回数」。"""
     rows = (
         Attempt.objects.filter(user=user, question_id__in=question_ids)
         .values('question_id')
-        .annotate(last_at=Max('answered_at'))
+        .annotate(last_at=Max('answered_at'), misses=Count('id', filter=Q(is_correct=False)))
     )
     last_at = {r['question_id']: r['last_at'] for r in rows}
     if not last_at:
         return {}
+    misses = {r['question_id']: r['misses'] for r in rows}
 
     latest = Attempt.objects.filter(
         user=user, question_id__in=list(last_at), answered_at__in=list(last_at.values())
@@ -90,8 +107,40 @@ def _last_result_map(user, question_ids):
         result[row['question_id']] = {
             'is_correct': row['is_correct'],
             'answered_at': row['answered_at'],
+            'misses': misses.get(row['question_id'], 0),
         }
     return result
+
+
+def _recent_answer_times(user):
+    """直近の解答時刻を古い順に。「何問前か」を数えるものさしになる。"""
+    times = list(
+        Attempt.objects.filter(user=user)
+        .order_by('-answered_at')
+        .values_list('answered_at', flat=True)[:REVIEW_WINDOW]
+    )
+    times.reverse()
+    return times
+
+
+def _due_for_review(wrong, history, recent_times):
+    """まちがえた問題のうち、復習の間隔があいたものを返す。
+
+    直後に出し直しても答えを覚えているだけなので、ほかの問題を何問か
+    はさんでから戻す。何度も落としている問題ほど間隔を詰める。
+    """
+    due = []
+    for question in wrong:
+        row = history[question.id]
+        # その問題を解いたあとに、ほかの問題を何問解いたか
+        gap = len(recent_times) - bisect.bisect_right(recent_times, row['answered_at'])
+        needed = max(
+            REVIEW_MIN_GAP,
+            REVIEW_DUE_GAP - (row['misses'] - 1) * REVIEW_SHORTEN,
+        )
+        if gap >= needed:
+            due.append((question, gap - needed))
+    return due
 
 
 def _pick_from_category(user, category, subject, exclude_ids):
@@ -112,6 +161,15 @@ def _pick_from_category(user, category, subject, exclude_ids):
     stale = [q for q in questions if history.get(q.id, {}).get('is_correct') is True]
     stale.sort(key=lambda q: history[q.id]['answered_at'])
 
+    # 落とした問題は、間隔をあけてから未出題より先に戻す。未出題を出し切るまで
+    # 復習しない作りだと、まちがえた1問がいつまでも放置される。
+    due = _due_for_review(wrong, history, _recent_answer_times(user)) if wrong else []
+    if due and (not unseen or random.random() < REVIEW_RATIO):
+        # 期限を過ぎているものほど先に戻す
+        overdue = max(d[1] for d in due)
+        oldest = [q for q, over in due if over == overdue]
+        return random.choice(oldest), 'まちがえた問題の復習'
+
     # 未出題の固定問題が無い中分類では、テンプレートがあれば新しい数値で作る
     if generators and (not unseen or random.random() < TEMPLATE_RATIO):
         question = generate_question(random.choice(generators), user)
@@ -120,12 +178,13 @@ def _pick_from_category(user, category, subject, exclude_ids):
 
     if unseen:
         return random.choice(unseen), '未出題'
-    if wrong:
-        return random.choice(wrong), '前回まちがえた問題'
     if stale:
         # 最後に解いてから時間が経っているものから
         head = stale[: max(1, len(stale) // 3)]
         return random.choice(head), 'しばらく解いていない問題'
+    if wrong:
+        # まだ間隔が足りない復習。ほかに出せる問題が無いときだけ繰り上げる。
+        return random.choice(wrong), '前回まちがえた問題'
     return None, None
 
 

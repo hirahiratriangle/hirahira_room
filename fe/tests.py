@@ -20,7 +20,8 @@ from .generators import REGISTRY, generate_question
 from .importer import replace_all, validate
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
                      Question, QuestionTemplate, StudySession)
-from .selection import pick_question
+from .selection import (REVIEW_DUE_GAP, _due_for_review,
+                        _last_result_map, _recent_answer_times, pick_question)
 from .stats import (WEAK_MIN_ATTEMPTS, category_stats, overall_stats,
                     record_progress, smoothed_rate, weak_categories)
 
@@ -161,6 +162,70 @@ class SelectionTests(TestCase):
         self.assertGreaterEqual(len(questions), 1)
         for index in range(count):
             answer(self.user, questions[index % len(questions)], correct)
+
+    def test_a_missed_question_is_not_repeated_immediately(self):
+        """まちがえた直後に同じ問題を出さない。答えを覚えているだけになる。"""
+        category = Category.objects.get(code=9)
+        missed = Question.objects.filter(owner=self.user, category=category).first()
+        answer(self.user, missed, correct=False)
+
+        session = StudySession.objects.create(
+            user=self.user, mode=StudySession.MODE_CATEGORY,
+            subject=Question.SUBJECT_A, category=category,
+        )
+        random.seed(20260908)
+        for _ in range(30):
+            question, _reason = pick_question(self.user, session)
+            self.assertNotEqual(question.id, missed.id, '間をあけずに戻ってきた')
+
+    def test_a_missed_question_comes_back_before_unseen_ones(self):
+        """間隔があけば、未出題が残っていても復習が優先される。"""
+        category = Category.objects.get(code=9)
+        questions = list(Question.objects.filter(owner=self.user, category=category))
+        self.assertGreaterEqual(len(questions), 4)
+        missed = questions[0]
+        answer(self.user, missed, correct=False)
+        # ほかの問題を解いて間隔をあける
+        for question in questions[1:]:
+            answer(self.user, question, correct=True)
+        for _ in range(REVIEW_DUE_GAP):
+            answer(self.user, questions[1], correct=True)
+
+        session = StudySession.objects.create(
+            user=self.user, mode=StudySession.MODE_CATEGORY,
+            subject=Question.SUBJECT_A, category=category,
+        )
+        random.seed(20260908)
+        reasons = set()
+        for _ in range(60):
+            question, reason = pick_question(self.user, session)
+            if question.id == missed.id:
+                reasons.add(reason)
+        self.assertIn('まちがえた問題の復習', reasons, '間隔をあけても戻ってこなかった')
+
+    def test_repeated_misses_shorten_the_interval(self):
+        """何度も落とした問題ほど、短い間隔で戻す。"""
+        category = Category.objects.get(code=9)
+        questions = list(Question.objects.filter(owner=self.user, category=category))
+        once, twice = questions[0], questions[1]
+        # 2回落とした方を先に、1回だけの方をあとに解く。
+        # あとに解いたほうが間隔は短いので、間隔だけで並ぶなら once は戻らない。
+        answer(self.user, twice, correct=False)
+        answer(self.user, twice, correct=False)
+        answer(self.user, once, correct=False)
+        for question in questions[2:]:
+            answer(self.user, question, correct=True)
+        answer(self.user, questions[2], correct=True)
+
+        history = _last_result_map(self.user, [once.id, twice.id])
+        times = _recent_answer_times(self.user)
+        due = dict(
+            (q.id, over) for q, over in
+            _due_for_review([once, twice], history, times)
+        )
+        # 2回落とした方が先に期限を迎える
+        self.assertIn(twice.id, due, '2回落とした問題は短い間隔で戻るべき')
+        self.assertNotIn(once.id, due, '1回だけの問題はまだ間隔が足りない')
 
     def test_focus_mode_favours_weak_categories(self):
         database = Category.objects.get(code=9)
