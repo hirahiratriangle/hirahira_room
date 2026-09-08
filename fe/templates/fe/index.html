@@ -64,6 +64,9 @@
                 <a href="{% url 'fe:quiz' %}" class="btn btn-primary">
                     <i class="fas fa-play me-1"></i>いまの設定で解く（{{ study_session.get_mode_display }}）
                 </a>
+                <a href="{% url 'fe:learn_start' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-book-open me-1"></i>学習モード（解説を読んでから解く）
+                </a>
                 <a href="{% url 'fe:stats' %}" class="btn btn-outline-primary btn-sm">分野別の正答率</a>
                 <a href="{% url 'fe:history' %}?result=wrong" class="btn btn-outline-primary btn-sm">まちがえた問題</a>
                 <a href="{% url 'fe:manage_list' %}" class="btn btn-outline-secondary btn-sm">

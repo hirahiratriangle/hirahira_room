@@ -11,14 +11,16 @@ import random
 
 from accounts.models import CustomUser
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models import Sum
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
 from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
-from .importer import replace_all, validate
+from .importer import ImportError_, parse, replace_all, validate
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
+                     LearningNote, LearningRound,
                      Question, QuestionTemplate, StudySession)
 from .selection import (REVIEW_DUE_GAP, _due_for_review,
                         _last_result_map, _recent_answer_times, pick_question)
@@ -61,7 +63,22 @@ def build_questions(user, per_category=4):
                 'explanation': '解説',
                 'source': 'テスト用',
             })
-    return replace_all(user, validate(records))
+    return replace_all(user, validate({'questions': records, 'notes': []}))
+
+
+def build_notes(user, codes=(9, 11), topic=None):
+    """テスト用の技術解説。問題とは別に、概念を説明した文章として持たせる。"""
+    notes = []
+    for code in codes:
+        category = Category.objects.get(code=code)
+        notes.append({
+            'category': code,
+            'topic': topic if topic is not None else category.name,
+            'title': '{}のしくみ'.format(category.name),
+            'body': '{}について、定義からしくみまでを説明した文章。'.format(category.name),
+            'source': 'シラバス',
+        })
+    return notes
 
 
 def answer(user, question, correct):
@@ -415,6 +432,12 @@ class ManageTests(TestCase):
             content_type='application/json',
         )}
 
+    def _upload_with_notes(self, n=3, codes=(9, 11), topic=None):
+        return self._json_upload({
+            'notes': build_notes(self.user, codes=codes, topic=topic),
+            'questions': json.loads(self._payload(n)),
+        })
+
     def _payload(self, n=3, prefix='問題'):
         return json.dumps([
             {
@@ -567,6 +590,182 @@ class ManageTests(TestCase):
         self.assertEqual(response.context['summary']['total'], 3)
         for question in response.context['questions']:
             self.assertEqual(question.owner_id, self.user.pk)
+
+
+class ImportNotesTests(TestCase):
+    """技術解説つき JSON の取り込み。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+        cls.user = make_user('reader')
+
+    def test_object_form_imports_notes_and_questions(self):
+        payload = {
+            'notes': build_notes(self.user),
+            'questions': [{
+                'category': 11, 'stem': 'x', 'choices': ['a', 'b', 'c', 'd'], 'answer': 0,
+            }],
+        }
+        created, _removed, notes = replace_all(self.user, validate(parse(
+            json.dumps(payload, ensure_ascii=False)
+        )))
+        self.assertEqual(created, 1)
+        self.assertEqual(notes, 2)
+        self.assertEqual(LearningNote.objects.filter(owner=self.user).count(), 2)
+
+    def test_plain_array_still_works(self):
+        """解説を持たない、いままでの形の JSON もそのまま取り込める。"""
+        payload = json.dumps(
+            [{'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0}],
+            ensure_ascii=False,
+        )
+        created, _removed, notes = replace_all(self.user, validate(parse(payload)))
+        self.assertEqual((created, notes), (1, 0))
+
+    def test_notes_are_replaced_with_the_questions(self):
+        """問題だけの JSON を入れたら、前の解説も消える。"""
+        replace_all(self.user, validate(parse(json.dumps({
+            'notes': build_notes(self.user),
+            'questions': [{'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0}],
+        }, ensure_ascii=False))))
+        self.assertEqual(LearningNote.objects.filter(owner=self.user).count(), 2)
+
+        replace_all(self.user, validate(parse(json.dumps(
+            [{'category': 11, 'stem': 'y', 'choices': ['a', 'b'], 'answer': 0}],
+            ensure_ascii=False,
+        ))))
+        self.assertEqual(
+            LearningNote.objects.filter(owner=self.user).count(), 0,
+            '問題と噛み合わない解説が残らない',
+        )
+
+    def test_a_broken_note_is_rejected(self):
+        cases = {
+            '本文が空': [{'category': 11, 'title': 'x', 'body': '  '}],
+            '見出しが無い': [{'category': 11, 'body': 'x'}],
+            '中分類が無い': [{'category': 99, 'title': 'x', 'body': 'y'}],
+        }
+        for label, notes in cases.items():
+            with self.subTest(label=label):
+                payload = json.dumps({
+                    'notes': notes,
+                    'questions': [{
+                        'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0,
+                    }],
+                }, ensure_ascii=False)
+                with self.assertRaises(ImportError_):
+                    validate(parse(payload))
+                self.assertEqual(Question.objects.filter(owner=self.user).count(), 0)
+
+
+class LearningModeTests(TestCase):
+    """学習モード。解説を読んでから、その範囲を解く。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+        cls.user = make_user('learner')
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def _prepare(self, topic=None):
+        build_questions(self.user, per_category=12)
+        LearningNote.objects.filter(owner=self.user).delete()
+        for note in build_notes(self.user, codes=(9,), topic=topic):
+            LearningNote.objects.create(
+                owner=self.user,
+                category=Category.objects.get(code=note['category']),
+                topic=note['topic'], title=note['title'],
+                body=note['body'], source=note['source'],
+            )
+
+    def test_a_round_needs_a_note(self):
+        """解説が無ければ始められない。取り込み画面へ案内する。"""
+        build_questions(self.user)
+        response = self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        self.assertRedirects(response, reverse('fe:manage_upload'))
+        self.assertEqual(LearningRound.objects.count(), 0)
+
+    def test_reading_phase_shows_the_note_not_the_questions(self):
+        """読む段階では、設問も選択肢も見せない。"""
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(user=self.user)
+        self.assertEqual(round_.reading_seconds, 300)
+
+        response = self.client.get(reverse('fe:learn_read', args=[round_.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, round_.note.title)
+        for item in round_.items.all():
+            self.assertNotContains(response, item.question.stem)
+
+    def test_questions_come_from_the_note_s_category(self):
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(user=self.user)
+        self.assertEqual(round_.total, LearningRound.QUESTION_COUNT)
+        for item in round_.items.select_related('question'):
+            self.assertEqual(
+                item.question.category_id, round_.note.category_id,
+                '読んだ解説と別の分野が出題された',
+            )
+
+    def test_answering_records_progress(self):
+        """学習モードで解いた分も、分野ごとの理解度に積む。"""
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(user=self.user)
+        self.client.post(reverse('fe:learn_read', args=[round_.pk]))
+
+        item = round_.items.get(order=0)
+        response = self.client.post(
+            reverse('fe:learn_quiz', args=[round_.pk]),
+            {'choice': item.question.answer_index},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['is_correct'])
+
+        item.refresh_from_db()
+        self.assertTrue(item.is_correct)
+        self.assertEqual(Attempt.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(
+            CategoryProgress.objects.filter(user=self.user).aggregate(
+                n=Sum('answered'))['n'], 1,
+        )
+
+    def test_a_round_runs_to_the_result_screen(self):
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 3})
+        round_ = LearningRound.objects.get(user=self.user)
+        self.client.post(reverse('fe:learn_read', args=[round_.pk]))
+
+        for _ in range(round_.total):
+            item = round_.items.get(order=round_.position)
+            self.client.post(
+                reverse('fe:learn_quiz', args=[round_.pk]),
+                {'choice': item.question.answer_index},
+            )
+            self.client.post(reverse('fe:learn_next', args=[round_.pk]))
+            round_.refresh_from_db()
+
+        self.assertEqual(round_.phase, LearningRound.PHASE_DONE)
+        self.assertEqual(round_.correct, round_.total)
+        response = self.client.get(reverse('fe:learn_result', args=[round_.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['missed'], [])
+
+    def test_another_account_cannot_open_the_round(self):
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(user=self.user)
+
+        self.client.force_login(make_user('stranger2'))
+        for name in ('fe:learn_read', 'fe:learn_quiz', 'fe:learn_result'):
+            self.assertEqual(
+                self.client.get(reverse(name, args=[round_.pk])).status_code, 404,
+            )
 
 
 class SeedCommandTests(TestCase):

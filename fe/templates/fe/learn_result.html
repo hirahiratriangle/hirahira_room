@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}学習モードの結果 - FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block head %}
+<style>
+    .fe-stem { white-space: pre-wrap; line-height: 1.8; }
+</style>
+{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="d-flex justify-content-between align-items-center text-white flex-wrap gap-2">
+            <h1 class="h5 fw-bold mb-0">結果</h1>
+            <div class="small">
+                <a class="text-white text-decoration-none me-3" href="{% url 'fe:learn_start' %}">もう1ラウンド</a>
+                <a class="text-white text-decoration-none" href="{% url 'fe:index' %}">ダッシュボード</a>
+            </div>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 860px;">
+
+    <div class="border rounded p-4 mb-4 d-flex justify-content-between align-items-center flex-wrap gap-3"
+         style="background-color:#eef3fa;">
+        <div>
+            <div class="small text-muted mb-1">読んだ解説</div>
+            <div class="fw-bold">{% if round.note %}{{ round.note.title }}{% else %}（削除された解説）{% endif %}</div>
+        </div>
+        <div class="text-end">
+            <div class="display-6 fw-bold" style="color:#2c5aa0;">
+                {{ round.correct }}<span class="fs-5"> / {{ round.total }}</span>
+            </div>
+            {% if round.rate_percent is not None %}
+            <div class="small text-muted">正答率 {{ round.rate_percent }}％</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if missed %}
+    <h2 class="h6 fw-bold mb-3" style="color:#2c5aa0;">まちがえた問題</h2>
+    {% for item in missed %}
+    <div class="border rounded p-3 mb-3">
+        <div class="mb-2">
+            <span class="badge bg-secondary">{{ item.question.category.name }}</span>
+            {% if item.question.topic %}<span class="text-muted small ms-2">{{ item.question.topic }}</span>{% endif %}
+        </div>
+        <div class="fe-stem small mb-2">{{ item.question.stem }}</div>
+        <div class="small mb-2">
+            <span class="text-danger">あなたの解答 {{ item.selected_label }}</span>
+            <span class="text-success ms-3">正解 {{ item.question.answer_label }}　{{ item.question.answer_text }}</span>
+        </div>
+        {% if item.question.explanation %}
+        <div class="fe-stem small text-muted mb-0">{{ item.question.explanation }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="alert alert-success">全問正解です。</div>
+    {% endif %}
+
+    <div class="d-flex gap-2 mt-4">
+        <a href="{% url 'fe:learn_start' %}" class="btn btn-primary">もう1ラウンド</a>
+        {% if round.note %}
+        <a href="{% url 'fe:learn_read' round.pk %}" class="btn btn-outline-secondary">解説を読み返す</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

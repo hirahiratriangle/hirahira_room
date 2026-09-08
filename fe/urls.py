@@ -8,6 +8,13 @@ urlpatterns = [
     path('', views.IndexView.as_view(), name='index'),
     path('quiz/', views.QuizView.as_view(), name='quiz'),
     path('quiz/settings/', views.QuizSettingsView.as_view(), name='quiz_settings'),
+    # 学習モード（先に解説を読み、そのあと同じ範囲を解く）
+    path('learn/', views.LearnStartView.as_view(), name='learn_start'),
+    path('learn/<int:pk>/read/', views.LearnReadView.as_view(), name='learn_read'),
+    path('learn/<int:pk>/quiz/', views.LearnQuizView.as_view(), name='learn_quiz'),
+    path('learn/<int:pk>/next/', views.LearnNextView.as_view(), name='learn_next'),
+    path('learn/<int:pk>/result/', views.LearnResultView.as_view(), name='learn_result'),
+
     path('stats/', views.StatsView.as_view(), name='stats'),
     path('history/', views.HistoryView.as_view(), name='history'),
 

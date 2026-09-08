@@ -140,6 +140,12 @@ class Question(models.Model):
     def answer_label(self):
         return self.choice_label(self.answer_index)
 
+    @property
+    def answer_text(self):
+        if 0 <= self.answer_index < len(self.choices):
+            return self.choices[self.answer_index]
+        return ''
+
     @staticmethod
     def choice_label(index):
         labels = 'アイウエオカキクケコ'
@@ -287,3 +293,128 @@ class StudySession(models.Model):
 
     def __str__(self):
         return '{} / {}'.format(self.user, self.get_mode_display())
+
+
+class LearningNote(models.Model):
+    """技術解説。問題の解説文とは別に書かれた、概念をひとまとまりで説明する文章。
+
+    問題は「解けるか」を測るものなので、断片的にしか説明できない。
+    先にこちらを読んでから解くために、独立した教材として持つ。
+    問題と同じくアカウントごとで、JSON の一括差し替えで入れ替える。
+    """
+
+    owner = models.ForeignKey(
+        CustomUser, verbose_name='所有者', on_delete=models.CASCADE, related_name='fe_notes',
+    )
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='notes'
+    )
+    topic = models.CharField(verbose_name='小分類', max_length=60, blank=True)
+    title = models.CharField(verbose_name='見出し', max_length=120)
+    body = models.TextField(verbose_name='本文')
+    source = models.CharField(verbose_name='出典', max_length=120, blank=True)
+    created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE 技術解説'
+        ordering = ['category__code', 'id']
+
+    def __str__(self):
+        return self.title
+
+
+class LearningRound(models.Model):
+    """学習モードの1ラウンド。「読む → 解く」を1セットにした記録。
+
+    先に技術解説をまとめて読み、そのあと同じ範囲を出題して定着を測る。
+    1問1答の演習と違い、読む時間と解く問題の並びを最初に決め打ちにする。
+    """
+
+    PHASE_READING = 'reading'
+    PHASE_QUIZ = 'quiz'
+    PHASE_DONE = 'done'
+    PHASE_CHOICES = [
+        (PHASE_READING, '解説を読む'),
+        (PHASE_QUIZ, '解答する'),
+        (PHASE_DONE, '終了'),
+    ]
+
+    # 提示時間の選択肢（分）。10問ぶんの解説を読み切れる幅で用意する。
+    MINUTE_CHOICES = [3, 5, 10, 15]
+    DEFAULT_MINUTES = 5
+    QUESTION_COUNT = 10
+
+    user = models.ForeignKey(
+        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
+        related_name='fe_rounds',
+    )
+    note = models.ForeignKey(
+        LearningNote, verbose_name='読んだ解説', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='rounds',
+    )
+    subject = models.CharField(
+        verbose_name='科目', max_length=1, choices=Question.SUBJECT_CHOICES,
+        default=Question.SUBJECT_A,
+    )
+    reading_seconds = models.PositiveIntegerField(verbose_name='提示時間(秒)')
+    phase = models.CharField(
+        verbose_name='段階', max_length=10, choices=PHASE_CHOICES, default=PHASE_READING
+    )
+    position = models.PositiveSmallIntegerField(verbose_name='解答中の位置', default=0)
+    started_at = models.DateTimeField(verbose_name='開始日時', auto_now_add=True)
+    finished_at = models.DateTimeField(verbose_name='終了日時', null=True, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE 学習ラウンド'
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return '{} {:%Y-%m-%d %H:%M}'.format(self.user, self.started_at)
+
+    @property
+    def total(self):
+        return self.items.count()
+
+    @property
+    def correct(self):
+        return self.items.filter(is_correct=True).count()
+
+    @property
+    def rate_percent(self):
+        total = self.items.filter(is_correct__isnull=False).count()
+        if not total:
+            return None
+        return round(self.correct / total * 100)
+
+
+class LearningItem(models.Model):
+    """学習ラウンドで扱う1問。読む段階では教材、解く段階では設問になる。"""
+
+    round = models.ForeignKey(
+        LearningRound, verbose_name='ラウンド', on_delete=models.CASCADE,
+        related_name='items',
+    )
+    question = models.ForeignKey(
+        Question, verbose_name='問題', on_delete=models.CASCADE, related_name='learning_items'
+    )
+    order = models.PositiveSmallIntegerField(verbose_name='出題順')
+    selected_index = models.PositiveSmallIntegerField(
+        verbose_name='選んだ選択肢', null=True, blank=True
+    )
+    is_correct = models.BooleanField(verbose_name='正誤', null=True, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE 学習ラウンドの問題'
+        ordering = ['order']
+        constraints = [
+            models.UniqueConstraint(fields=['round', 'order'], name='fe_unique_round_order'),
+        ]
+
+    def __str__(self):
+        return '{} {}問目'.format(self.round_id, self.order + 1)
+
+    @property
+    def selected_label(self):
+        if self.selected_index is None:
+            return ''
+        return Question.choice_label(self.selected_index)

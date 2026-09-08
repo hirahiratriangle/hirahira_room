@@ -21,8 +21,9 @@ from django.views import generic
 from .exam import EXAM, build_prompt
 from .forms import QuestionUploadForm
 from .importer import export_records, replace_all
-from .models import (Attempt, Category, CategoryProgress, Question,
-                     QuestionTemplate, StudySession)
+from .learning import current_item, grade, start_round
+from .models import (Attempt, Category, CategoryProgress, LearningRound,
+                     Question, QuestionTemplate, StudySession)
 from .selection import pick_question
 from .stats import (category_stats, daily_counts, field_stats, overall_stats,
                     record_progress, weak_categories)
@@ -326,13 +327,170 @@ class QuestionUploadView(LoginRequiredMixin, generic.FormView):
         return context
 
     def form_valid(self, form):
-        created, removed = replace_all(self.request.user, form.records)
+        created, removed, notes = replace_all(self.request.user, form.records)
         note = '問題集を {} 問に差し替えました。'.format(created)
+        if notes:
+            note += ' 技術解説 {} 本も取り込みました。'.format(notes)
         if removed:
             note += ' これまでの {} 問と、その解答履歴は削除しました' \
                     '（分野ごとの正答率と苦手分野の判定は残ります）。'.format(removed)
         messages.success(self.request, note)
         return super().form_valid(form)
+
+
+class LearnStartView(LoginRequiredMixin, generic.View):
+    """学習モードの入口。読む時間を決めてラウンドを始める。"""
+
+    template_name = 'fe/learn_start.html'
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, {
+            'minute_choices': LearningRound.MINUTE_CHOICES,
+            'default_minutes': LearningRound.DEFAULT_MINUTES,
+            'count': LearningRound.QUESTION_COUNT,
+            'study_session': _get_study_session(request.user),
+            'recent': LearningRound.objects.filter(
+                user=request.user, phase=LearningRound.PHASE_DONE
+            )[:5],
+        })
+
+    def post(self, request, *args, **kwargs):
+        raw = request.POST.get('minutes')
+        minutes = int(raw) if raw and raw.isdigit() else LearningRound.DEFAULT_MINUTES
+        if minutes not in LearningRound.MINUTE_CHOICES:
+            minutes = LearningRound.DEFAULT_MINUTES
+
+        session = _get_study_session(request.user)
+        round_ = start_round(request.user, session, minutes)
+        if round_ is None:
+            messages.error(
+                request,
+                '学習モードには技術解説が要ります。'
+                '解説と問題をまとめた JSON を取り込んでください。',
+            )
+            return redirect('fe:manage_upload')
+        return redirect('fe:learn_read', pk=round_.pk)
+
+
+class LearnReadView(LoginRequiredMixin, generic.View):
+    """読む段階。設問ではなく、分野ごとにまとめた技術解説を出す。"""
+
+    template_name = 'fe/learn_read.html'
+
+    def get(self, request, pk, *args, **kwargs):
+        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        # 終わったラウンドの解説は、結果画面から読み返せるようにしておく
+        if round_.phase == LearningRound.PHASE_QUIZ:
+            return redirect('fe:learn_quiz', pk=round_.pk)
+
+        elapsed = (timezone.now() - round_.started_at).total_seconds()
+        return render(request, self.template_name, {
+            'round': round_,
+            'note': round_.note,
+            'finished': round_.phase == LearningRound.PHASE_DONE,
+            # 途中で再読み込みしても、残り時間は開始時刻から数え直す
+            'remaining': max(0, int(round_.reading_seconds - elapsed)),
+        })
+
+    def post(self, request, pk, *args, **kwargs):
+        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        if round_.phase == LearningRound.PHASE_READING:
+            round_.phase = LearningRound.PHASE_QUIZ
+            round_.save(update_fields=['phase'])
+        return redirect('fe:learn_quiz', pk=round_.pk)
+
+
+class LearnQuizView(LoginRequiredMixin, generic.View):
+    """解く段階。読んだ範囲をそのまま1問1答で出す。"""
+
+    template_name = 'fe/learn_quiz.html'
+
+    def get(self, request, pk, *args, **kwargs):
+        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        if round_.phase == LearningRound.PHASE_READING:
+            return redirect('fe:learn_read', pk=round_.pk)
+        if round_.phase == LearningRound.PHASE_DONE:
+            return redirect('fe:learn_result', pk=round_.pk)
+
+        item = current_item(round_)
+        if item is None:
+            return self._finish(round_)
+        return render(request, self.template_name, {
+            'round': round_, 'item': item, 'question': item.question,
+        })
+
+    def post(self, request, pk, *args, **kwargs):
+        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        item = current_item(round_)
+        if item is None:
+            return self._finish(round_)
+
+        question = item.question
+        selected = request.POST.get('choice')
+        if selected is None or not selected.isdigit() or int(selected) >= len(question.choices):
+            messages.error(request, '選択肢を選んでください。')
+            return render(request, self.template_name, {
+                'round': round_, 'item': item, 'question': question,
+            })
+
+        selected = int(selected)
+        if item.is_correct is None:
+            is_correct = grade(item, selected)
+            # 演習と同じ記録に積む。学習モードで解いた分も理解度に反映する。
+            Attempt.objects.create(
+                user=request.user, question=question, category=question.category,
+                selected_index=selected, is_correct=is_correct,
+            )
+            record_progress(request.user, question, is_correct)
+
+        return render(request, self.template_name, {
+            'round': round_, 'item': item, 'question': question,
+            'answered': True,
+            'selected': item.selected_index,
+            'selected_label': item.selected_label,
+            'is_correct': item.is_correct,
+        })
+
+    def _finish(self, round_):
+        if round_.phase != LearningRound.PHASE_DONE:
+            round_.phase = LearningRound.PHASE_DONE
+            round_.finished_at = timezone.now()
+            round_.save(update_fields=['phase', 'finished_at'])
+        return redirect('fe:learn_result', pk=round_.pk)
+
+
+class LearnNextView(LoginRequiredMixin, generic.View):
+    """採点結果を見てから次の1問へ進む。"""
+
+    def post(self, request, pk, *args, **kwargs):
+        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        item = current_item(round_)
+        if item is not None and item.is_correct is not None:
+            round_.position += 1
+            round_.save(update_fields=['position'])
+        if current_item(round_) is None:
+            round_.phase = LearningRound.PHASE_DONE
+            round_.finished_at = timezone.now()
+            round_.save(update_fields=['phase', 'finished_at'])
+            return redirect('fe:learn_result', pk=round_.pk)
+        return redirect('fe:learn_quiz', pk=round_.pk)
+
+
+class LearnResultView(LoginRequiredMixin, generic.DetailView):
+    """ラウンドの結果。まちがえた問題を読み返せるようにする。"""
+
+    template_name = 'fe/learn_result.html'
+    context_object_name = 'round'
+
+    def get_queryset(self):
+        return LearningRound.objects.filter(user=self.request.user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        items = self.object.items.select_related('question', 'question__category')
+        context['items'] = items
+        context['missed'] = [i for i in items if i.is_correct is False]
+        return context
 
 
 class QuestionExportView(LoginRequiredMixin, generic.View):

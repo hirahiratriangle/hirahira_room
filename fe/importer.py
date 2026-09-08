@@ -12,7 +12,7 @@
 import json
 from django.db import transaction
 
-from .models import Category, Question
+from .models import Category, LearningNote, Question
 
 LABELS = 'アイウエオカキクケコ'
 MAX_CHOICES = len(LABELS)
@@ -22,21 +22,60 @@ class ImportError_(ValueError):
 
 
 def parse(payload):
-    """文字列を問題のリストにする。読めなければ理由を添えて失敗させる。"""
+    """文字列を取り込む中身にする。読めなければ理由を添えて失敗させる。
+
+    受け付ける形は2つ。問題だけを並べた配列と、技術解説を添えた
+    {"notes": [...], "questions": [...]} の形。
+    """
     try:
         data = json.loads(payload)
     except json.JSONDecodeError as exc:
         raise ImportError_('JSON として読めません：{}'.format(exc))
-    if not isinstance(data, list):
-        raise ImportError_('問題を並べた配列（[ ... ]）で渡してください。')
-    if not data:
+
+    if isinstance(data, list):
+        questions, notes = data, []
+    elif isinstance(data, dict):
+        questions = data.get('questions')
+        notes = data.get('notes') or []
+        if not isinstance(questions, list):
+            raise ImportError_('"questions" に問題の配列がありません。')
+        if not isinstance(notes, list):
+            raise ImportError_('"notes" は技術解説の配列にしてください。')
+    else:
+        raise ImportError_(
+            '問題を並べた配列（[ ... ]）か、'
+            '{"notes": [...], "questions": [...]} の形で渡してください。'
+        )
+
+    if not questions:
         raise ImportError_('問題が1件も含まれていません。')
-    return data
+    return {'questions': questions, 'notes': notes}
 
 
-def validate(records):
+def validate_notes(records, codes):
+    """技術解説を検査する。分野・見出し・本文がそろっていることだけ見る。"""
+    for i, record in enumerate(records, start=1):
+        where = '技術解説{}件目'.format(i)
+        if not isinstance(record, dict):
+            raise ImportError_('{}：オブジェクトではありません。'.format(where))
+        if record.get('category') not in codes:
+            raise ImportError_(
+                '{}：中分類 {} は存在しません（1〜23 の番号で指定します）。'.format(
+                    where, record.get('category')
+                )
+            )
+        for field, label in (('title', '見出し'), ('body', '本文')):
+            value = record.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ImportError_('{}：{}（{}）が空です。'.format(where, field, label))
+    return records
+
+
+def validate(payload):
     """取り込む前に全件を検査する。1件でも駄目なら何も入れない。"""
     codes = set(Category.objects.values_list('code', flat=True))
+    records = payload['questions']
+    validate_notes(payload['notes'], codes)
     for i, record in enumerate(records, start=1):
         where = '{}件目'.format(i)
         if not isinstance(record, dict):
@@ -83,17 +122,18 @@ def validate(records):
 
         if record.get('difficulty', 2) not in (1, 2, 3):
             raise ImportError_('{}：difficulty は 1〜3 にしてください。'.format(where))
-    return records
+    return payload
 
 
 @transaction.atomic
-def replace_all(user, records):
-    """その人の問題集を、渡された内容にそっくり入れ替える。
+def replace_all(user, payload):
+    """その人の問題集と技術解説を、渡された内容にそっくり入れ替える。
 
     古い問題は削除し、それに紐づく解答履歴も一緒に消える。分野別の正答率は
     解答のたびに別途積み上げてあるので、問題が消えても残る。
     テンプレートが生成した計算問題は JSON に無くて当然なので触らない。
     """
+    records = payload['questions']
     removed, _ = (
         Question.objects
         .filter(owner=user, template__isnull=True)
@@ -101,6 +141,22 @@ def replace_all(user, records):
     )
 
     categories = {c.code: c for c in Category.objects.all()}
+
+    # 技術解説も同じタイミングで入れ替える。問題だけの JSON を取り込んだ
+    # ときに前の解説だけ残ると、問題と噛み合わない教材が居座るため。
+    LearningNote.objects.filter(owner=user).delete()
+    LearningNote.objects.bulk_create([
+        LearningNote(
+            owner=user,
+            category=categories[note['category']],
+            topic=note.get('topic', ''),
+            title=note['title'],
+            body=note['body'],
+            source=note.get('source', ''),
+        )
+        for note in payload['notes']
+    ])
+
     created = []
     for record in records:
         created.append(Question(
@@ -117,7 +173,7 @@ def replace_all(user, records):
             is_active=True,
         ))
     Question.objects.bulk_create(created)
-    return len(created), removed
+    return len(created), removed, len(payload['notes'])
 
 
 def export_records(user, subject=None):
