@@ -101,7 +101,7 @@
                         <p class="mb-2 text-muted">シラバス準拠の1問1答。分野ごとの正答率を集計し，苦手分野を重点的に出題</p>
                         <div class="mt-2">
                             {% if user.is_authenticated %}
-                            <a href="{% url 'fe:quiz' %}" class="btn btn-sm btn-outline-primary me-2">問題を解く</a>
+                            <a href="{% url 'fe:index' %}" class="btn btn-sm btn-outline-primary me-2">ダッシュボード</a>
                             <a href="{% url 'fe:stats' %}" class="btn btn-sm btn-outline-primary">分野別正答率</a>
                             {% else %}
                             <a href="{% url 'account_login' %}" class="btn btn-sm btn-outline-primary">ログイン</a>
