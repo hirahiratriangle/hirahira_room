@@ -9,17 +9,7 @@
 {% endblock %}
 
 {% block header %}
-<header style="background-color: #2c5aa0; padding-top: 5rem;">
-    <div class="container px-5 py-4">
-        <div class="d-flex justify-content-between align-items-center text-white flex-wrap gap-2">
-            <h1 class="h5 fw-bold mb-0">結果</h1>
-            <div class="small">
-                <a class="text-white text-decoration-none me-3" href="{% url 'fe:learn_start' %}">もう1ラウンド</a>
-                <a class="text-white text-decoration-none" href="{% url 'fe:index' %}">ダッシュボード</a>
-            </div>
-        </div>
-    </div>
-</header>
+{% include 'fe/_header.html' with page_title='学習モードの結果' current='learn' %}
 {% endblock %}
 
 {% block contents %}

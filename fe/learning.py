@@ -10,20 +10,23 @@
 import random
 
 from django.db import transaction
+from django.db.models import Count
 
 from .models import LearningItem, LearningNote, LearningRound, Question
 from .stats import category_stats
 
 
 @transaction.atomic
-def start_round(user, session, minutes, count=None):
+def start_round(user, session, minutes, count=None, note=None):
     """読む解説を1本選び、その分野から出題ぶんを取ってラウンドを作る。
 
+    note を渡せばそれを読む。渡さなければ苦手な分野から選ぶ。
     解説が無ければ始められない。問題と同じく、利用者が JSON で取り込む。
     """
     count = count or LearningRound.QUESTION_COUNT
 
-    note = pick_note(user, session.subject)
+    if note is None:
+        note = pick_note(user, session.subject)
     if note is None:
         return None
 
@@ -67,6 +70,38 @@ def pick_note(user, subject):
 
     weights = [max(0.05, weakness.get(n.category_id, 0.4)) for n in fresh]
     return random.choices(fresh, weights=weights, k=1)[0]
+
+
+def note_menu(user, subject):
+    """学習対象の一覧。中分類でまとめ、その下に小分類（解説）を並べる。
+
+    どれを選ぶか決められるように、中分類の正答率と、解説ごとの学習回数を添える。
+    """
+    notes = list(
+        LearningNote.objects.filter(owner=user).select_related('category')
+    )
+    if not notes:
+        return []
+
+    stats = {row['category'].id: row for row in category_stats(user, subject=subject)}
+    counts = {
+        row['note']: row['n']
+        for row in LearningRound.objects.filter(user=user, note__isnull=False)
+        .values('note').annotate(n=Count('id'))
+    }
+
+    groups = {}
+    for note in notes:
+        group = groups.setdefault(note.category_id, {
+            'category': note.category,
+            'stats': stats.get(note.category_id),
+            'notes': [],
+        })
+        group['notes'].append({'note': note, 'rounds': counts.get(note.id, 0)})
+
+    for group in groups.values():
+        group['notes'].sort(key=lambda n: (n['note'].topic, n['note'].title))
+    return sorted(groups.values(), key=lambda g: g['category'].code)
 
 
 def questions_for_note(user, note, subject, count):

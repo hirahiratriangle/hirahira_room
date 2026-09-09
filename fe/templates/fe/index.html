@@ -7,7 +7,14 @@
     <div class="container px-5 py-4">
         <div class="text-center text-white">
             <h1 class="h3 fw-bold mb-2">基本情報技術者試験 対策</h1>
-            <p class="mb-0 small">科目A 60問／90分・科目B 20問／100分　合格には両科目とも 600点／1,000点 以上が必要</p>
+            <p class="mb-2 small">科目A 60問／90分・科目B 20問／100分　合格には両科目とも 600点／1,000点 以上が必要</p>
+            <nav class="small d-flex flex-wrap gap-3 justify-content-center">
+                <a class="text-white text-decoration-none" href="{% url 'fe:quiz' %}">1問1答</a>
+                <a class="text-white text-decoration-none" href="{% url 'fe:learn_start' %}">学習モード</a>
+                <a class="text-white text-decoration-none" href="{% url 'fe:stats' %}">分野別正答率</a>
+                <a class="text-white text-decoration-none" href="{% url 'fe:history' %}">履歴</a>
+                <a class="text-white text-decoration-none" href="{% url 'fe:manage_list' %}">自分の問題</a>
+            </nav>
         </div>
     </div>
 </header>

@@ -10,13 +10,7 @@
 {% endblock %}
 
 {% block header %}
-<header style="background-color: #2c5aa0; padding-top: 5rem;">
-    <div class="container px-5 py-4">
-        <div class="text-white">
-            <h1 class="h5 fw-bold mb-0">解説を読む</h1>
-        </div>
-    </div>
-</header>
+{% include 'fe/_header.html' with page_title='解説を読む' current='learn' %}
 {% endblock %}
 
 {% block contents %}

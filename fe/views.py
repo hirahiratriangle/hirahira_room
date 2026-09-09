@@ -21,9 +21,9 @@ from django.views import generic
 from .exam import EXAM, build_prompt
 from .forms import QuestionUploadForm
 from .importer import export_records, replace_all
-from .learning import current_item, grade, start_round
-from .models import (Attempt, Category, CategoryProgress, LearningRound,
-                     Question, QuestionTemplate, StudySession)
+from .learning import current_item, grade, note_menu, start_round
+from .models import (Attempt, Category, CategoryProgress, LearningNote,
+                     LearningRound, Question, QuestionTemplate, StudySession)
 from .selection import pick_question
 from .stats import (category_stats, daily_counts, field_stats, overall_stats,
                     record_progress, weak_categories)
@@ -344,11 +344,13 @@ class LearnStartView(LoginRequiredMixin, generic.View):
     template_name = 'fe/learn_start.html'
 
     def get(self, request, *args, **kwargs):
+        session = _get_study_session(request.user)
         return render(request, self.template_name, {
             'minute_choices': LearningRound.MINUTE_CHOICES,
             'default_minutes': LearningRound.DEFAULT_MINUTES,
             'count': LearningRound.QUESTION_COUNT,
-            'study_session': _get_study_session(request.user),
+            'study_session': session,
+            'groups': note_menu(request.user, session.subject),
             'recent': LearningRound.objects.filter(
                 user=request.user, phase=LearningRound.PHASE_DONE
             )[:5],
@@ -360,9 +362,27 @@ class LearnStartView(LoginRequiredMixin, generic.View):
         if minutes not in LearningRound.MINUTE_CHOICES:
             minutes = LearningRound.DEFAULT_MINUTES
 
+        # 空なら「おまかせ」。他人の解説を指定されても拾わない。
+        note = None
+        chosen = request.POST.get('note')
+        if chosen and chosen.isdigit():
+            note = LearningNote.objects.filter(
+                pk=chosen, owner=request.user
+            ).select_related('category').first()
+            if note is None:
+                messages.error(request, 'その解説は見つかりませんでした。')
+                return redirect('fe:learn_start')
+
         session = _get_study_session(request.user)
-        round_ = start_round(request.user, session, minutes)
+        round_ = start_round(request.user, session, minutes, note=note)
         if round_ is None:
+            if note is not None:
+                messages.error(
+                    request,
+                    '「{}」に出題できる問題がありません。'
+                    'この分野の問題も取り込んでください。'.format(note.title),
+                )
+                return redirect('fe:learn_start')
             messages.error(
                 request,
                 '学習モードには技術解説が要ります。'

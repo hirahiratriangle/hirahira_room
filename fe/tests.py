@@ -756,6 +756,65 @@ class LearningModeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['missed'], [])
 
+    def test_the_menu_groups_notes_by_category(self):
+        """学習対象は、中分類でまとめて小分類（解説）を並べる。"""
+        build_questions(self.user, per_category=12)
+        LearningNote.objects.filter(owner=self.user).delete()
+        for code, topic in ((9, '正規化'), (9, 'SQL'), (11, '暗号技術')):
+            category = Category.objects.get(code=code)
+            LearningNote.objects.create(
+                owner=self.user, category=category, topic=topic,
+                title='{}の解説'.format(topic), body='本文', source='テスト',
+            )
+
+        response = self.client.get(reverse('fe:learn_start'))
+        groups = response.context['groups']
+        self.assertEqual([g['category'].code for g in groups], [9, 11])
+        self.assertEqual(len(groups[0]['notes']), 2)
+        self.assertEqual(
+            [n['note'].topic for n in groups[0]['notes']], ['SQL', '正規化'],
+        )
+
+    def test_choosing_a_note_uses_that_note(self):
+        """選んだ解説がそのまま読む対象になる。"""
+        self._prepare()
+        database = Category.objects.get(code=9)
+        chosen = LearningNote.objects.create(
+            owner=self.user, category=database, topic='正規化',
+            title='正規化の解説', body='本文', source='テスト',
+        )
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5, 'note': chosen.pk})
+        round_ = LearningRound.objects.get(user=self.user)
+        self.assertEqual(round_.note_id, chosen.pk)
+        for item in round_.items.select_related('question'):
+            self.assertEqual(item.question.category_id, database.pk)
+
+    def test_another_account_s_note_is_not_accepted(self):
+        self._prepare()
+        other = make_user('note-owner')
+        theirs = LearningNote.objects.create(
+            owner=other, category=Category.objects.get(code=9),
+            topic='x', title='他人の解説', body='本文',
+        )
+        response = self.client.post(
+            reverse('fe:learn_start'), {'minutes': 5, 'note': theirs.pk}
+        )
+        self.assertRedirects(response, reverse('fe:learn_start'))
+        self.assertEqual(LearningRound.objects.count(), 0)
+
+    def test_a_note_without_questions_is_reported(self):
+        """解説はあるが、その分野の問題が無いとき。"""
+        LearningNote.objects.filter(owner=self.user).delete()
+        note = LearningNote.objects.create(
+            owner=self.user, category=Category.objects.get(code=23),
+            topic='法務', title='法務の解説', body='本文',
+        )
+        response = self.client.post(
+            reverse('fe:learn_start'), {'minutes': 5, 'note': note.pk}
+        )
+        self.assertRedirects(response, reverse('fe:learn_start'))
+        self.assertEqual(LearningRound.objects.count(), 0)
+
     def test_another_account_cannot_open_the_round(self):
         self._prepare()
         self.client.post(reverse('fe:learn_start'), {'minutes': 5})

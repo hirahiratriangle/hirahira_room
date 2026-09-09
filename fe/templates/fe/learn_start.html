@@ -3,17 +3,24 @@
 {% block title %}学習モード - FE 基本情報対策 | HirahiraRoom{% endblock %}
 
 {% block header %}
-<header style="background-color: #2c5aa0; padding-top: 5rem;">
-    <div class="container px-5 py-4">
-        <div class="d-flex justify-content-between align-items-center text-white flex-wrap gap-2">
-            <h1 class="h5 fw-bold mb-0">学習モード</h1>
-            <div class="small">
-                <a class="text-white text-decoration-none me-3" href="{% url 'fe:index' %}">ダッシュボード</a>
-                <a class="text-white text-decoration-none" href="{% url 'fe:quiz' %}">1問1答</a>
-            </div>
-        </div>
-    </div>
-</header>
+{% include 'fe/_header.html' with page_title='学習モード' current='learn' %}
+{% endblock %}
+
+{% block head %}
+<style>
+    /* いま選んでいる行と、それを含む中分類を目立たせる。
+       畳んだままでも「どこを選んだか」が分かるようにする。 */
+    .fe-pick .fe-row { cursor: pointer; }
+    .fe-pick .fe-row:hover { background-color: #eef3fa; }
+    .fe-pick .fe-row:has(input:checked) {
+        background-color: #e3ecf9;
+        box-shadow: inset 3px 0 0 #2c5aa0;
+        font-weight: 700;
+    }
+    .fe-pick .fe-here { display: none; }
+    .fe-pick .fe-group:has(input:checked) > summary { background-color: #eef3fa; }
+    .fe-pick .fe-group:has(input:checked) .fe-here { display: inline; }
+</style>
 {% endblock %}
 
 {% block contents %}
@@ -21,11 +28,73 @@
 
     <p class="text-muted">
         技術解説を<strong>時間を決めて読み</strong>、そのあと同じ範囲から<strong>{{ count }}問</strong>解きます。
-        読む解説は、苦手な分野のものから選ばれます。
+        読むものは中分類から選べます。おまかせにすると、苦手な分野の未読から選ばれます。
     </p>
 
     <form method="post" class="border rounded p-4 mb-4">
         {% csrf_token %}
+
+        <div class="fw-bold" style="color:#2c5aa0;">学習対象</div>
+        <div class="small text-muted mb-2">
+            いま選んでいるもの：<span class="fw-bold text-body" id="picked">おまかせ</span>
+        </div>
+        {% if groups %}
+        <div class="border rounded mb-4 fe-pick">
+            <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
+                <input class="form-check-input mt-0" type="radio" name="note" value="" checked>
+                <span class="fw-bold">おまかせ</span>
+                <span class="text-muted small">苦手な分野の、まだ読んでいない解説から選びます</span>
+            </label>
+
+            {% for group in groups %}
+            <details class="fe-group border-bottom">
+                <summary class="d-flex justify-content-between align-items-center p-2 px-3"
+                         style="cursor:pointer;">
+                    <span>
+                        <span class="text-muted small me-2">{{ group.category.code }}</span>
+                        <span class="fw-bold">{{ group.category.name }}</span>
+                        <span class="text-muted small ms-2">解説{{ group.notes|length }}本</span>
+                        <span class="badge bg-primary ms-2 fe-here">選択中</span>
+                    </span>
+                    <span class="small">
+                        {% if group.stats.rate_percent is not None %}
+                        <span class="{% if group.stats.is_weak %}text-danger fw-bold{% else %}text-muted{% endif %}">
+                            正答率 {{ group.stats.rate_percent }}％
+                        </span>
+                        {% else %}
+                        <span class="text-muted">未着手</span>
+                        {% endif %}
+                        <span class="text-muted ms-2">問題{{ group.stats.question_count }}問</span>
+                    </span>
+                </summary>
+                <div style="background-color:#f6f8fb;">
+                    {% for entry in group.notes %}
+                    <label class="fe-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0"
+                           data-name="{{ group.category.name }} ／ {{ entry.note.title }}">
+                        <input class="form-check-input mt-0" type="radio" name="note"
+                               value="{{ entry.note.pk }}">
+                        {% if entry.note.topic %}
+                        <span class="badge bg-secondary">{{ entry.note.topic }}</span>
+                        {% endif %}
+                        <span>{{ entry.note.title }}</span>
+                        {% if entry.rounds %}
+                        <span class="text-muted small">学習{{ entry.rounds }}回</span>
+                        {% else %}
+                        <span class="text-primary small">未読</span>
+                        {% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-warning">
+            技術解説がまだありません。
+            <a href="{% url 'fe:manage_upload' %}">解説を含む JSON を取り込んで</a>ください。
+        </div>
+        {% endif %}
+
         <div class="fw-bold mb-3" style="color:#2c5aa0;">読む時間</div>
         <div class="d-flex flex-wrap gap-3 mb-4">
             {% for m in minute_choices %}
@@ -39,7 +108,9 @@
         <div class="form-text mb-3">
             時間が来ると解答に進みます。読み終われば途中でも進めます。
         </div>
-        <button type="submit" class="btn btn-primary">はじめる</button>
+        <button type="submit" class="btn btn-primary"{% if not groups %} disabled{% endif %}>
+            はじめる
+        </button>
     </form>
 
     {% if recent %}
@@ -58,4 +129,28 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 「いま選んでいるもの」を出す。畳んだ中分類の中を選んでも分かるように。
+// :has() が効かないブラウザでも、この行だけは正しく出る。
+(function () {
+    var label = document.getElementById('picked');
+    var form = label && label.closest('form');
+    if (!form) { return; }
+
+    var update = function () {
+        var checked = form.querySelector('input[name="note"]:checked');
+        var row = checked && checked.closest('.fe-row');
+        label.textContent = (row && row.dataset.name) ? row.dataset.name : 'おまかせ';
+    };
+    form.addEventListener('change', update);
+
+    // 前の選択が残って再表示されたときは、その中分類を開いておく
+    var checked = form.querySelector('.fe-group input[name="note"]:checked');
+    if (checked) { checked.closest('details').open = true; }
+    update();
+})();
+</script>
 {% endblock %}
