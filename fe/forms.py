@@ -6,10 +6,12 @@
 """
 
 from django import forms
+from django.conf import settings
 
 from .importer import ImportError_, parse, validate
 
-MAX_UPLOAD_BYTES = 2 * 1024 * 1024
+# 上限は設定に一本化してある。Django 側の上限とずれないようにするため。
+MAX_UPLOAD_BYTES = settings.FE_MAX_UPLOAD_BYTES
 
 
 class QuestionUploadForm(forms.Form):
@@ -30,7 +32,9 @@ class QuestionUploadForm(forms.Form):
         upload = self.cleaned_data['upload']
         if upload.size > MAX_UPLOAD_BYTES:
             raise forms.ValidationError(
-                'ファイルが大きすぎます（上限 {} MB）。'.format(MAX_UPLOAD_BYTES // 1024 // 1024)
+                'ファイルが大きすぎます（{:.1f} MB。上限 {} MB）。'.format(
+                    upload.size / 1024 / 1024, MAX_UPLOAD_BYTES // 1024 // 1024
+                )
             )
         try:
             payload = upload.read().decode('utf-8')

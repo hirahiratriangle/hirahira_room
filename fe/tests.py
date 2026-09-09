@@ -468,6 +468,30 @@ class ManageTests(TestCase):
         self.assertNotContains(response, 'id_payload')
         self.assertNotContains(response, '<textarea')
 
+    def test_a_large_file_is_accepted(self):
+        """解説を添えると 1MB を超えるので、その大きさで通ること。"""
+        records = json.loads(self._payload(200, '大きな問題'))
+        notes = [
+            {
+                'category': 11, 'topic': '情報セキュリティ',
+                'title': '解説{}'.format(i), 'body': 'あ' * 8000, 'source': 'テスト',
+            }
+            for i in range(120)
+        ]
+        payload = json.dumps(
+            {'notes': notes, 'questions': records}, ensure_ascii=False
+        ).encode('utf-8')
+        # 小分類ぶんの解説を厚く書いた実運用の大きさを想定する。
+        self.assertGreater(len(payload), 2 * 1024 * 1024, '2MB を超える前提のテスト')
+
+        response = self.client.post(reverse('fe:manage_upload'), {
+            'upload': SimpleUploadedFile('big.json', payload,
+                                         content_type='application/json'),
+        })
+        self.assertRedirects(response, reverse('fe:manage_list'))
+        self.assertEqual(Question.objects.filter(owner=self.user).count(), 200)
+        self.assertEqual(LearningNote.objects.filter(owner=self.user).count(), 120)
+
     def test_upload_is_required(self):
         response = self.client.post(reverse('fe:manage_upload'), {})
         self.assertEqual(response.status_code, 200)
