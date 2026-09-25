@@ -84,11 +84,15 @@ class QuizSettingsView(LoginRequiredMixin, generic.View):
         if subject in {Question.SUBJECT_A, Question.SUBJECT_B}:
             session.subject = subject
 
+        # 分野が効くのは「分野を指定」のときだけ。ほかのモードに変えたら、
+        # 残しておいても誤解のもとなので消す。
         session.category = None
         if session.mode == StudySession.MODE_CATEGORY and category_code:
-            session.category = Category.objects.filter(code=category_code).first()
+            session.category = Category.objects.filter(
+                code=category_code, subject=session.subject
+            ).first()
             if session.category is None:
-                messages.error(request, '指定された分野が見つかりませんでした。')
+                messages.error(request, 'その分野は選んだ科目にありません。')
                 session.mode = StudySession.MODE_FOCUS
 
         session.save()

@@ -401,6 +401,40 @@ class ViewTests(TestCase):
                         Category.objects.get(code=code).subject, subject,
                     )
 
+    def test_the_category_shows_only_when_the_mode_uses_it(self):
+        """分野が効くのは「分野を指定」のときだけ。
+
+        ほかのモードでも保存値を映していると、効いていない分野が選ばれた
+        ままに見える。設定を送らない限り変わらないので、固定されたように映る。
+        """
+        session, _ = StudySession.objects.get_or_create(user=self.user)
+        session.subject = Question.SUBJECT_A
+        session.category = Category.objects.get(code=2)
+
+        def selected():
+            html = self.client.get(reverse('fe:index')).content.decode('utf-8')
+            block = re.search(r'id="category".*?</select>', html, re.S).group(0)
+            found = re.findall(r'<option value="(\d*)"[^>]*selected', block)
+            return found[0] if found else ''
+
+        session.mode = StudySession.MODE_CATEGORY
+        session.save()
+        self.assertEqual(selected(), '2', '分野指定のときは選ばれて見える')
+
+        session.mode = StudySession.MODE_FOCUS
+        session.save()
+        self.assertEqual(selected(), '', 'ほかのモードでは指定なしに見える')
+
+    def test_a_category_from_the_other_subject_is_refused(self):
+        """科目に無い分野を指定されたら受け付けない。"""
+        response = self.client.post(reverse('fe:quiz_settings'), {
+            'mode': StudySession.MODE_CATEGORY, 'subject': 'A', 'category': 103,
+        })
+        self.assertEqual(response.status_code, 302)
+        session = StudySession.objects.get(user=self.user)
+        self.assertIsNone(session.category)
+        self.assertEqual(session.mode, StudySession.MODE_FOCUS)
+
     def test_the_two_subjects_have_separate_categories(self):
         """科目Aだけの分類と科目Bだけの分類に分かれ、重なりが無いこと。"""
         a = set(Category.objects.filter(subject='A').values_list('code', flat=True))

@@ -19,10 +19,12 @@ categories には fe.stats.category_options の結果（科目ごとの件数つ
     </div>
     <div class="col-6 col-md-3">
         <label for="category" class="form-label small text-muted mb-1">分野（分野指定のとき）</label>
+        {% comment %}分野が効くのは「分野を指定」のときだけ。ほかのモードでも
+        保存値を映すと、効いていない分野が選ばれたままに見える。{% endcomment %}
         <select class="form-select form-select-sm" id="category" name="category">
             <option value="">指定なし</option>
             {% for option in categories %}{% if option.subject == study_session.subject %}
-            <option value="{{ option.code }}"{% if study_session.category.code == option.code %} selected{% endif %}>{{ option.label }}{% if option.question_count %}（{{ option.question_count }}問）{% endif %}</option>
+            <option value="{{ option.code }}"{% if study_session.mode == 'category' and study_session.category.code == option.code %} selected{% endif %}>{{ option.label }}{% if option.question_count %}（{{ option.question_count }}問）{% endif %}</option>
             {% endif %}{% endfor %}
         </select>
     </div>
