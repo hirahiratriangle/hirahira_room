@@ -67,7 +67,7 @@ class PassReportForm(forms.Form):
 
 # /fe/ 直下のほかの画面と同じ名前は、ダッシュボードの URL（/fe/<ID>/）と
 # ぶつかるので ID にできない。
-RESERVED_CODES = {'quiz', 'learn', 'stats', 'history', 'pass', 'manage', 'leave'}
+RESERVED_CODES = {'quiz', 'learn', 'stats', 'history', 'pass', 'manage', 'enter'}
 
 
 class LearnerForm(forms.Form):

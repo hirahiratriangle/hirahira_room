@@ -3,9 +3,10 @@
 出題は 1 問 1 答。GET で 1 問出し，POST で採点してその場で解説を出す。
 出題する問題の選定は fe.selection，成績の集計は fe.stats に分けてある。
 
-成績も問題も Learner（本アプリの中の ID）ごとに持つ。/fe/ で ID を入力すると
+成績は Learner（本アプリの中の ID）ごとに持つ。/fe/ で ID を入力すると
 セッションが覚え、以後の画面はその ID の分を出す。ダッシュボードだけは
-/fe/<ID>/ に置き、ほかの ID のものは開けない（404）。
+/fe/<ID>/ に置き、ほかの ID のものは開けない（404）。問題と技術解説は
+全 ID で共有し、取り込みなどの管理は管理用の ID だけができる。
 """
 
 import logging
@@ -13,7 +14,8 @@ import logging
 import json
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.http import Http404, HttpResponse
@@ -81,27 +83,38 @@ class LearnerRequiredMixin(LoginRequiredMixin):
             if self.learner is None:
                 return redirect('fe:index')
             request.fe_learner = self.learner
+            self.check_learner(self.learner)
         return super().dispatch(request, *args, **kwargs)
+
+    def check_learner(self, learner):
+        """入っている ID でこの画面を使えるか。使えなければ例外を投げる。"""
+
+
+class AdminRequiredMixin(LearnerRequiredMixin):
+    """問題集を管理する画面。管理用の ID でなければ 403。"""
+
+    def check_learner(self, learner):
+        if not learner.is_admin:
+            raise PermissionDenied('問題集を管理できるのは管理用の ID だけです。')
 
 
 def dashboard_url(learner):
     return reverse('fe:dashboard', args=[learner.code])
 
 
-class IndexView(LoginRequiredMixin, generic.FormView):
-    """アプリの入口。ID で入るか、新しく作る。
+class EnterView(LoginRequiredMixin, generic.FormView):
+    """ID で入る、または新しく作る。
 
-    入っていれば、そのまま自分のダッシュボードへ送る。
+    すでに入っていても開ける。別の ID を入力すれば、その ID に切り替わる。
     """
 
     template_name = 'fe/enter.html'
     form_class = LearnerForm
 
-    def get(self, request, *args, **kwargs):
-        learner = current_learner(request)
-        if learner is not None:
-            return redirect(dashboard_url(learner))
-        return super().get(request, *args, **kwargs)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['current'] = current_learner(self.request)
+        return context
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -118,13 +131,14 @@ class IndexView(LoginRequiredMixin, generic.FormView):
         return redirect(dashboard_url(learner))
 
 
-class LeaveView(LoginRequiredMixin, generic.View):
-    """ID から出る。別の ID で入り直すときに使う。"""
+class IndexView(EnterView):
+    """アプリの入口。入っていれば、そのまま自分のダッシュボードへ送る。"""
 
-    def post(self, request, *args, **kwargs):
-        for key in (SESSION_LEARNER, SESSION_RECENT, SESSION_PENDING, SESSION_SHOWN_AT):
-            request.session.pop(key, None)
-        return redirect('fe:index')
+    def get(self, request, *args, **kwargs):
+        learner = current_learner(request)
+        if learner is not None:
+            return redirect(dashboard_url(learner))
+        return super().get(request, *args, **kwargs)
 
 
 class DashboardView(LearnerRequiredMixin, generic.TemplateView):
@@ -155,7 +169,7 @@ class DashboardView(LearnerRequiredMixin, generic.TemplateView):
         context['categories'] = category_options(learner)
         context['daily'] = daily_counts(learner, days=14)
         context['exam'] = EXAM
-        context['question_total'] = Question.objects.active().owned_by(learner).filter(
+        context['question_total'] = Question.objects.active().filter(
             template__isnull=True
         ).count()
         context['template_total'] = QuestionTemplate.objects.filter(is_active=True).count()
@@ -242,7 +256,7 @@ class QuizView(LearnerRequiredMixin, generic.View):
             return redirect('fe:quiz')
 
         question = (
-            Question.objects.owned_by(self.learner).filter(id=pending_id)
+            Question.objects.filter(id=pending_id)
             .select_related('category').first()
         )
         if question is None:
@@ -399,22 +413,21 @@ class HistoryView(LearnerRequiredMixin, generic.ListView):
 
 
 # ================================================================ 問題の管理
-# 問題は ID ごとに持ち、JSON の取り込みが唯一の作成・更新経路。
+# 問題は全 ID で共有し、JSON の取り込みが唯一の作成・更新経路。
 # 画面に入力フォームを置かないので、手元の JSON と画面の内容がずれない。
+# 一覧・取り込み・書き出しは、管理用の ID だけが使える。
 
 
-class ManageListView(LearnerRequiredMixin, generic.ListView):
-    """自分の問題の一覧。中身の確認と、出題対象の切り替えだけを行う。"""
+class ManageListView(AdminRequiredMixin, generic.ListView):
+    """共有の問題の一覧。中身の確認だけを行う。"""
 
     template_name = 'fe/manage_list.html'
     context_object_name = 'questions'
     paginate_by = 25
 
     def get_queryset(self):
-        learner = self.learner
         queryset = (
             Question.objects.select_related('category', 'template')
-            .filter(learner=learner)
             .annotate(attempt_count=Count('attempts'))
         )
         params = self.request.GET
@@ -431,7 +444,7 @@ class ManageListView(LearnerRequiredMixin, generic.ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        mine = Question.objects.filter(learner=self.learner, template__isnull=True)
+        mine = Question.objects.filter(template__isnull=True)
         context['categories'] = Category.objects.all()  # 一覧は両科目を横断して絞り込む
         context['filters'] = self.request.GET
         context['query_string'] = self.request.GET.urlencode()
@@ -439,15 +452,13 @@ class ManageListView(LearnerRequiredMixin, generic.ListView):
             'total': mine.count(),
             'subject_a': mine.filter(subject=Question.SUBJECT_A).count(),
             'subject_b': mine.filter(subject=Question.SUBJECT_B).count(),
-            'generated': Question.objects.filter(
-                learner=self.learner, template__isnull=False
-            ).count(),
+            'generated': Question.objects.filter(template__isnull=False).count(),
         }
         return context
 
 
-class QuestionUploadView(LearnerRequiredMixin, generic.FormView):
-    """JSON を取り込んで、自分の問題にする。"""
+class QuestionUploadView(AdminRequiredMixin, generic.FormView):
+    """JSON を取り込んで、共有の問題集を差し替える。"""
 
     template_name = 'fe/manage_upload.html'
     form_class = QuestionUploadForm
@@ -460,12 +471,12 @@ class QuestionUploadView(LearnerRequiredMixin, generic.FormView):
         return context
 
     def form_valid(self, form):
-        created, removed, notes = replace_all(self.learner, form.records)
+        created, removed, notes = replace_all(form.records)
         note = '問題集を {} 問に差し替えました。'.format(created)
         if notes:
             note += ' 技術解説 {} 本も取り込みました。'.format(notes)
         if removed:
-            note += ' これまでの {} 問と、その解答履歴は削除しました' \
+            note += ' これまでの {} 問と、全 ID のその解答履歴は削除しました' \
                     '（分野ごとの正答率と苦手分野の判定は残ります）。'.format(removed)
         messages.success(self.request, note)
         return super().form_valid(form)
@@ -495,13 +506,11 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
         if minutes not in LearningRound.MINUTE_CHOICES:
             minutes = LearningRound.DEFAULT_MINUTES
 
-        # 空なら「おまかせ」。他人の解説を指定されても拾わない。
+        # 空なら「おまかせ」
         note = None
         chosen = request.POST.get('note')
         if chosen and chosen.isdigit():
-            note = LearningNote.objects.filter(
-                pk=chosen, learner=self.learner
-            ).select_related('category').first()
+            note = LearningNote.objects.filter(pk=chosen).select_related('category').first()
             if note is None:
                 messages.error(request, 'その解説は見つかりませんでした。')
                 return redirect('fe:learn_start')
@@ -512,16 +521,14 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
             if note is not None:
                 messages.error(
                     request,
-                    '「{}」に出題できる問題がありません。'
-                    'この分野の問題も取り込んでください。'.format(note.title),
+                    '「{}」に出題できる問題がありません。'.format(note.title),
                 )
                 return redirect('fe:learn_start')
-            messages.error(
-                request,
-                '学習モードには技術解説が要ります。'
-                '解説と問題をまとめた JSON を取り込んでください。',
-            )
-            return redirect('fe:manage_upload')
+            messages.error(request, '学習モードに使う技術解説が、まだ用意されていません。')
+            # 管理用の ID なら、そのまま取り込みへ案内する
+            if self.learner.is_admin:
+                return redirect('fe:manage_upload')
+            return redirect('fe:learn_start')
         return redirect('fe:learn_read', pk=round_.pk)
 
 
@@ -646,12 +653,12 @@ class LearnResultView(LearnerRequiredMixin, generic.DetailView):
         return context
 
 
-class QuestionExportView(LearnerRequiredMixin, generic.View):
-    """自分の問題を、取り込みと同じ形式の JSON で書き出す。"""
+class QuestionExportView(AdminRequiredMixin, generic.View):
+    """共有の問題を、取り込みと同じ形式の JSON で書き出す。"""
 
     def get(self, request, *args, **kwargs):
         subject = request.GET.get('subject')
-        payload = export_records(self.learner, subject)
+        payload = export_records(subject)
         body = json.dumps(payload, ensure_ascii=False, indent=1)
         response = HttpResponse(body, content_type='application/json; charset=utf-8')
         name = 'fe_{}.json'.format(subject.lower()) if subject in ('A', 'B') else 'fe_all.json'

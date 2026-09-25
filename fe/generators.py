@@ -566,11 +566,10 @@ def generators_for_category(category):
     ]
 
 
-def generate_question(template, learner, rng=None):
+def generate_question(template, rng=None):
     """テンプレートから Question を1件作る。
 
-    問題は ID ごとに持つので、生成した問題もその ID のものになる。
-    同じ人が同じ数値を引いたときは、同じ問題を使い回す。
+    問題は全 ID で共有する。同じ数値を引いたときは、同じ問題を使い回す。
     """
     spec = REGISTRY.get(template.key)
     if spec is None:
@@ -588,7 +587,7 @@ def generate_question(template, learner, rng=None):
     answer_index = options.index(built['correct'])
 
     question, created = Question.objects.get_or_create(
-        learner=learner, template=template, params=built['params'],
+        template=template, params=built['params'],
         defaults={
             'subject': Question.SUBJECT_A,
             'category': template.category,

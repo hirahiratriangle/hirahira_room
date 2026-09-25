@@ -21,7 +21,7 @@ def start_round(learner, session, minutes, count=None, note=None):
     """読む解説を1本選び、その分野から出題ぶんを取ってラウンドを作る。
 
     note を渡せばそれを読む。渡さなければ苦手な分野から選ぶ。
-    解説が無ければ始められない。問題と同じく、利用者が JSON で取り込む。
+    解説が無ければ始められない。問題と同じく、管理用の ID が JSON で取り込む。
     """
     count = count or LearningRound.QUESTION_COUNT
 
@@ -57,7 +57,7 @@ def pick_note(learner, subject):
     # 分類は科目ごとに別なので、解説も科目で絞る。絞らないと、科目Aの回で
     # 科目Bの解説を読まされ、そのあと出題できる問題が無いことになる。
     notes = list(
-        LearningNote.objects.filter(learner=learner, category__subject=subject)
+        LearningNote.objects.filter(category__subject=subject)
         .select_related('category')
     )
     if not notes:
@@ -84,7 +84,7 @@ def note_menu(learner, subject):
     どれを選ぶか決められるように、中分類の正答率と、解説ごとの学習回数を添える。
     """
     notes = list(
-        LearningNote.objects.filter(learner=learner, category__subject=subject)
+        LearningNote.objects.filter(category__subject=subject)
         .select_related('category')
     )
     if not notes:
@@ -118,7 +118,7 @@ def questions_for_note(learner, note, subject, count):
     読んだ内容と出題がずれないようにするため。
     """
     pool = (
-        Question.objects.active().for_subject(subject).owned_by(learner)
+        Question.objects.active().for_subject(subject)
         .filter(category=note.category).select_related('category')
     )
     same_topic = [q for q in pool if note.topic and q.topic == note.topic]

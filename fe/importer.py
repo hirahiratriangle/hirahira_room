@@ -1,6 +1,7 @@
 """問題 JSON の検証と一括取り込み。
 
-問題は ID ごとに持ち、JSON の取り込みが唯一の登録経路になる。
+問題は全 ID で共有し、JSON の取り込みが唯一の登録経路になる。
+取り込めるのは管理用の ID だけ（画面側で制限する）。
 取り込みは常に一括差し替え。既存の問題との一致・不一致は見ず、
 ファイルの内容をそのままその人の問題集にする。
 
@@ -137,17 +138,17 @@ def validate(payload):
 
 
 @transaction.atomic
-def replace_all(learner, payload):
-    """その人の問題集と技術解説を、渡された内容にそっくり入れ替える。
+def replace_all(payload):
+    """共有の問題集と技術解説を、渡された内容にそっくり入れ替える。
 
-    古い問題は削除し、それに紐づく解答履歴も一緒に消える。分野別の正答率は
-    解答のたびに別途積み上げてあるので、問題が消えても残る。
+    古い問題は削除し、それに紐づく全 ID の解答履歴も一緒に消える。分野別の
+    正答率は解答のたびに ID ごとに積み上げてあるので、問題が消えても残る。
     テンプレートが生成した計算問題は JSON に無くて当然なので触らない。
     """
     records = payload['questions']
     removed, _ = (
         Question.objects
-        .filter(learner=learner, template__isnull=True)
+        .filter(template__isnull=True)
         .delete()
     )
 
@@ -155,10 +156,9 @@ def replace_all(learner, payload):
 
     # 技術解説も同じタイミングで入れ替える。問題だけの JSON を取り込んだ
     # ときに前の解説だけ残ると、問題と噛み合わない教材が居座るため。
-    LearningNote.objects.filter(learner=learner).delete()
+    LearningNote.objects.all().delete()
     LearningNote.objects.bulk_create([
         LearningNote(
-            learner=learner,
             category=categories[note['category']],
             topic=note.get('topic', ''),
             title=note['title'],
@@ -171,7 +171,6 @@ def replace_all(learner, payload):
     created = []
     for record in records:
         created.append(Question(
-            learner=learner,
             subject=record.get('subject', Question.SUBJECT_A),
             category=categories[record['category']],
             topic=record.get('topic', ''),
@@ -187,8 +186,8 @@ def replace_all(learner, payload):
     return len(created), removed, len(payload['notes'])
 
 
-def export_records(learner, subject=None):
-    """その人の問題と技術解説を、取り込みと同じ形式で書き出す。
+def export_records(subject=None):
+    """共有の問題と技術解説を、取り込みと同じ形式で書き出す。
 
     取り込みは解説も一括で差し替えるので、問題だけを書き出すと、
     それを取り込み直したときに解説が消える。往復しても失われないよう、
@@ -197,8 +196,8 @@ def export_records(learner, subject=None):
     subject を指定すると、その科目のぶんだけを出す。取り込み直せば
     もう一方の科目は消えるので、控えを取るなら指定しない。
     """
-    questions = Question.objects.filter(learner=learner, template__isnull=True, is_active=True)
-    notes = LearningNote.objects.filter(learner=learner)
+    questions = Question.objects.filter(template__isnull=True, is_active=True)
+    notes = LearningNote.objects.all()
     if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
         questions = questions.filter(subject=subject)
         # 分類が科目ごとに別なので、解説もその科目のものだけになる

@@ -86,7 +86,7 @@ def category_stats(learner, subject=None):
 
     available = {
         row['category']: row['n']
-        for row in Question.objects.active().for_subject(subject).owned_by(learner)
+        for row in Question.objects.active().for_subject(subject)
         .values('category').annotate(n=Count('id'))
     }
 
@@ -123,7 +123,7 @@ def category_options(learner):
     """
     counts = {}
     for row in (
-        Question.objects.active().owned_by(learner)
+        Question.objects.active()
         .values('category', 'subject').annotate(n=Count('id'))
     ):
         counts.setdefault(row['category'], {})[row['subject']] = row['n']

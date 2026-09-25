@@ -27,8 +27,10 @@ history / manage）を渡す。sub があれば見出しの右に小さく添え
                 {% if current != 'history' %}<a class="text-white text-decoration-none" href="{% url 'fe:history' %}">履歴</a>
                 {% else %}<span style="color:#93aecd;">履歴</span>{% endif %}
 
-                {% if current != 'manage' %}<a class="text-white text-decoration-none" href="{% url 'fe:manage_list' %}">自分の問題</a>
-                {% else %}<span style="color:#93aecd;">自分の問題</span>{% endif %}
+                {% if request.fe_learner.is_admin %}
+                {% if current != 'manage' %}<a class="text-white text-decoration-none" href="{% url 'fe:manage_list' %}">問題の管理</a>
+                {% else %}<span style="color:#93aecd;">問題の管理</span>{% endif %}
+                {% endif %}
 
                 {% if request.fe_learner %}{% include 'fe/_learner_badge.html' %}{% endif %}
             </nav>

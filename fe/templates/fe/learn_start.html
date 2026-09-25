@@ -90,8 +90,8 @@
         </div>
         {% else %}
         <div class="alert alert-warning">
-            技術解説がまだありません。
-            <a href="{% url 'fe:manage_upload' %}">解説を含む JSON を取り込んで</a>ください。
+            技術解説はまだ用意されていません。
+            {% if request.fe_learner.is_admin %}<a href="{% url 'fe:manage_upload' %}">解説を含む JSON を取り込んで</a>ください。{% endif %}
         </div>
         {% endif %}
 

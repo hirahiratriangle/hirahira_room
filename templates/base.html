@@ -42,6 +42,14 @@
                         <a class="nav-link {% if request.resolver_match.view_name == 'home:home' %}active{% endif %}"
                            href="{% url 'home:home' %}">HOME</a>
                     </li>
+                    {% if request.fe_learner %}
+                    <!-- FE 対策アプリで入っている ID（アプリ内の ID で、アカウントとは別） -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'fe:enter' %}" title="FE 対策アプリの ID を切り替える">
+                            <i class="fas fa-id-badge"></i> FE ID: {{ request.fe_learner.code }} ▸ 切り替える
+                        </a>
+                    </li>
+                    {% endif %}
                     {% endblock %}
                 </ul>
                 <ul class="navbar-nav ms-auto">

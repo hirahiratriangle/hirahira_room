@@ -13,7 +13,7 @@
                 <a class="text-white text-decoration-none" href="{% url 'fe:learn_start' %}">学習モード</a>
                 <a class="text-white text-decoration-none" href="{% url 'fe:stats' %}">分野別正答率</a>
                 <a class="text-white text-decoration-none" href="{% url 'fe:history' %}">履歴</a>
-                <a class="text-white text-decoration-none" href="{% url 'fe:manage_list' %}">自分の問題</a>
+                {% if learner.is_admin %}<a class="text-white text-decoration-none" href="{% url 'fe:manage_list' %}">問題の管理</a>{% endif %}
                 {% include 'fe/_learner_badge.html' %}
             </nav>
         </div>
@@ -77,9 +77,11 @@
                 </a>
                 <a href="{% url 'fe:stats' %}" class="btn btn-outline-primary btn-sm">分野別の正答率</a>
                 <a href="{% url 'fe:history' %}?result=wrong" class="btn btn-outline-primary btn-sm">まちがえた問題</a>
+                {% if learner.is_admin %}
                 <a href="{% url 'fe:manage_list' %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="fas fa-pen me-1"></i>自分の問題を管理
+                    <i class="fas fa-pen me-1"></i>問題を管理
                 </a>
+                {% endif %}
             </div>
         </div>
     </section>
@@ -160,14 +162,15 @@
     <!-- みんなの集計 -->
     {% include 'fe/_summary.html' %}
 
-    <!-- 問題を作るのに必要な資料 -->
+    {# 問題を作る資料の案内。問題集を管理する管理用の ID にだけ見せる #}
+    {% if learner.is_admin %}
     <section class="mb-5">
         <h2 class="h5 mb-3" style="color:#2c5aa0;">問題を作るのに必要な資料</h2>
         {% if question_total == 0 %}
         <div class="border rounded p-4" style="background-color:#eef3fa;">
             <p class="mb-3">
                 まだ問題がありません。{{ exam.name }}の問題は、
-                <strong>ご自身で用意した資料をもとに作って取り込みます</strong>。
+                <strong>用意した資料をもとに作って取り込みます</strong>。
                 このアプリは資料を同梱していません。
             </p>
         {% else %}
@@ -200,6 +203,13 @@
             {% endif %}
         </div>
     </section>
+    {% elif question_total == 0 %}
+    <section class="mb-5">
+        <div class="alert alert-warning mb-0">
+            問題集はまだ用意されていません。用意されるまでは、計算問題だけを出題します。
+        </div>
+    </section>
+    {% endif %}
 
     <!-- 直近の学習量 -->
     <section>

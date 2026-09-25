@@ -13,7 +13,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('__str__', 'learner', 'subject', 'category', 'topic', 'difficulty')
+    list_display = ('__str__', 'subject', 'category', 'topic', 'difficulty')
     list_filter = ('subject', 'category', 'difficulty', 'is_active')
     search_fields = ('stem', 'topic')
     ordering = ('category__code', 'id')
@@ -52,7 +52,9 @@ class PassReportAdmin(admin.ModelAdmin):
 
 @admin.register(Learner)
 class LearnerAdmin(admin.ModelAdmin):
-    list_display = ('code', 'created_at')
+    list_display = ('code', 'is_admin', 'created_at')
+    list_editable = ('is_admin',)
+    list_filter = ('is_admin',)
     search_fields = ('code',)
 
 

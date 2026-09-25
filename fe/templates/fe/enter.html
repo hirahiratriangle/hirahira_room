@@ -17,6 +17,13 @@
 <div class="container px-5 py-5">
     <div class="row justify-content-center">
         <div class="col-12 col-md-8 col-lg-5">
+            {% if current %}
+            <div class="alert alert-light border small">
+                いまは ID「<strong>{{ current.code }}</strong>」で入っています。
+                別の ID を入力すると切り替わります。
+                <a href="{% url 'fe:dashboard' current.code %}">ダッシュボードに戻る</a>
+            </div>
+            {% endif %}
             <form method="post" novalidate>
                 {% csrf_token %}
                 <label for="{{ form.code.id_for_label }}" class="form-label fw-bold">{{ form.code.label }}</label>
@@ -31,7 +38,7 @@
             </form>
 
             <p class="small text-muted mt-4 mb-0">
-                問題・成績・出題設定は ID ごとに分かれています。
+                成績と出題設定は ID ごとに分かれています（問題集は全員共通です）。
                 ID は hirahira_room のアカウントとは別のもので、合言葉はありません。
                 ID を知っている人は誰でもその ID で入れるので、人と同じ ID は使わないでください。
             </p>

@@ -37,8 +37,8 @@ def seed_masters():
     call_command('seed_fe', verbosity=0)
 
 
-def make_learner(code):
-    return Learner.objects.create(code=code)
+def make_learner(code, is_admin=False):
+    return Learner.objects.create(code=code, is_admin=is_admin)
 
 
 def enter(client, learner):
@@ -57,7 +57,7 @@ def dashboard(learner):
     return reverse('fe:dashboard', args=[learner.code])
 
 
-def build_questions(learner, per_category=4):
+def build_questions(per_category=4):
     """テスト用の問題を全分類に作る。
 
     アプリは問題を同梱しないので、テストも配布物に依存させない。
@@ -82,10 +82,10 @@ def build_questions(learner, per_category=4):
                 'explanation': '解説',
                 'source': 'テスト用',
             })
-    return replace_all(learner, validate({'questions': records, 'notes': []}))
+    return replace_all(validate({'questions': records, 'notes': []}))
 
 
-def build_notes(learner, codes=(9, 11), topic=None):
+def build_notes(codes=(9, 11), topic=None):
     """テスト用の技術解説。問題とは別に、概念を説明した文章として持たせる。"""
     notes = []
     for code in codes:
@@ -121,26 +121,24 @@ class GeneratorTests(TestCase):
             with self.subTest(template=template.key):
                 rng = random.Random(template.key)
                 for _ in range(30):
-                    question = generate_question(template, self.learner, rng=rng)
+                    question = generate_question(template, rng=rng)
                     self.assertIsNotNone(question)
                     self.assertEqual(len(question.choices), 4)
                     self.assertEqual(len(set(question.choices)), 4)
-                    self.assertEqual(question.learner, self.learner)
                     self.assertEqual(question.category_id, template.category_id)
 
     def test_same_parameters_reuse_the_same_question(self):
         template = QuestionTemplate.objects.get(key='calc-availability-mtbf')
-        first = generate_question(template, self.learner, rng=random.Random(1))
-        second = generate_question(template, self.learner, rng=random.Random(1))
+        first = generate_question(template, rng=random.Random(1))
+        second = generate_question(template, rng=random.Random(1))
         self.assertEqual(first.id, second.id, '同じ数値なら同じ問題を使い回す')
 
-    def test_generated_questions_belong_to_each_account(self):
-        other = make_learner('gen_other')
+    def test_generated_questions_are_shared_by_every_id(self):
+        """問題は全 ID の共有なので、同じ数値なら誰が引いても同じ1問になる。"""
         template = QuestionTemplate.objects.get(key='calc-availability-mtbf')
-        mine = generate_question(template, self.learner, rng=random.Random(2))
-        theirs = generate_question(template, other, rng=random.Random(2))
-        self.assertNotEqual(mine.id, theirs.id, '同じ数値でも人ごとに別の行になる')
-        self.assertEqual(mine.params, theirs.params, '中身は同じ')
+        generate_question(template, rng=random.Random(2))
+        generate_question(template, rng=random.Random(2))
+        self.assertEqual(Question.objects.filter(template=template).count(), 1)
 
     def test_registry_and_templates_match(self):
         self.assertEqual(
@@ -153,7 +151,7 @@ class StatsTests(TestCase):
     def setUpTestData(cls):
         seed_masters()
         cls.learner = make_learner('stats')
-        build_questions(cls.learner)
+        build_questions()
 
     def test_smoothing_pulls_small_samples_toward_the_prior(self):
         self.assertAlmostEqual(smoothed_rate(0, 1), 3.0 / 6.0)
@@ -162,14 +160,14 @@ class StatsTests(TestCase):
 
     def test_weak_categories_need_a_minimum_number_of_attempts(self):
         security = Category.objects.get(code=11)
-        question = Question.objects.filter(learner=self.learner, category=security).first()
+        question = Question.objects.filter(category=security).first()
         answer(self.learner, question, correct=False)
         rows = category_stats(self.learner)
         self.assertEqual(weak_categories(rows), [], '1問だけでは苦手判定しない')
 
     def test_category_stats_counts_correctly(self):
         security = Category.objects.get(code=11)
-        questions = list(Question.objects.filter(learner=self.learner, category=security)[:4])
+        questions = list(Question.objects.filter(category=security)[:4])
         for index, question in enumerate(questions):
             answer(self.learner, question, correct=index == 0)
         row = next(r for r in category_stats(self.learner) if r['category'] == security)
@@ -178,12 +176,14 @@ class StatsTests(TestCase):
         self.assertEqual(row['rate_percent'], 25)
         self.assertTrue(row['is_weak'])
 
-    def test_stats_count_only_the_users_own_questions(self):
+    def test_other_ids_answers_do_not_count(self):
+        """問題は共有でも、成績は ID ごと。ほかの ID の解答は数えない。"""
         other = make_learner('stats_other')
-        rows_before = {r['category'].code: r['question_count'] for r in category_stats(self.learner)}
-        build_questions(other)
-        rows_after = {r['category'].code: r['question_count'] for r in category_stats(self.learner)}
-        self.assertEqual(rows_before, rows_after, '他人の問題が出題可能数に混ざってはいけない')
+        security = Category.objects.get(code=11)
+        answer(other, Question.objects.filter(category=security).first(), correct=True)
+        row = next(r for r in category_stats(self.learner) if r['category'] == security)
+        self.assertEqual(row['total'], 0)
+        self.assertEqual(overall_stats(self.learner)['total'], 0)
 
 
 class SelectionTests(TestCase):
@@ -191,10 +191,10 @@ class SelectionTests(TestCase):
     def setUpTestData(cls):
         seed_masters()
         cls.learner = make_learner('picker')
-        build_questions(cls.learner)
+        build_questions()
 
     def _answer(self, category, correct, count):
-        questions = list(Question.objects.filter(learner=self.learner, category=category)[:count])
+        questions = list(Question.objects.filter(category=category)[:count])
         self.assertGreaterEqual(len(questions), 1)
         for index in range(count):
             answer(self.learner, questions[index % len(questions)], correct)
@@ -202,7 +202,7 @@ class SelectionTests(TestCase):
     def test_a_missed_question_is_not_repeated_immediately(self):
         """まちがえた直後に同じ問題を出さない。答えを覚えているだけになる。"""
         category = Category.objects.get(code=9)
-        missed = Question.objects.filter(learner=self.learner, category=category).first()
+        missed = Question.objects.filter(category=category).first()
         answer(self.learner, missed, correct=False)
 
         session = StudySession.objects.create(
@@ -217,7 +217,7 @@ class SelectionTests(TestCase):
     def test_a_missed_question_comes_back_before_unseen_ones(self):
         """間隔があけば、未出題が残っていても復習が優先される。"""
         category = Category.objects.get(code=9)
-        questions = list(Question.objects.filter(learner=self.learner, category=category))
+        questions = list(Question.objects.filter(category=category))
         self.assertGreaterEqual(len(questions), 4)
         missed = questions[0]
         answer(self.learner, missed, correct=False)
@@ -242,7 +242,7 @@ class SelectionTests(TestCase):
     def test_repeated_misses_shorten_the_interval(self):
         """何度も落とした問題ほど、短い間隔で戻す。"""
         category = Category.objects.get(code=9)
-        questions = list(Question.objects.filter(learner=self.learner, category=category))
+        questions = list(Question.objects.filter(category=category))
         once, twice = questions[0], questions[1]
         # 2回落とした方を先に、1回だけの方をあとに解く。
         # あとに解いたほうが間隔は短いので、間隔だけで並ぶなら once は戻らない。
@@ -316,7 +316,7 @@ class SelectionTests(TestCase):
 
     def test_review_mode_returns_previously_wrong_questions(self):
         database = Category.objects.get(code=9)
-        questions = list(Question.objects.filter(learner=self.learner, category=database)[:3])
+        questions = list(Question.objects.filter(category=database)[:3])
         for question in questions:
             answer(self.learner, question, correct=False)
         session = StudySession.objects.create(
@@ -336,17 +336,16 @@ class SelectionTests(TestCase):
             question, _reason = pick_question(self.learner, session, exclude_ids=[first.id])
             self.assertNotEqual(question.id, first.id)
 
-    def test_other_peoples_questions_are_never_served(self):
+    def test_every_id_is_served_from_the_shared_set(self):
         other = make_learner('picker_other')
-        build_questions(other)
         session = StudySession.objects.create(
-            learner=self.learner, mode=StudySession.MODE_FOCUS, subject=Question.SUBJECT_A
+            learner=other, mode=StudySession.MODE_FOCUS, subject=Question.SUBJECT_A
         )
-        for _ in range(60):
-            question, _reason = pick_question(self.learner, session)
-            self.assertEqual(question.learner_id, self.learner.pk)
+        question, _reason = pick_question(other, session)
+        self.assertIsNotNone(question)
 
     def test_no_questions_yields_nothing_instead_of_crashing(self):
+        Question.objects.all().delete()
         empty = make_learner('picker_empty')
         session = StudySession.objects.create(
             learner=empty, mode=StudySession.MODE_FOCUS, subject=Question.SUBJECT_B
@@ -361,7 +360,7 @@ class ViewTests(TestCase):
     def setUpTestData(cls):
         seed_masters()
         cls.learner = make_learner('viewer')
-        build_questions(cls.learner)
+        build_questions()
 
     def setUp(self):
         enter(self.client, self.learner)
@@ -591,7 +590,7 @@ class LearnerIdTests(TestCase):
 
     def test_create_refuses_a_taken_or_bad_id(self):
         make_learner('taken')
-        for code in ('taken', 'TAKEN', 'quiz', 'ab', 'ひらがな', 'a b', 'x' * 31):
+        for code in ('taken', 'TAKEN', 'quiz', 'enter', 'ab', 'ひらがな', 'a b', 'x' * 31):
             with self.subTest(code=code):
                 response = self._post(code, 'create')
                 self.assertEqual(response.status_code, 200)
@@ -625,22 +624,58 @@ class LearnerIdTests(TestCase):
             with self.subTest(page=name):
                 self.assertRedirects(self.client.get(reverse(name)), reverse('fe:index'))
 
-    def test_leave_forgets_the_id(self):
-        learner = make_learner('leaver')
+    def test_the_enter_page_switches_ids_any_time(self):
+        """入ったあとでも入口を開け、別の ID を入力すれば何度でも切り替わる。"""
+        first, second = make_learner('first'), make_learner('second')
+        enter(self.client, first)
+        response = self.client.get(reverse('fe:enter'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'いまは ID「<strong>first</strong>」で入っています')
+
+        self.assertRedirects(
+            self.client.post(reverse('fe:enter'), {'code': 'second', 'action': 'enter'}),
+            dashboard(second),
+        )
+        self.assertEqual(self.client.get(dashboard(first)).status_code, 404)
+        self.assertRedirects(
+            self.client.post(reverse('fe:enter'), {'code': 'first', 'action': 'enter'}),
+            dashboard(first),
+        )
+        self.assertRedirects(
+            self.client.post(reverse('fe:enter'), {'code': 'third', 'action': 'create'}),
+            '/fe/third/',
+        )
+
+    def test_every_page_links_to_the_enter_page(self):
+        learner = make_learner('linked')
         enter(self.client, learner)
-        self.assertRedirects(self.client.post(reverse('fe:leave')), reverse('fe:index'))
-        self.assertEqual(self.client.get(reverse('fe:index')).status_code, 200)
-        self.assertEqual(self.client.get(dashboard(learner)).status_code, 302)
+        for url in (dashboard(learner), reverse('fe:stats'), reverse('fe:quiz')):
+            with self.subTest(url=url):
+                self.assertContains(self.client.get(url), reverse('fe:enter'))
 
     def test_ids_in_the_same_account_are_separate(self):
-        """同じアカウントでも、ID が違えば問題も成績も別。"""
+        """同じアカウントでも、ID が違えば成績は別。問題集は共有。"""
         first, second = make_learner('first'), make_learner('second')
-        build_questions(first)
-        answer(first, Question.objects.filter(learner=first).first(), correct=True)
+        build_questions()
+        answer(first, Question.objects.all().first(), correct=True)
         enter(self.client, second)
         response = self.client.get(dashboard(second))
-        self.assertEqual(response.context['question_total'], 0)
+        self.assertEqual(response.context['question_total'], Question.objects.count())
         self.assertEqual(response.context['overall']['total'], 0)
+
+    def test_only_an_admin_id_can_manage_questions(self):
+        build_questions()
+        enter(self.client, make_learner('plain'))
+        for name in ('fe:manage_list', 'fe:manage_upload', 'fe:manage_export'):
+            with self.subTest(page=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 403)
+        response = self.client.post(reverse('fe:manage_upload'), {})
+        self.assertEqual(response.status_code, 403)
+        self.assertNotContains(self.client.get(reverse('fe:stats')), '問題の管理')
+
+        enter(self.client, make_learner('boss', is_admin=True))
+        self.assertEqual(self.client.get(reverse('fe:manage_list')).status_code, 200)
+        self.assertContains(self.client.get(reverse('fe:stats')), '問題の管理')
 
 
 class ManageTests(TestCase):
@@ -649,7 +684,7 @@ class ManageTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         seed_masters()
-        cls.learner = make_learner('owner')
+        cls.learner = make_learner('owner', is_admin=True)
         cls.other = make_learner('stranger')
 
     def setUp(self):
@@ -670,7 +705,7 @@ class ManageTests(TestCase):
 
     def _upload_with_notes(self, n=3, codes=(9, 11), topic=None):
         return self._json_upload({
-            'notes': build_notes(self.learner, codes=codes, topic=topic),
+            'notes': build_notes(codes=codes, topic=topic),
             'questions': json.loads(self._payload(n)),
         })
 
@@ -693,9 +728,8 @@ class ManageTests(TestCase):
     def test_upload_by_file_creates_the_question_set(self):
         response = self.client.post(reverse('fe:manage_upload'), self._upload(3))
         self.assertRedirects(response, reverse('fe:manage_list'))
-        questions = Question.objects.filter(learner=self.learner)
+        questions = Question.objects.all()
         self.assertEqual(questions.count(), 3)
-        self.assertTrue(all(q.learner_id == self.learner.pk for q in questions))
 
     def test_pasting_is_not_offered(self):
         """取り込み経路はファイル1本。貼り付け欄は置かない。"""
@@ -725,8 +759,8 @@ class ManageTests(TestCase):
                                          content_type='application/json'),
         })
         self.assertRedirects(response, reverse('fe:manage_list'))
-        self.assertEqual(Question.objects.filter(learner=self.learner).count(), 200)
-        self.assertEqual(LearningNote.objects.filter(learner=self.learner).count(), 120)
+        self.assertEqual(Question.objects.all().count(), 200)
+        self.assertEqual(LearningNote.objects.all().count(), 120)
 
     def test_upload_is_required(self):
         response = self.client.post(reverse('fe:manage_upload'), {})
@@ -735,27 +769,28 @@ class ManageTests(TestCase):
 
     def test_upload_deletes_the_old_set_and_its_logs(self):
         self.client.post(reverse('fe:manage_upload'), self._upload(3, '旧'))
-        old = list(Question.objects.filter(learner=self.learner))
+        old = list(Question.objects.all())
         old_ids = [q.id for q in old]
         answer(self.learner, old[0], correct=True)
+        answer(self.other, old[1], correct=False)
 
         self.client.post(reverse('fe:manage_upload'), self._upload(2, '新'))
 
         self.assertEqual(
-            Question.objects.filter(learner=self.learner).count(), 2,
+            Question.objects.all().count(), 2,
             '古い問題は削除され、データが増え続けない',
         )
         self.assertFalse(Question.objects.filter(id__in=old_ids).exists())
         self.assertEqual(
-            Attempt.objects.filter(learner=self.learner).count(), 0,
-            '解答ログは問題と一緒に消える',
+            Attempt.objects.count(), 0,
+            '全 ID の解答ログが問題と一緒に消える',
         )
 
     def test_understanding_survives_the_replacement(self):
         """問題を入れ替えても、分野ごとの理解度は残る。"""
         self.client.post(reverse('fe:manage_upload'), self._upload(3, '旧'))
         security = Category.objects.get(code=11)
-        questions = list(Question.objects.filter(learner=self.learner))
+        questions = list(Question.objects.all())
         answer(self.learner, questions[0], correct=True)
         answer(self.learner, questions[1], correct=False)
 
@@ -771,10 +806,10 @@ class ManageTests(TestCase):
         self.assertEqual(overall['study_days'], 1, '学習した日数も残る')
 
     def test_progress_is_kept_per_account(self):
-        build_questions(self.other)
+        build_questions()
         self.client.post(reverse('fe:manage_upload'), self._upload(2))
-        mine = Question.objects.filter(learner=self.learner).first()
-        theirs = Question.objects.filter(learner=self.other).first()
+        mine = Question.objects.all().first()
+        theirs = Question.objects.all().first()
         answer(self.learner, mine, correct=True)
         answer(self.other, theirs, correct=False)
 
@@ -785,20 +820,21 @@ class ManageTests(TestCase):
             '他人の解答が自分の理解度に混ざらない',
         )
 
-    def test_upload_does_not_touch_other_accounts(self):
-        build_questions(self.other)
-        before = Question.objects.filter(learner=self.other).count()
+    def test_upload_replaces_the_set_for_every_id(self):
+        build_questions()
         self.client.post(reverse('fe:manage_upload'), self._upload(2))
-        after = Question.objects.filter(learner=self.other).count()
-        self.assertEqual(before, after, '他人の問題集は差し替えの影響を受けない')
+        self.assertEqual(
+            Question.objects.filter(template__isnull=True).count(), 2,
+            '問題集は共有なので、取り込むと全員の問題集が入れ替わる',
+        )
 
     def test_broken_json_is_rejected_without_touching_anything(self):
         self.client.post(reverse('fe:manage_upload'), self._upload(2))
-        before = list(Question.objects.filter(learner=self.learner).values_list('id', flat=True))
+        before = list(Question.objects.all().values_list('id', flat=True))
         response = self.client.post(reverse('fe:manage_upload'), {'upload': SimpleUploadedFile(
             'q.json', b'{ not json', content_type='application/json')})
         self.assertEqual(response.status_code, 200)
-        after = list(Question.objects.filter(learner=self.learner).values_list('id', flat=True))
+        after = list(Question.objects.all().values_list('id', flat=True))
         self.assertEqual(before, after, '取り込みに失敗したら既存の問題は変わらない')
 
     def test_invalid_records_are_rejected_with_a_reason(self):
@@ -815,7 +851,7 @@ class ManageTests(TestCase):
                     reverse('fe:manage_upload'), self._json_upload(records))
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.context['form'].errors)
-                self.assertEqual(Question.objects.filter(learner=self.learner).count(), 0)
+                self.assertEqual(Question.objects.all().count(), 0)
 
     def test_export_round_trips_without_losing_notes(self):
         """書き出して取り込み直しても、問題も解説も失われないこと。
@@ -824,8 +860,8 @@ class ManageTests(TestCase):
         往復しただけで教材が消える。
         """
         self.client.post(reverse('fe:manage_upload'), self._upload_with_notes(4))
-        before_q = Question.objects.filter(learner=self.learner).count()
-        before_n = LearningNote.objects.filter(learner=self.learner).count()
+        before_q = Question.objects.all().count()
+        before_n = LearningNote.objects.all().count()
         self.assertEqual((before_q, before_n), (4, 2))
 
         response = self.client.get(reverse('fe:manage_export'))
@@ -838,14 +874,14 @@ class ManageTests(TestCase):
         response = self.client.post(
             reverse('fe:manage_upload'), self._json_upload(payload))
         self.assertRedirects(response, reverse('fe:manage_list'))
-        self.assertEqual(Question.objects.filter(learner=self.learner).count(), before_q)
-        self.assertEqual(LearningNote.objects.filter(learner=self.learner).count(), before_n)
+        self.assertEqual(Question.objects.all().count(), before_q)
+        self.assertEqual(LearningNote.objects.all().count(), before_n)
 
     def test_export_can_be_limited_to_one_subject(self):
         self.client.post(reverse('fe:manage_upload'), self._upload_with_notes(3))
         b = Category.objects.filter(subject='B').first()
         LearningNote.objects.create(
-            learner=self.learner, category=b, topic=b.name, title='科目Bの解説', body='本文',
+            category=b, topic=b.name, title='科目Bの解説', body='本文',
         )
         payload = json.loads(
             self.client.get(reverse('fe:manage_export'), {'subject': 'A'})
@@ -862,18 +898,15 @@ class ManageTests(TestCase):
             'choices': ['選択肢{}'.format(i) for i in range(9)], 'answer': 8,
             'explanation': '解説',
         }]))
-        question = Question.objects.get(learner=self.learner)
+        question = Question.objects.get(template__isnull=True)
         labels = [label for _, label, _ in question.labeled_choices()]
         self.assertEqual(labels, list('アイウエオカキクケ'))
         self.assertEqual(question.answer_label, 'ケ')
 
-    def test_list_shows_only_my_questions(self):
-        build_questions(self.other)
+    def test_list_shows_the_shared_set(self):
         self.client.post(reverse('fe:manage_upload'), self._upload(3))
         response = self.client.get(reverse('fe:manage_list'))
         self.assertEqual(response.context['summary']['total'], 3)
-        for question in response.context['questions']:
-            self.assertEqual(question.learner_id, self.learner.pk)
 
 
 class ImportNotesTests(TestCase):
@@ -886,17 +919,17 @@ class ImportNotesTests(TestCase):
 
     def test_object_form_imports_notes_and_questions(self):
         payload = {
-            'notes': build_notes(self.learner),
+            'notes': build_notes(),
             'questions': [{
                 'category': 11, 'stem': 'x', 'choices': ['a', 'b', 'c', 'd'], 'answer': 0,
             }],
         }
-        created, _removed, notes = replace_all(self.learner, validate(parse(
+        created, _removed, notes = replace_all(validate(parse(
             json.dumps(payload, ensure_ascii=False)
         )))
         self.assertEqual(created, 1)
         self.assertEqual(notes, 2)
-        self.assertEqual(LearningNote.objects.filter(learner=self.learner).count(), 2)
+        self.assertEqual(LearningNote.objects.all().count(), 2)
 
     def test_plain_array_still_works(self):
         """解説を持たない、いままでの形の JSON もそのまま取り込める。"""
@@ -904,23 +937,23 @@ class ImportNotesTests(TestCase):
             [{'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0}],
             ensure_ascii=False,
         )
-        created, _removed, notes = replace_all(self.learner, validate(parse(payload)))
+        created, _removed, notes = replace_all(validate(parse(payload)))
         self.assertEqual((created, notes), (1, 0))
 
     def test_notes_are_replaced_with_the_questions(self):
         """問題だけの JSON を入れたら、前の解説も消える。"""
-        replace_all(self.learner, validate(parse(json.dumps({
-            'notes': build_notes(self.learner),
+        replace_all(validate(parse(json.dumps({
+            'notes': build_notes(),
             'questions': [{'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0}],
         }, ensure_ascii=False))))
-        self.assertEqual(LearningNote.objects.filter(learner=self.learner).count(), 2)
+        self.assertEqual(LearningNote.objects.all().count(), 2)
 
-        replace_all(self.learner, validate(parse(json.dumps(
+        replace_all(validate(parse(json.dumps(
             [{'category': 11, 'stem': 'y', 'choices': ['a', 'b'], 'answer': 0}],
             ensure_ascii=False,
         ))))
         self.assertEqual(
-            LearningNote.objects.filter(learner=self.learner).count(), 0,
+            LearningNote.objects.all().count(), 0,
             '問題と噛み合わない解説が残らない',
         )
 
@@ -940,7 +973,7 @@ class ImportNotesTests(TestCase):
                 }, ensure_ascii=False)
                 with self.assertRaises(ImportError_):
                     validate(parse(payload))
-                self.assertEqual(Question.objects.filter(learner=self.learner).count(), 0)
+                self.assertEqual(Question.objects.all().count(), 0)
 
 
 class LearningModeTests(TestCase):
@@ -955,19 +988,22 @@ class LearningModeTests(TestCase):
         enter(self.client, self.learner)
 
     def _prepare(self, topic=None):
-        build_questions(self.learner, per_category=12)
-        LearningNote.objects.filter(learner=self.learner).delete()
-        for note in build_notes(self.learner, codes=(9,), topic=topic):
+        build_questions(per_category=12)
+        LearningNote.objects.all().delete()
+        for note in build_notes(codes=(9,), topic=topic):
             LearningNote.objects.create(
-                learner=self.learner,
                 category=Category.objects.get(code=note['category']),
                 topic=note['topic'], title=note['title'],
                 body=note['body'], source=note['source'],
             )
 
     def test_a_round_needs_a_note(self):
-        """解説が無ければ始められない。取り込み画面へ案内する。"""
-        build_questions(self.learner)
+        """解説が無ければ始められない。管理用の ID なら取り込み画面へ案内する。"""
+        build_questions()
+        response = self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        self.assertRedirects(response, reverse('fe:learn_start'))
+
+        enter(self.client, make_learner('curator', is_admin=True))
         response = self.client.post(reverse('fe:learn_start'), {'minutes': 5})
         self.assertRedirects(response, reverse('fe:manage_upload'))
         self.assertEqual(LearningRound.objects.count(), 0)
@@ -1042,12 +1078,12 @@ class LearningModeTests(TestCase):
 
     def test_the_menu_groups_notes_by_category(self):
         """学習対象は、中分類でまとめて小分類（解説）を並べる。"""
-        build_questions(self.learner, per_category=12)
-        LearningNote.objects.filter(learner=self.learner).delete()
+        build_questions(per_category=12)
+        LearningNote.objects.all().delete()
         for code, topic in ((9, '正規化'), (9, 'SQL'), (11, '暗号技術')):
             category = Category.objects.get(code=code)
             LearningNote.objects.create(
-                learner=self.learner, category=category, topic=topic,
+                category=category, topic=topic,
                 title='{}の解説'.format(topic), body='本文', source='テスト',
             )
 
@@ -1064,7 +1100,7 @@ class LearningModeTests(TestCase):
         self._prepare()
         database = Category.objects.get(code=9)
         chosen = LearningNote.objects.create(
-            learner=self.learner, category=database, topic='正規化',
+            category=database, topic='正規化',
             title='正規化の解説', body='本文', source='テスト',
         )
         self.client.post(reverse('fe:learn_start'), {'minutes': 5, 'note': chosen.pk})
@@ -1073,24 +1109,19 @@ class LearningModeTests(TestCase):
         for item in round_.items.select_related('question'):
             self.assertEqual(item.question.category_id, database.pk)
 
-    def test_another_account_s_note_is_not_accepted(self):
+    def test_an_unknown_note_is_not_accepted(self):
         self._prepare()
-        other = make_learner('note-owner')
-        theirs = LearningNote.objects.create(
-            learner=other, category=Category.objects.get(code=9),
-            topic='x', title='他人の解説', body='本文',
-        )
         response = self.client.post(
-            reverse('fe:learn_start'), {'minutes': 5, 'note': theirs.pk}
+            reverse('fe:learn_start'), {'minutes': 5, 'note': 999999}
         )
         self.assertRedirects(response, reverse('fe:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
 
     def test_a_note_without_questions_is_reported(self):
         """解説はあるが、その分野の問題が無いとき。"""
-        LearningNote.objects.filter(learner=self.learner).delete()
+        LearningNote.objects.all().delete()
         note = LearningNote.objects.create(
-            learner=self.learner, category=Category.objects.get(code=23),
+            category=Category.objects.get(code=23),
             topic='法務', title='法務の解説', body='本文',
         )
         response = self.client.post(
@@ -1104,7 +1135,7 @@ class LearningModeTests(TestCase):
         self._prepare()
         b = Category.objects.filter(subject='B').first()
         LearningNote.objects.create(
-            learner=self.learner, category=b, topic=b.name,
+            category=b, topic=b.name,
             title='科目Bの解説', body='本文', source='テスト',
         )
 
@@ -1121,7 +1152,7 @@ class LearningModeTests(TestCase):
         self._prepare()
         b = Category.objects.filter(subject='B').first()
         theirs = LearningNote.objects.create(
-            learner=self.learner, category=b, topic=b.name,
+            category=b, topic=b.name,
             title='科目Bの解説', body='本文',
         )
         response = self.client.post(
@@ -1151,14 +1182,14 @@ class SiteSummaryTests(TestCase):
         cls.alice = make_learner('alice')
         cls.bob = make_learner('bob')
         make_learner('idle')  # 1問も解いていない人は「学習した人」に数えない
-        build_questions(cls.alice)
-        build_questions(cls.bob)
+        build_questions()
+        build_questions()
 
     def setUp(self):
         enter(self.client, self.alice)
 
     def _question(self, learner, code):
-        return Question.objects.filter(learner=learner, category__code=code).first()
+        return Question.objects.filter(category__code=code).first()
 
     def test_counts_every_users_answers_by_category(self):
         answer(self.alice, self._question(self.alice, 11), True)
@@ -1183,7 +1214,7 @@ class SiteSummaryTests(TestCase):
     def test_total_survives_reimport(self):
         """のべ解答数は、問題を取り込み直しても減らない。"""
         answer(self.alice, self._question(self.alice, 11), True)
-        build_questions(self.alice)
+        build_questions()
         self.assertFalse(Attempt.objects.filter(learner=self.alice).exists())
         self.assertEqual(site_summary()['total'], 1)
 
@@ -1260,7 +1291,7 @@ class ExamDefinitionTests(TestCase):
                 self.assertIn(category.name, prompt)
 
     def test_upload_screen_shows_the_materials(self):
-        learner = make_learner('materials')
+        learner = make_learner('materials', is_admin=True)
         enter(self.client, learner)
         response = self.client.get(reverse('fe:manage_upload'))
         self.assertEqual(response.status_code, 200)
@@ -1268,8 +1299,16 @@ class ExamDefinitionTests(TestCase):
             self.assertContains(response, material['name'])
         self.assertContains(response, EXAM['url'])
 
+    def test_materials_are_only_for_an_admin_id(self):
+        """問題を作る資料の案内は、問題集を管理する管理用の ID にだけ出す。"""
+        learner = make_learner('materials_plain')
+        enter(self.client, learner)
+        response = self.client.get(dashboard(learner))
+        self.assertNotContains(response, '問題を作るのに必要な資料')
+        self.assertContains(response, '問題集はまだ用意されていません')
+
     def test_dashboard_shows_the_materials(self):
-        learner = make_learner('materials_dash')
+        learner = make_learner('materials_dash', is_admin=True)
         enter(self.client, learner)
         response = self.client.get(dashboard(learner))
         self.assertEqual(response.status_code, 200)
