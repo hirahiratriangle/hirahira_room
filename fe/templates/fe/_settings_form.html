@@ -1,7 +1,13 @@
 {% comment %}出題モードの切替フォーム。quiz 画面とダッシュボードで共有する。
-categories には fe.stats.category_options の結果（科目ごとの件数つき）を渡す。{% endcomment %}
+categories には fe.stats.category_options の結果（科目ごとの件数つき）を渡す。
+
+stay を渡すと、保存したあとその場に留まる。ダッシュボードには「いまの設定で
+解く」ボタンが別にあるので、設定を変えた瞬間に演習が始まると、何が保存された
+のか確かめられない。演習画面では、そのまま次の問題へ進むほうが自然なので渡さない。
+{% endcomment %}
 <form method="post" action="{% url 'fe:quiz_settings' %}" class="row g-2 align-items-end" id="quizSettings">
     {% csrf_token %}
+    {% if stay %}<input type="hidden" name="next" value="index">{% endif %}
     <div class="col-12 col-md-4">
         <label for="mode" class="form-label small text-muted mb-1">出題モード</label>
         <select class="form-select form-select-sm" id="mode" name="mode">
@@ -29,7 +35,9 @@ categories には fe.stats.category_options の結果（科目ごとの件数つ
         </select>
     </div>
     <div class="col-12 col-md-2 d-grid">
-        <button type="submit" class="btn btn-sm btn-outline-primary">この設定で出題</button>
+        <button type="submit" class="btn btn-sm btn-outline-primary">
+            {% if stay %}設定を保存{% else %}この設定で出題{% endif %}
+        </button>
     </div>
 </form>
 

@@ -425,6 +425,28 @@ class ViewTests(TestCase):
         session.save()
         self.assertEqual(selected(), '', 'ほかのモードでは指定なしに見える')
 
+    def test_saving_from_the_dashboard_comes_back_to_it(self):
+        """ダッシュボードで設定を変えたら、その場に戻す。
+
+        変えた瞬間に演習が始まると、何が保存されたのか確かめられない。
+        ダッシュボードには「いまの設定で解く」が別にあるので、そちらで始める。
+        """
+        response = self.client.post(reverse('fe:quiz_settings'), {
+            'mode': StudySession.MODE_RANDOM, 'subject': 'A', 'next': 'index',
+        })
+        self.assertRedirects(response, reverse('fe:index'))
+
+        # 演習画面からなら、そのまま次の問題へ進む
+        response = self.client.post(reverse('fe:quiz_settings'), {
+            'mode': StudySession.MODE_RANDOM, 'subject': 'A',
+        })
+        self.assertRedirects(response, reverse('fe:quiz'))
+
+    def test_the_dashboard_button_says_it_only_saves(self):
+        html = self.client.get(reverse('fe:index')).content.decode('utf-8')
+        self.assertIn('設定を保存', html)
+        self.assertNotIn('この設定で出題', html)
+
     def test_a_category_from_the_other_subject_is_refused(self):
         """科目に無い分野を指定されたら受け付けない。"""
         response = self.client.post(reverse('fe:quiz_settings'), {

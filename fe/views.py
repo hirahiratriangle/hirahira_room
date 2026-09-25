@@ -98,6 +98,10 @@ class QuizSettingsView(LoginRequiredMixin, generic.View):
         session.save()
         # 設定を変えたら履歴の除外はいったんリセットする
         request.session[SESSION_RECENT] = []
+        # ダッシュボードから変えたときは、そのまま戻して結果を確かめられるようにする。
+        # 演習画面からなら、次の問題へ進む。
+        if request.POST.get('next') == 'index':
+            return redirect('fe:index')
         return redirect('fe:quiz')
 
 
