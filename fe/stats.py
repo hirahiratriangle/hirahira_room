@@ -51,6 +51,18 @@ def record_progress(user, question, is_correct):
     )
 
 
+def categories_for(subject=None):
+    """その科目の分類。科目を指定しなければ全部返す。
+
+    科目Aは中分類（1〜23）、科目Bは要綱が別に定める5項目（101〜105）で、
+    重なりがない。科目を絞らずに並べると、解きようのない分類が混ざる。
+    """
+    queryset = Category.objects.all()
+    if subject in (Category.SUBJECT_A, Category.SUBJECT_B):
+        queryset = queryset.filter(subject=subject)
+    return queryset
+
+
 def smoothed_rate(correct, total):
     """平滑化した正答率。未解答なら事前分布そのもの。"""
     return (correct + SMOOTHING_STRENGTH * SMOOTHING_PRIOR) / (total + SMOOTHING_STRENGTH)
@@ -79,7 +91,7 @@ def category_stats(user, subject=None):
     }
 
     rows = []
-    for category in Category.objects.all():
+    for category in categories_for(subject):
         agg = aggregated.get(category.id, {})
         total = agg.get('total') or 0
         correct = agg.get('correct') or 0
@@ -99,6 +111,27 @@ def category_stats(user, subject=None):
             'is_untouched': total == 0,
         })
     return rows
+
+
+def category_options(user):
+    """出題設定の「分野」に並べる選択肢。どの科目のものかを添える。
+
+    分類は科目ごとに別なので、画面では科目に合わせて出し分ける。
+    選ぶ前に薄い分野が分かるよう、持っている問題数も渡す。
+    """
+    counts = {
+        row['category']: row['n']
+        for row in Question.objects.active().owned_by(user)
+        .values('category').annotate(n=Count('id'))
+    }
+    return [
+        {
+            'category': category,
+            'subject': category.subject,
+            'question_count': counts.get(category.id, 0),
+        }
+        for category in Category.objects.all()
+    ]
 
 
 def weak_categories(rows, limit=5):

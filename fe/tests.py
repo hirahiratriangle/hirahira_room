@@ -19,12 +19,14 @@ from django.urls import reverse
 from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
 from .importer import ImportError_, parse, replace_all, validate
+from .learning import note_menu, pick_note
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
                      LearningNote, LearningRound,
                      Question, QuestionTemplate, StudySession)
 from .selection import (REVIEW_DUE_GAP, _due_for_review,
                         _last_result_map, _recent_answer_times, pick_question)
-from .stats import (WEAK_MIN_ATTEMPTS, category_stats, overall_stats,
+from .stats import (WEAK_MIN_ATTEMPTS, category_options, category_stats,
+                    overall_stats,
                     record_progress, smoothed_rate, weak_categories)
 
 
@@ -40,19 +42,20 @@ def make_user(username):
 
 
 def build_questions(user, per_category=4):
-    """テスト用の問題を全中分類に作る。
+    """テスト用の問題を全分類に作る。
 
     アプリは問題を同梱しないので、テストも配布物に依存させない。
-    科目Bは要綱の内訳に合わせて中分類2と11にだけ置き、本番同様6択にする。
+    分類は科目ごとに別なので、その分類の科目に合わせて作る。
+    科目Bは本番同様6択にする。
     """
     records = []
     for category in Category.objects.all():
         for i in range(per_category):
-            is_subject_b = category.code in (2, 11) and i == 0
+            is_subject_b = category.subject == Question.SUBJECT_B
             size = 6 if is_subject_b else 4
             records.append({
                 'category': category.code,
-                'subject': Question.SUBJECT_B if is_subject_b else Question.SUBJECT_A,
+                'subject': category.subject,
                 'topic': category.name,
                 'difficulty': 2,
                 'stem': '{}の問題{}'.format(category.name, i),
@@ -292,7 +295,8 @@ class SelectionTests(TestCase):
         for _ in range(30):
             question, _reason = pick_question(self.user, session)
             self.assertEqual(question.subject, Question.SUBJECT_B)
-            self.assertIn(question.category.code, (2, 11))
+            self.assertEqual(question.category.subject, Question.SUBJECT_B)
+            self.assertIn(question.category.code, range(101, 106))
 
     def test_review_mode_returns_previously_wrong_questions(self):
         database = Category.objects.get(code=9)
@@ -350,6 +354,46 @@ class ViewTests(TestCase):
         response = self.client.get(reverse('fe:index'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '基本情報技術者試験')
+
+    def test_every_page_with_the_settings_form_offers_the_categories(self):
+        """出題設定のフォームを置く画面は、分野の選択肢も渡すこと。
+
+        フォームを include で共有しているので、渡し忘れても画面は出る。
+        選択肢が「指定なし」だけの状態で出てしまい、気づきにくい。
+        """
+        total = Category.objects.count()
+        for name in ('fe:index', 'fe:quiz'):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(len(response.context['categories']), total)
+                self.assertContains(response, 'セキュリティ')
+
+    def test_category_options_carry_the_subject(self):
+        """分類は科目ごとに別。画面で出し分けられるよう科目を添えている。"""
+        options = {o['category'].code: o for o in category_options(self.user)}
+        self.assertEqual(options[11]['subject'], Question.SUBJECT_A, 'セキュリティは科目A')
+        self.assertEqual(options[103]['subject'], Question.SUBJECT_B)
+        self.assertFalse(
+            set(range(1, 24)) & set(range(101, 106)),
+            '科目Aと科目Bの分類番号は重ならない',
+        )
+        self.assertGreater(options[103]['question_count'], 0)
+
+    def test_the_two_subjects_have_separate_categories(self):
+        """科目Aだけの分類と科目Bだけの分類に分かれ、重なりが無いこと。"""
+        a = set(Category.objects.filter(subject='A').values_list('code', flat=True))
+        b = set(Category.objects.filter(subject='B').values_list('code', flat=True))
+        self.assertEqual(len(a), 23)
+        self.assertEqual(len(b), 5)
+        self.assertFalse(a & b)
+        self.assertEqual(
+            sum(c.exam_weight for c in Category.objects.filter(subject='A')), 60,
+            '科目Aの想定出題数の合計は本番の60問',
+        )
+        self.assertEqual(
+            sum(c.exam_weight for c in Category.objects.filter(subject='B')), 20,
+            '科目Bの想定出題数の合計は本番の20問',
+        )
 
     def test_quiz_shows_a_question_and_grades_the_answer(self):
         response = self.client.get(reverse('fe:quiz'))
@@ -581,24 +625,48 @@ class ManageTests(TestCase):
                 self.assertTrue(response.context['form'].errors)
                 self.assertEqual(Question.objects.filter(owner=self.user).count(), 0)
 
-    def test_export_round_trips_through_upload(self):
-        self.client.post(reverse('fe:manage_upload'), self._upload(4))
+    def test_export_round_trips_without_losing_notes(self):
+        """書き出して取り込み直しても、問題も解説も失われないこと。
+
+        取り込みは解説も一括で差し替えるので、書き出しに解説が入っていないと、
+        往復しただけで教材が消える。
+        """
+        self.client.post(reverse('fe:manage_upload'), self._upload_with_notes(4))
+        before_q = Question.objects.filter(owner=self.user).count()
+        before_n = LearningNote.objects.filter(owner=self.user).count()
+        self.assertEqual((before_q, before_n), (4, 2))
+
         response = self.client.get(reverse('fe:manage_export'))
         self.assertEqual(response.status_code, 200)
-        records = json.loads(response.content.decode('utf-8'))
-        self.assertEqual(len(records), 4)
-        self.assertNotIn('key', records[0], '書き出しにキーは含めない')
+        payload = json.loads(response.content.decode('utf-8'))
+        self.assertEqual(len(payload['questions']), 4)
+        self.assertEqual(len(payload['notes']), 2)
+        self.assertNotIn('key', payload['questions'][0], '書き出しにキーは含めない')
 
-        # 書き出したものをそのまま取り込み直せる
         response = self.client.post(
-            reverse('fe:manage_upload'), self._json_upload(records))
+            reverse('fe:manage_upload'), self._json_upload(payload))
         self.assertRedirects(response, reverse('fe:manage_list'))
-        self.assertEqual(Question.objects.filter(owner=self.user).count(), len(records))
+        self.assertEqual(Question.objects.filter(owner=self.user).count(), before_q)
+        self.assertEqual(LearningNote.objects.filter(owner=self.user).count(), before_n)
+
+    def test_export_can_be_limited_to_one_subject(self):
+        self.client.post(reverse('fe:manage_upload'), self._upload_with_notes(3))
+        b = Category.objects.filter(subject='B').first()
+        LearningNote.objects.create(
+            owner=self.user, category=b, topic=b.name, title='科目Bの解説', body='本文',
+        )
+        payload = json.loads(
+            self.client.get(reverse('fe:manage_export'), {'subject': 'A'})
+            .content.decode('utf-8')
+        )
+        self.assertTrue(payload['notes'])
+        for note in payload['notes']:
+            self.assertLess(note['category'], 100, '科目Aの書き出しに科目Bの解説が混ざらない')
 
     def test_choice_labels_cover_a_long_answer_group(self):
         """選択肢が多くても記号が割り当たること。"""
         self.client.post(reverse('fe:manage_upload'), self._json_upload([{
-            'category': 2, 'subject': 'B', 'stem': 'x',
+            'category': 103, 'subject': 'B', 'stem': 'x',
             'choices': ['選択肢{}'.format(i) for i in range(9)], 'answer': 8,
             'explanation': '解説',
         }]))
@@ -839,6 +907,37 @@ class LearningModeTests(TestCase):
         self.assertRedirects(response, reverse('fe:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
 
+    def test_notes_are_offered_per_subject(self):
+        """解説も科目で絞る。科目Aの回で科目Bの解説が出てはいけない。"""
+        self._prepare()
+        b = Category.objects.filter(subject='B').first()
+        LearningNote.objects.create(
+            owner=self.user, category=b, topic=b.name,
+            title='科目Bの解説', body='本文', source='テスト',
+        )
+
+        a_menu = note_menu(self.user, Question.SUBJECT_A)
+        b_menu = note_menu(self.user, Question.SUBJECT_B)
+        self.assertNotIn(b.id, [g['category'].id for g in a_menu])
+        self.assertEqual([g['category'].id for g in b_menu], [b.id])
+
+        for _ in range(20):
+            note = pick_note(self.user, Question.SUBJECT_A)
+            self.assertEqual(note.category.subject, Question.SUBJECT_A)
+
+    def test_a_note_from_the_other_subject_is_refused(self):
+        self._prepare()
+        b = Category.objects.filter(subject='B').first()
+        theirs = LearningNote.objects.create(
+            owner=self.user, category=b, topic=b.name,
+            title='科目Bの解説', body='本文',
+        )
+        response = self.client.post(
+            reverse('fe:learn_start'), {'minutes': 5, 'note': theirs.pk}
+        )
+        self.assertRedirects(response, reverse('fe:learn_start'))
+        self.assertEqual(LearningRound.objects.count(), 0)
+
     def test_another_account_cannot_open_the_round(self):
         self._prepare()
         self.client.post(reverse('fe:learn_start'), {'minutes': 5})
@@ -855,7 +954,8 @@ class SeedCommandTests(TestCase):
     def test_seed_loads_masters_but_no_questions(self):
         """アプリは問題を同梱しないので、コマンドでも問題は入らない。"""
         seed_masters()
-        self.assertEqual(Category.objects.count(), 23)
+        self.assertEqual(Category.objects.filter(subject='A').count(), 23)
+        self.assertEqual(Category.objects.filter(subject='B').count(), 5)
         self.assertEqual(QuestionTemplate.objects.count(), len(REGISTRY))
         self.assertEqual(Question.objects.count(), 0)
 

@@ -53,8 +53,13 @@
         <a href="{% url 'fe:manage_upload' %}" class="btn btn-primary btn-sm">
             <i class="fas fa-upload me-1"></i>JSONを取り込む
         </a>
-        <a href="{% url 'fe:manage_export' %}" class="btn btn-outline-primary btn-sm">JSONを書き出す</a>
+        <a href="{% url 'fe:manage_export' %}" class="btn btn-outline-primary btn-sm">
+            JSONを書き出す
+        </a>
     </div>
+    <p class="small text-muted">
+        書き出しには<strong>問題と技術解説の両方</strong>が入ります。そのまま取り込み直せば元に戻ります。
+    </p>
 
     <form method="get" class="row g-2 align-items-end mb-4">
         <div class="col-6 col-md-2">

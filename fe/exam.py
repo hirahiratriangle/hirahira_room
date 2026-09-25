@@ -44,16 +44,19 @@ def material_lines():
     ]
 
 
-def category_lines():
-    """プロンプトに差し込む中分類の一覧。データベースの内容から作る。"""
+def category_lines(subject=None, per_line=3):
+    """プロンプトに差し込む分類の一覧。データベースの内容から作る。"""
+    queryset = Category.objects.all()
+    if subject:
+        queryset = queryset.filter(subject=subject)
     parts = [
         '{} {}({})'.format(c.code, c.name, c.exam_weight)
-        for c in Category.objects.all()
+        for c in queryset
     ]
     lines, current = [], []
     for part in parts:
         current.append(part)
-        if len(current) == 3:
+        if len(current) == per_line:
             lines.append(' / '.join(current))
             current = []
     if current:
@@ -120,8 +123,10 @@ def build_prompt():
         '- この解説を読んだ人が、同じ小分類の問題を初見で解けることを目安にする',
         '',
         '【問題（questions）の規則】',
-        '- category は中分類の番号（下表）。必須',
+        '- category は分類の番号（下表）。必須',
         '- subject は "A"（知識）か "B"（技能・擬似言語）。既定は "A"',
+        '- **分類は科目ごとに別。** 科目Aは 1〜23、科目Bは 101〜105。'
+        '番号と subject が食い違うと取り込めない',
         '- choices にア／イ／ウ／エの記号は入れない（表示側で付ける）',
         '- answer は 0 から数える',
         '- 科目Aは必ず4択。科目Bは本番同様6〜10択にする（4択だと消去法が効きすぎる）',
@@ -130,8 +135,12 @@ def build_prompt():
         '- source には参照した資料の箇所を必ず書く。'
         '過去問から転記したものと自分で作ったものを、あとで区別するため',
         '',
-        '【中分類（括弧内は本番60問での想定出題数）】',
-        *category_lines(),
+        '【科目Aの中分類（括弧内は本番60問での想定出題数）】',
+        *category_lines(subject='A'),
+        '',
+        '【科目Bの分類（括弧内は本番20問での想定出題数）】',
+        '科目Aの中分類とは別の軸。要綱が科目B用に定めている5項目。',
+        *category_lines(subject='B', per_line=2),
         '',
         '【誤答の作り方】',
         '混同しやすい近い概念を誤答に置く。'

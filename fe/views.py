@@ -25,8 +25,8 @@ from .learning import current_item, grade, note_menu, start_round
 from .models import (Attempt, Category, CategoryProgress, LearningNote,
                      LearningRound, Question, QuestionTemplate, StudySession)
 from .selection import pick_question
-from .stats import (category_stats, daily_counts, field_stats, overall_stats,
-                    record_progress, weak_categories)
+from .stats import (categories_for, category_options, category_stats, daily_counts,
+                    field_stats, overall_stats, record_progress, weak_categories)
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ class IndexView(LoginRequiredMixin, generic.TemplateView):
         context['weak'] = weak_categories(rows, limit=5)
         context['untouched'] = [r for r in rows if r['is_untouched'] and r['question_count']]
         context['study_session'] = _get_study_session(user)
+        # 出題設定のフォームを他の画面と共有しているので、分野の選択肢も渡す
+        context['categories'] = category_options(user)
         context['daily'] = daily_counts(user, days=14)
         context['exam'] = EXAM
         context['question_total'] = Question.objects.active().owned_by(user).filter(
@@ -108,7 +110,7 @@ class QuizView(LoginRequiredMixin, generic.View):
         if question is None:
             return render(request, self.template_name, {
                 'study_session': study_session,
-                'categories': Category.objects.all(),
+                'categories': category_options(request.user),
                 'no_question': True,
             })
 
@@ -119,7 +121,7 @@ class QuizView(LoginRequiredMixin, generic.View):
             'question': question,
             'reason': reason,
             'study_session': study_session,
-            'categories': Category.objects.all(),
+            'categories': category_options(request.user),
             'progress': self._progress(request.user, question.category),
         })
 
@@ -143,7 +145,7 @@ class QuizView(LoginRequiredMixin, generic.View):
             return render(request, self.template_name, {
                 'question': question,
                 'study_session': study_session,
-                'categories': Category.objects.all(),
+                'categories': category_options(request.user),
                 'progress': self._progress(request.user, question.category),
             })
 
@@ -181,7 +183,7 @@ class QuizView(LoginRequiredMixin, generic.View):
         return render(request, self.template_name, {
             'question': question,
             'study_session': study_session,
-            'categories': Category.objects.all(),
+            'categories': category_options(request.user),
             'answered': True,
             'selected': selected,
             'selected_label': Question.choice_label(selected),
@@ -259,7 +261,7 @@ class HistoryView(LoginRequiredMixin, generic.ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['categories'] = Category.objects.all()
+        context['categories'] = categories_for(_get_study_session(self.request.user).subject)
         context['result_filter'] = self.request.GET.get('result', '')
         context['category_filter'] = self.request.GET.get('category', '')
         return context
@@ -299,7 +301,7 @@ class ManageListView(LoginRequiredMixin, generic.ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         mine = Question.objects.filter(owner=self.request.user, template__isnull=True)
-        context['categories'] = Category.objects.all()
+        context['categories'] = Category.objects.all()  # 一覧は両科目を横断して絞り込む
         context['filters'] = self.request.GET
         context['query_string'] = self.request.GET.urlencode()
         context['summary'] = {
@@ -517,8 +519,10 @@ class QuestionExportView(LoginRequiredMixin, generic.View):
     """自分の問題を、取り込みと同じ形式の JSON で書き出す。"""
 
     def get(self, request, *args, **kwargs):
-        records = export_records(request.user, request.GET.get('subject'))
-        body = json.dumps(records, ensure_ascii=False, indent=1)
+        subject = request.GET.get('subject')
+        payload = export_records(request.user, subject)
+        body = json.dumps(payload, ensure_ascii=False, indent=1)
         response = HttpResponse(body, content_type='application/json; charset=utf-8')
-        response['Content-Disposition'] = 'attachment; filename="fe_questions.json"'
+        name = 'fe_{}.json'.format(subject.lower()) if subject in ('A', 'B') else 'fe_all.json'
+        response['Content-Disposition'] = 'attachment; filename="{}"'.format(name)
         return response

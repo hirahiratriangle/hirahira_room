@@ -1,5 +1,6 @@
-{% comment %}出題モードの切替フォーム。quiz 画面とダッシュボードで共有する。{% endcomment %}
-<form method="post" action="{% url 'fe:quiz_settings' %}" class="row g-2 align-items-end">
+{% comment %}出題モードの切替フォーム。quiz 画面とダッシュボードで共有する。
+categories には fe.stats.category_options の結果（科目ごとの件数つき）を渡す。{% endcomment %}
+<form method="post" action="{% url 'fe:quiz_settings' %}" class="row g-2 align-items-end" id="quizSettings">
     {% csrf_token %}
     <div class="col-12 col-md-4">
         <label for="mode" class="form-label small text-muted mb-1">出題モード</label>
@@ -20,10 +21,10 @@
         <label for="category" class="form-label small text-muted mb-1">分野（分野指定のとき）</label>
         <select class="form-select form-select-sm" id="category" name="category">
             <option value="">指定なし</option>
-            {% for category in categories %}
-            <option value="{{ category.code }}" {% if study_session.category_id == category.id %}selected{% endif %}>
-                {{ category.label }}
-            </option>
+            {% for option in categories %}
+            <option value="{{ option.category.code }}" data-subject="{{ option.subject }}"
+                    data-count="{{ option.question_count }}"
+                    {% if study_session.category_id == option.category.id %}selected{% endif %}>{{ option.category.label }}</option>
             {% endfor %}
         </select>
     </div>
@@ -31,3 +32,39 @@
         <button type="submit" class="btn btn-sm btn-outline-primary">この設定で出題</button>
     </div>
 </form>
+
+<script>
+// 科目に合わせて分類を入れ替える。要綱は科目ごとに別の出題範囲を定めていて、
+// 科目Aは中分類（1〜23）、科目Bは5項目（101〜105）。重なりが無いので、
+// 混ぜて並べると解きようのない組み合わせができる。
+// 問題数も添えて、選ぶ前に薄い分野が分かるようにする。
+(function () {
+    var form = document.getElementById('quizSettings');
+    if (!form || form.dataset.bound) { return; }
+    form.dataset.bound = '1';
+
+    var subject = form.querySelector('#subject');
+    var category = form.querySelector('#category');
+    if (!subject || !category) { return; }
+
+    var options = Array.prototype.slice.call(category.options).slice(1);
+    options.forEach(function (o) { o.dataset.label = o.textContent.trim(); });
+
+    var sync = function () {
+        options.forEach(function (o) {
+            var mine = o.dataset.subject === subject.value;
+            var count = o.dataset.count;
+            o.hidden = !mine;
+            o.disabled = !mine;
+            o.textContent = o.dataset.label + (count > 0 ? '（' + count + '問）' : '');
+        });
+        // 別の科目の分類が選ばれたままだと、出題できない設定で送られる
+        if (category.selectedOptions[0] && category.selectedOptions[0].disabled) {
+            category.value = '';
+        }
+    };
+
+    subject.addEventListener('change', sync);
+    sync();
+})();
+</script>

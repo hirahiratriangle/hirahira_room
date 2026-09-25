@@ -1,7 +1,8 @@
 """基本情報技術者試験（FE）対策アプリのモデル。
 
-分析の単位は試験要綱の「中分類」（全23）。苦手分野の把握・重点出題は
-すべてこの粒度で行う。中分類は Category、出題は Question、解答履歴は
+分析の単位は試験要綱の出題範囲の分類。科目Aは中分類（1〜23）、科目Bは
+要綱が別に定める5項目（101〜105）で、両者は重ならない。苦手分野の把握・
+重点出題はすべてこの粒度で行う。分類は Category、出題は Question、解答履歴は
 Attempt が持つ。計算問題は QuestionTemplate から数値を振り直して
 Question を生成するため、固定問題とテンプレート問題を同じ導線で扱える。
 """
@@ -10,9 +11,23 @@ from accounts.models import CustomUser
 from django.db import models
 from django.db.models import Count, Q
 
+# 科目。要綱が科目ごとに別の出題範囲を定めているので、分類も科目を持つ。
+SUBJECT_A = 'A'
+SUBJECT_B = 'B'
+SUBJECT_CHOICES = [(SUBJECT_A, '科目A'), (SUBJECT_B, '科目B')]
+
 
 class Category(models.Model):
-    """試験要綱の中分類（1〜23）。"""
+    """試験要綱が定める出題範囲の分類。
+
+    科目Aは中分類（1〜23）。科目Bは要綱が別に定める5項目（101〜105）で、
+    科目Aの中分類とは別の軸になっている。番号が重ならないようにしてあるので、
+    取り込みの JSON は番号だけで分類が一意に定まる。
+    """
+
+    SUBJECT_A = SUBJECT_A
+    SUBJECT_B = SUBJECT_B
+    SUBJECT_CHOICES = SUBJECT_CHOICES
 
     FIELD_TECHNOLOGY = 'T'
     FIELD_MANAGEMENT = 'M'
@@ -23,14 +38,18 @@ class Category(models.Model):
         (FIELD_STRATEGY, 'ストラテジ系'),
     ]
 
-    code = models.PositiveSmallIntegerField(verbose_name='中分類番号', unique=True)
-    name = models.CharField(verbose_name='中分類', max_length=40)
+    code = models.PositiveSmallIntegerField(verbose_name='分類番号', unique=True)
+    name = models.CharField(verbose_name='分類', max_length=40)
+    subject = models.CharField(
+        verbose_name='科目', max_length=1, choices=SUBJECT_CHOICES, default=SUBJECT_A
+    )
     field = models.CharField(verbose_name='分野', max_length=1, choices=FIELD_CHOICES)
     major_code = models.PositiveSmallIntegerField(verbose_name='大分類番号')
     major_name = models.CharField(verbose_name='大分類', max_length=40)
-    # 科目A（60問）で何問出るかの想定値。公開されたサンプルセット60問の
-    # 分野構成と、令和5〜8年度の公開問題の傾向から割り当てている。
-    exam_weight = models.PositiveSmallIntegerField(verbose_name='科目A想定出題数')
+    # 本番で何問出るかの想定値。科目Aは60問、科目Bは20問のうちの件数。
+    # IPA は内訳を公表していないため、公開されたサンプルセットと
+    # 令和5〜8年度の公開問題の傾向から割り当てている。
+    exam_weight = models.PositiveSmallIntegerField(verbose_name='想定出題数')
 
     class Meta:
         verbose_name = verbose_name_plural = 'FE 中分類'
@@ -84,9 +103,9 @@ class QuestionQuerySet(models.QuerySet):
 class Question(models.Model):
     """1問1答で出題する問題。"""
 
-    SUBJECT_A = 'A'
-    SUBJECT_B = 'B'
-    SUBJECT_CHOICES = [(SUBJECT_A, '科目A'), (SUBJECT_B, '科目B')]
+    SUBJECT_A = SUBJECT_A
+    SUBJECT_B = SUBJECT_B
+    SUBJECT_CHOICES = SUBJECT_CHOICES
 
     DIFFICULTY_CHOICES = [(1, '基本'), (2, '標準'), (3, '応用')]
 

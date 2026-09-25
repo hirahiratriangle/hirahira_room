@@ -54,14 +54,8 @@ def _category_weights(user, subject, mode):
     weights = {}
     for category_id, row in available.items():
         category = row['category']
-        if subject == Question.SUBJECT_B:
-            # 科目Bの内訳は要綱に明記（アルゴリズム16問／セキュリティ4問）
-            from .data.categories import SUBJECT_B_WEIGHTS
-            base = SUBJECT_B_WEIGHTS.get(category.code, 0)
-            if not base:
-                continue
-        else:
-            base = category.exam_weight
+        # 分類は科目ごとに別なので、その分類の想定出題数をそのまま使う
+        base = category.exam_weight
 
         if mode == StudySession.MODE_RANDOM:
             weight = float(base)

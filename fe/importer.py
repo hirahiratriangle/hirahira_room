@@ -73,7 +73,8 @@ def validate_notes(records, codes):
 
 def validate(payload):
     """取り込む前に全件を検査する。1件でも駄目なら何も入れない。"""
-    codes = set(Category.objects.values_list('code', flat=True))
+    subjects = dict(Category.objects.values_list('code', 'subject'))
+    codes = set(subjects)
     records = payload['questions']
     validate_notes(payload['notes'], codes)
     for i, record in enumerate(records, start=1):
@@ -119,6 +120,16 @@ def validate(payload):
         subject = record.get('subject', Question.SUBJECT_A)
         if subject not in (Question.SUBJECT_A, Question.SUBJECT_B):
             raise ImportError_('{}：subject は "A" か "B" にしてください。'.format(where))
+        # 分類は科目ごとに別なので、番号と科目が食い違っていたら止める。
+        # 通してしまうと、その科目では二度と出てこない問題になる。
+        if subjects[record['category']] != subject:
+            raise ImportError_(
+                '{}：中分類 {} は{}の分類です。subject が "{}" になっています。'.format(
+                    where, record['category'],
+                    '科目A' if subjects[record['category']] == Question.SUBJECT_A else '科目B',
+                    subject,
+                )
+            )
 
         if record.get('difficulty', 2) not in (1, 2, 3):
             raise ImportError_('{}：difficulty は 1〜3 にしてください。'.format(where))
@@ -177,21 +188,45 @@ def replace_all(user, payload):
 
 
 def export_records(user, subject=None):
-    """その人の出題対象を、取り込みと同じ形式で書き出す。"""
-    queryset = Question.objects.filter(owner=user, template__isnull=True, is_active=True)
+    """その人の問題と技術解説を、取り込みと同じ形式で書き出す。
+
+    取り込みは解説も一括で差し替えるので、問題だけを書き出すと、
+    それを取り込み直したときに解説が消える。往復しても失われないよう、
+    同じ形（notes と questions）で出す。
+
+    subject を指定すると、その科目のぶんだけを出す。取り込み直せば
+    もう一方の科目は消えるので、控えを取るなら指定しない。
+    """
+    questions = Question.objects.filter(owner=user, template__isnull=True, is_active=True)
+    notes = LearningNote.objects.filter(owner=user)
     if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
-        queryset = queryset.filter(subject=subject)
-    return [
-        {
-            'category': q.category.code,
-            'subject': q.subject,
-            'topic': q.topic,
-            'difficulty': q.difficulty,
-            'stem': q.stem,
-            'choices': q.choices,
-            'answer': q.answer_index,
-            'explanation': q.explanation,
-            'source': q.source,
-        }
-        for q in queryset.select_related('category').order_by('category__code', 'id')
-    ]
+        questions = questions.filter(subject=subject)
+        # 分類が科目ごとに別なので、解説もその科目のものだけになる
+        notes = notes.filter(category__subject=subject)
+
+    return {
+        'notes': [
+            {
+                'category': n.category.code,
+                'topic': n.topic,
+                'title': n.title,
+                'body': n.body,
+                'source': n.source,
+            }
+            for n in notes.select_related('category').order_by('category__code', 'id')
+        ],
+        'questions': [
+            {
+                'category': q.category.code,
+                'subject': q.subject,
+                'topic': q.topic,
+                'difficulty': q.difficulty,
+                'stem': q.stem,
+                'choices': q.choices,
+                'answer': q.answer_index,
+                'explanation': q.explanation,
+                'source': q.source,
+            }
+            for q in questions.select_related('category').order_by('category__code', 'id')
+        ],
+    }

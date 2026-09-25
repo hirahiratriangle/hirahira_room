@@ -27,6 +27,9 @@ def start_round(user, session, minutes, count=None, note=None):
 
     if note is None:
         note = pick_note(user, session.subject)
+    elif note.category.subject != session.subject:
+        # 別の科目の解説を指定されても、その科目の問題は出せない
+        return None
     if note is None:
         return None
 
@@ -51,8 +54,11 @@ def pick_note(user, subject):
 
     同じ分野に解説が複数あるときは、まだ読んでいないものから出す。
     """
+    # 分類は科目ごとに別なので、解説も科目で絞る。絞らないと、科目Aの回で
+    # 科目Bの解説を読まされ、そのあと出題できる問題が無いことになる。
     notes = list(
-        LearningNote.objects.filter(owner=user).select_related('category')
+        LearningNote.objects.filter(owner=user, category__subject=subject)
+        .select_related('category')
     )
     if not notes:
         return None
@@ -78,7 +84,8 @@ def note_menu(user, subject):
     どれを選ぶか決められるように、中分類の正答率と、解説ごとの学習回数を添える。
     """
     notes = list(
-        LearningNote.objects.filter(owner=user).select_related('category')
+        LearningNote.objects.filter(owner=user, category__subject=subject)
+        .select_related('category')
     )
     if not notes:
         return []
