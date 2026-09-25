@@ -29,12 +29,17 @@ def learner_fk(related_name, one=False):
 
 class Migration(migrations.Migration):
 
+    # PostgreSQL では、行を消したのと同じトランザクションで ALTER TABLE できない
+    # （外部キーの遅延チェックが「保留中のトリガー」として残るため）。
+    # そこで全体を1つのトランザクションにせず、削除だけを先に確定させる。
+    atomic = False
+
     dependencies = [
         ('fe', '0008_pass_report'),
     ]
 
     operations = [
-        migrations.RunPython(discard_account_data, migrations.RunPython.noop),
+        migrations.RunPython(discard_account_data, migrations.RunPython.noop, atomic=True),
 
         migrations.CreateModel(
             name='Learner',
