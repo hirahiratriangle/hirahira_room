@@ -24,10 +24,11 @@ stay を渡すと、保存したあとその場に留まる。ダッシュボー
         </select>
     </div>
     <div class="col-6 col-md-3">
-        <label for="category" class="form-label small text-muted mb-1">分野（分野指定のとき）</label>
+        <label for="category" class="form-label small text-muted mb-1">分野</label>
         {% comment %}分野が効くのは「分野を指定」のときだけ。ほかのモードでも
         保存値を映すと、効いていない分野が選ばれたままに見える。{% endcomment %}
-        <select class="form-select form-select-sm" id="category" name="category">
+        <select class="form-select form-select-sm" id="category" name="category"
+                {% if study_session.mode != 'category' %}disabled{% endif %}>
             <option value="">指定なし</option>
             {% for option in categories %}{% if option.subject == study_session.subject %}
             <option value="{{ option.code }}"{% if study_session.mode == 'category' and study_session.category.code == option.code %} selected{% endif %}>{{ option.label }}{% if option.question_count %}（{{ option.question_count }}問）{% endif %}</option>
@@ -43,26 +44,29 @@ stay を渡すと、保存したあとその場に留まる。ダッシュボー
 
 {{ categories|json_script:"categoryOptions" }}
 <script>
-// 科目に合わせて分類を入れ替える。要綱は科目ごとに別の出題範囲を定めていて、
-// 科目Aは中分類（1〜23）、科目Bは5項目（101〜105）。重なりが無いので、
-// 混ぜて並べると解きようのない組み合わせができる。
+// 分野の欄は、出題モードと科目で決まる。
 //
-// 最初に出す分だけはサーバーが描いている。全部描いて JavaScript で隠す作りだと、
+// ・分野が効くのは「分野を指定」のときだけ。ほかのモードでは選べても
+//   保存時に捨てられるので、選べること自体が誤解のもとになる。伏せておく。
+// ・分類は科目ごとに別で、科目Aは中分類（1〜23）、科目Bは5項目（101〜105）。
+//   重なりが無いので、混ぜて並べると解きようのない組み合わせができる。
+//
+// 最初に出す分はサーバーが描いている。全部描いて JavaScript で絞る作りだと、
 // JS が動くまでの一瞬、別の科目の分類まで見えてしまう。
-// 切り替えのときだけ、埋め込んだ一覧から作り直す。
 (function () {
     var form = document.getElementById('quizSettings');
     if (!form || form.dataset.bound) { return; }
     form.dataset.bound = '1';
 
+    var mode = form.querySelector('#mode');
     var subject = form.querySelector('#subject');
     var category = form.querySelector('#category');
     var source = document.getElementById('categoryOptions');
-    if (!subject || !category || !source) { return; }
+    if (!mode || !subject || !category || !source) { return; }
 
     var all = JSON.parse(source.textContent);
 
-    subject.addEventListener('change', function () {
+    var rebuild = function () {
         var keep = category.value;
         // 先頭の「指定なし」は残し、その後ろを選んだ科目のものに入れ替える
         while (category.options.length > 1) { category.remove(1); }
@@ -79,6 +83,18 @@ stay を渡すと、保存したあとその場に留まる。ダッシュボー
         // 何も選ばれていない空欄になる。先頭の「指定なし」へ明示的に戻す。
         category.value = keep;
         if (category.selectedIndex < 0) { category.selectedIndex = 0; }
-    });
+    };
+
+    var toggle = function () {
+        var usable = mode.value === 'category';
+        category.disabled = !usable;
+        // 使わないモードに移ったら、選んだままにしない。
+        // 保存時にどのみち捨てられるので、画面と保存結果を一致させる。
+        if (!usable) { category.selectedIndex = 0; }
+    };
+
+    mode.addEventListener('change', toggle);
+    subject.addEventListener('change', rebuild);
+    toggle();
 })();
 </script>

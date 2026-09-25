@@ -401,6 +401,24 @@ class ViewTests(TestCase):
                         Category.objects.get(code=code).subject, subject,
                     )
 
+    def test_the_category_field_is_locked_unless_the_mode_uses_it(self):
+        """分野が効くのは「分野を指定」のときだけ。ほかのモードでは操作させない。
+
+        選べるのに保存時に捨てられる状態だと、選んだつもりが効いていない。
+        """
+        session, _ = StudySession.objects.get_or_create(user=self.user)
+        for mode, locked in (
+            (StudySession.MODE_CATEGORY, False),
+            (StudySession.MODE_FOCUS, True),
+            (StudySession.MODE_REVIEW, True),
+        ):
+            with self.subTest(mode=mode):
+                session.mode = mode
+                session.save()
+                html = self.client.get(reverse('fe:index')).content.decode('utf-8')
+                block = re.search(r'<select[^>]*id="category".*?>', html, re.S).group(0)
+                self.assertEqual('disabled' in block, locked)
+
     def test_the_category_shows_only_when_the_mode_uses_it(self):
         """分野が効くのは「分野を指定」のときだけ。
 
