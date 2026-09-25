@@ -11,3 +11,267 @@ footer {
 .my-div-style {
     margin-top: 6rem;
 }
+
+/* ==========================================================================
+   配色
+   --------------------------------------------------------------------------
+   テーマ（one-page-wonder.css）の主色は #ee0979 の鮮やかなピンクだが、
+   このサイトは青を基調にしている。FE 対策アプリの見出しも #2c5aa0 なので、
+   主色を青に寄せて揃える。
+
+   肌色は「苦手」「不正解」を示すアクセントに限定する。赤で埋まると圧が
+   強いので、読める範囲でできるだけ薄くした。値は実測で決めている。
+
+   習得度のバーは3段階（苦手／ふつう／得意）。暖色を3つ並べると、薄くした
+   ぶん隣どうしが見分けられなくなるので、暖色2段＋青の並びにした。
+   濃いほど手当てが要る、という読み方で統一している。
+     苦手 #e5a26c ／ ふつう #f0cb95 ／ 得意 #2c5aa0（隣の差 1.41 と 4.45）
+     ・進捗バーは下地 #e9ecef と見分けがつく必要があり、#edc19c が下限
+     ・白地に置く文字は #8f5a30（コントラスト 5.72、基準 4.5）
+     ・バッジの地は #fbeee2 まで。これ以上濃いと文字が読めなくなる
+
+   テーマ本体は触らず、後から読み込まれるこのファイルで上書きする。
+   ========================================================================== */
+:root {
+    --bs-primary: #2c5aa0;
+    --bs-primary-rgb: 44, 90, 160;
+    --bs-link-color: #2c5aa0;
+    --bs-link-hover-color: #24497f;
+    --bs-code-color: #2c5aa0;
+    --bs-pink: #edc19c;
+    --bs-danger-rgb: 143, 90, 48;
+    --bs-secondary: #7d4900;
+    --bs-secondary-rgb: 125, 73, 0;
+
+    --skin-bg: #fdf5ee;     /* 行・帯の地。最も薄い */
+    --skin-tint: #fbeee2;   /* バッジの地。これ以上濃いと文字が読めない */
+    --skin-line: #e5a26c;   /* 縁・習得度バー（苦手）。段をつけるため濃いめ */
+    --skin-ink: #8f5a30;    /* 文字 */
+
+    /* 橙（未着手など）。肌色と同じ色相なので、薄くしすぎると見分けがつかない。
+       苦手の地 #fbeee2 との差が 1.24 つくところまで濃くした（1.1 を切ると
+       並んだとき同じ色に見える）。文字はそれに合わせて濃くしてある。 */
+    --amber-tint: #f8d2ae;  /* バッジの地 */
+    --amber-line: #eba95f;
+    --amber-ink: #7d4900;   /* 文字。地の上で 5.25、白地で 7.43 */
+
+    /* 黄（習得度の中間、注意書き）。肌色・橙と並ぶので、色相で見分ける。
+       明度だけで離そうとすると、黄はもともと明るいので離れない。 */
+    --lemon-tint: #f9e49a;  /* バッジ・バーの地 */
+    --lemon-line: #f0cb95;  /* 習得度バー（ふつう）。苦手との差 1.41 */
+    --lemon-ink: #6b5000;   /* 文字。地の上で 5.98、白地で 7.57 */
+}
+
+/* --- 主色を青に ------------------------------------------------------- */
+.btn-primary {
+    --bs-btn-bg: #2c5aa0;
+    --bs-btn-border-color: #2c5aa0;
+    --bs-btn-hover-bg: #24497f;
+    --bs-btn-hover-border-color: #1f4070;
+    --bs-btn-active-bg: #1f4070;
+    --bs-btn-active-border-color: #1a3660;
+    --bs-btn-disabled-bg: #2c5aa0;
+    --bs-btn-disabled-border-color: #2c5aa0;
+}
+
+.btn-outline-primary {
+    --bs-btn-color: #2c5aa0;
+    --bs-btn-border-color: #2c5aa0;
+    --bs-btn-hover-bg: #2c5aa0;
+    --bs-btn-hover-border-color: #2c5aa0;
+    --bs-btn-active-bg: #2c5aa0;
+    --bs-btn-active-border-color: #2c5aa0;
+    --bs-btn-disabled-color: #2c5aa0;
+    --bs-btn-disabled-border-color: #2c5aa0;
+}
+
+/* --- 習得度の3段階と、正解を示す緑 ------------------------------------- */
+/* 得意は基調の青。暖色を3つ並べると見分けられないため、ここだけ色相を変える */
+.progress-bar.bg-success { background-color: #2c5aa0 !important; }
+
+/* 正解の表示は緑のままにする（正解＝緑の読み方は強い）。原色は落とす */
+.bg-success {
+    background-color: #ddf0e5 !important;
+    color: #1f6b47 !important;
+}
+.text-success { color: #1f6b47 !important; }
+.border-success { border-color: #a9d8bf !important; }
+.alert-success {
+    --bs-alert-color: #1f6b47;
+    --bs-alert-bg: #eaf6ef;
+    --bs-alert-border-color: #a9d8bf;
+}
+.list-group-item-success { background-color: #eaf6ef; color: #1f6b47; }
+.table-success { --bs-table-bg: #eaf6ef; --bs-table-color: #1f6b47; }
+
+/* --- 黄を薄く --------------------------------------------------------- */
+.bg-warning {
+    background-color: var(--lemon-tint) !important;
+    color: var(--lemon-ink) !important;
+}
+.text-warning { color: var(--lemon-ink) !important; }
+.border-warning { border-color: var(--lemon-line) !important; }
+
+.alert-warning {
+    --bs-alert-color: var(--lemon-ink);
+    --bs-alert-bg: #fdf8e4;
+    --bs-alert-border-color: var(--lemon-line);
+}
+
+.table-warning { --bs-table-bg: #fdf8e4; --bs-table-color: var(--lemon-ink); }
+
+.btn-warning {
+    --bs-btn-color: var(--lemon-ink);
+    --bs-btn-bg: var(--lemon-tint);
+    --bs-btn-border-color: var(--lemon-line);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--lemon-ink);
+    --bs-btn-hover-border-color: var(--lemon-ink);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--lemon-ink);
+    --bs-btn-active-border-color: var(--lemon-ink);
+    --bs-btn-disabled-color: var(--lemon-ink);
+    --bs-btn-disabled-bg: var(--lemon-tint);
+    --bs-btn-disabled-border-color: var(--lemon-line);
+}
+
+.btn-outline-warning {
+    --bs-btn-color: var(--lemon-ink);
+    --bs-btn-border-color: var(--lemon-line);
+    --bs-btn-hover-bg: var(--lemon-ink);
+    --bs-btn-hover-border-color: var(--lemon-ink);
+    --bs-btn-active-bg: var(--lemon-ink);
+    --bs-btn-active-border-color: var(--lemon-ink);
+}
+
+.progress-bar.bg-warning { background-color: var(--lemon-line) !important; }
+
+/* --- 橙を薄く --------------------------------------------------------- */
+.bg-secondary {
+    background-color: var(--amber-tint) !important;
+    color: var(--amber-ink) !important;
+}
+.text-secondary { color: var(--amber-ink) !important; }
+.border-secondary { border-color: var(--amber-line) !important; }
+
+.btn-secondary {
+    --bs-btn-color: var(--amber-ink);
+    --bs-btn-bg: var(--amber-tint);
+    --bs-btn-border-color: var(--amber-line);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--amber-ink);
+    --bs-btn-hover-border-color: var(--amber-ink);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--amber-ink);
+    --bs-btn-active-border-color: var(--amber-ink);
+    --bs-btn-disabled-color: var(--amber-ink);
+    --bs-btn-disabled-bg: var(--amber-tint);
+    --bs-btn-disabled-border-color: var(--amber-line);
+}
+
+.btn-outline-secondary {
+    --bs-btn-color: var(--amber-ink);
+    --bs-btn-border-color: var(--amber-line);
+    --bs-btn-hover-bg: var(--amber-ink);
+    --bs-btn-hover-border-color: var(--amber-ink);
+    --bs-btn-active-bg: var(--amber-ink);
+    --bs-btn-active-border-color: var(--amber-ink);
+    --bs-btn-disabled-color: var(--amber-ink);
+    --bs-btn-disabled-border-color: var(--amber-line);
+}
+
+.alert-secondary {
+    --bs-alert-color: var(--amber-ink);
+    --bs-alert-bg: #fdf2e6;
+    --bs-alert-border-color: var(--amber-line);
+}
+
+.bg-primary { background-color: #2c5aa0 !important; }
+.text-primary { color: #2c5aa0 !important; }
+.border-primary { border-color: #2c5aa0 !important; }
+.link-primary { color: #2c5aa0 !important; }
+.link-primary:hover, .link-primary:focus { color: #24497f !important; }
+
+.nav-pills { --bs-nav-pills-link-active-bg: #2c5aa0; }
+.pagination { --bs-pagination-active-bg: #2c5aa0; --bs-pagination-active-border-color: #2c5aa0; }
+.progress { --bs-progress-bar-bg: #2c5aa0; }
+.list-group { --bs-list-group-active-bg: #2c5aa0; --bs-list-group-active-border-color: #2c5aa0; }
+.dropdown-menu, .dropdown-menu-dark { --bs-dropdown-link-active-bg: #2c5aa0; }
+
+/* テーマの既定はピンク。ナビの現在地と hover もここで決まる */
+.navbar-custom .navbar-nav .nav-item .nav-link:hover,
+.navbar-custom .navbar-nav .nav-item .nav-link:focus,
+.navbar-custom .navbar-nav .nav-item .nav-link.active { color: #8aa8d0; }
+
+.alert-primary {
+    --bs-alert-color: #24497f;
+    --bs-alert-bg: #eef3fa;
+    --bs-alert-border-color: #c3d6ee;
+}
+.alert-primary .alert-link { color: #1f4070; }
+
+.form-check-input:checked {
+    background-color: #2c5aa0;
+    border-color: #2c5aa0;
+}
+.form-check-input:focus { border-color: #8aa8d0; box-shadow: 0 0 0 .25rem rgba(44, 90, 160, .25); }
+.form-control:focus, .form-select:focus {
+    border-color: #8aa8d0;
+    box-shadow: 0 0 0 .25rem rgba(44, 90, 160, .25);
+}
+.form-range::-webkit-slider-thumb { background-color: #2c5aa0; }
+.form-range::-moz-range-thumb { background-color: #2c5aa0; }
+
+/* --- 赤を桜色に ------------------------------------------------------- */
+.text-danger { color: var(--skin-ink) !important; }
+
+.bg-danger {
+    background-color: var(--skin-tint) !important;
+    color: var(--skin-ink) !important;
+}
+
+.alert-danger {
+    background-color: var(--skin-bg);
+    border-color: var(--skin-line);
+    color: var(--skin-ink);
+}
+
+.list-group-item-danger {
+    background-color: var(--skin-bg);
+    color: var(--skin-ink);
+}
+
+.table-danger { --bs-table-bg: var(--skin-bg); --bs-table-color: var(--skin-ink); }
+
+/* 削除や取り消しのボタン。白文字が乗るので、薄い肌色では読めない。
+   薄い地に濃い肌色の文字と縁にして、注意の色であることは残す。 */
+.btn-danger {
+    --bs-btn-color: var(--skin-ink);
+    --bs-btn-bg: var(--skin-tint);
+    --bs-btn-border-color: var(--skin-line);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--skin-ink);
+    --bs-btn-hover-border-color: var(--skin-ink);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--skin-ink);
+    --bs-btn-active-border-color: var(--skin-ink);
+    --bs-btn-disabled-color: var(--skin-ink);
+    --bs-btn-disabled-bg: var(--skin-tint);
+    --bs-btn-disabled-border-color: var(--skin-line);
+}
+
+.btn-outline-danger {
+    --bs-btn-color: var(--skin-ink);
+    --bs-btn-border-color: var(--skin-line);
+    --bs-btn-hover-bg: var(--skin-ink);
+    --bs-btn-hover-border-color: var(--skin-ink);
+    --bs-btn-active-bg: var(--skin-ink);
+    --bs-btn-active-border-color: var(--skin-ink);
+    --bs-btn-disabled-color: var(--skin-ink);
+    --bs-btn-disabled-border-color: var(--skin-line);
+}
+
+.border-danger { border-color: var(--skin-line) !important; }
+
+/* 文字が乗らないので、下地から見分けられる濃さが要る */
+.progress-bar.bg-danger { background-color: var(--skin-line) !important; }

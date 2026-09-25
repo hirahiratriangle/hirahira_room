@@ -37,7 +37,9 @@ categories には fe.stats.category_options の結果（科目ごとの件数つ
 // 科目に合わせて分類を入れ替える。要綱は科目ごとに別の出題範囲を定めていて、
 // 科目Aは中分類（1〜23）、科目Bは5項目（101〜105）。重なりが無いので、
 // 混ぜて並べると解きようのない組み合わせができる。
-// 問題数も添えて、選ぶ前に薄い分野が分かるようにする。
+//
+// option の hidden は Safari が無視するため、隠すのではなく作り直す。
+// disabled だけだと、選べない項目がグレーで並んだままになる。
 (function () {
     var form = document.getElementById('quizSettings');
     if (!form || form.dataset.bound) { return; }
@@ -47,21 +49,33 @@ categories には fe.stats.category_options の結果（科目ごとの件数つ
     var category = form.querySelector('#category');
     if (!subject || !category) { return; }
 
-    var options = Array.prototype.slice.call(category.options).slice(1);
-    options.forEach(function (o) { o.dataset.label = o.textContent.trim(); });
+    // 先頭の「指定なし」は常に残し、その後ろを科目ごとに差し替える
+    var all = Array.prototype.slice.call(category.options).slice(1).map(function (o) {
+        return {
+            value: o.value,
+            label: o.textContent.trim(),
+            subject: o.dataset.subject,
+            count: parseInt(o.dataset.count, 10) || 0,
+        };
+    });
 
     var sync = function () {
-        options.forEach(function (o) {
-            var mine = o.dataset.subject === subject.value;
-            var count = o.dataset.count;
-            o.hidden = !mine;
-            o.disabled = !mine;
-            o.textContent = o.dataset.label + (count > 0 ? '（' + count + '問）' : '');
+        var keep = category.value;
+        while (category.options.length > 1) { category.remove(1); }
+
+        all.forEach(function (o) {
+            if (o.subject !== subject.value) { return; }
+            var el = document.createElement('option');
+            el.value = o.value;
+            el.textContent = o.label + (o.count > 0 ? '（' + o.count + '問）' : '');
+            category.add(el);
         });
-        // 別の科目の分類が選ばれたままだと、出題できない設定で送られる
-        if (category.selectedOptions[0] && category.selectedOptions[0].disabled) {
-            category.value = '';
-        }
+
+        // 前の選択が別の科目のものだと、value を入れても一致せず
+        // selectedIndex が -1 になり、何も選ばれていない空欄になる。
+        // 先頭の「指定なし」へ明示的に戻す。
+        category.value = keep;
+        if (category.selectedIndex < 0) { category.selectedIndex = 0; }
     };
 
     subject.addEventListener('change', sync);
