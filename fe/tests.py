@@ -8,6 +8,7 @@
 
 import json
 import random
+import re
 
 from accounts.models import CustomUser
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -370,7 +371,7 @@ class ViewTests(TestCase):
 
     def test_category_options_carry_the_subject(self):
         """分類は科目ごとに別。画面で出し分けられるよう科目を添えている。"""
-        options = {o['category'].code: o for o in category_options(self.user)}
+        options = {o['code']: o for o in category_options(self.user)}
         self.assertEqual(options[11]['subject'], Question.SUBJECT_A, 'セキュリティは科目A')
         self.assertEqual(options[103]['subject'], Question.SUBJECT_B)
         self.assertFalse(
@@ -378,6 +379,27 @@ class ViewTests(TestCase):
             '科目Aと科目Bの分類番号は重ならない',
         )
         self.assertGreater(options[103]['question_count'], 0)
+
+    def test_only_the_current_subject_is_rendered(self):
+        """分類は科目ごとに別なので、最初から選んでいる科目のぶんだけ描く。
+
+        全部を描いて JavaScript で隠す作りだと、JS が動くまでの一瞬、
+        別の科目の分類が見えてしまう。
+        """
+        session, _ = StudySession.objects.get_or_create(user=self.user)
+        for subject, expected in ((Question.SUBJECT_A, 23), (Question.SUBJECT_B, 5)):
+            with self.subTest(subject=subject):
+                session.subject = subject
+                session.category = None
+                session.save()
+                html = self.client.get(reverse('fe:index')).content.decode('utf-8')
+                select = re.search(r'id="category".*?</select>', html, re.S).group(0)
+                codes = [int(v) for v in re.findall(r'<option value="(\d+)"', select)]
+                self.assertEqual(len(codes), expected)
+                for code in codes:
+                    self.assertEqual(
+                        Category.objects.get(code=code).subject, subject,
+                    )
 
     def test_the_two_subjects_have_separate_categories(self):
         """科目Aだけの分類と科目Bだけの分類に分かれ、重なりが無いこと。"""

@@ -114,21 +114,28 @@ def category_stats(user, subject=None):
 
 
 def category_options(user):
-    """出題設定の「分野」に並べる選択肢。どの科目のものかを添える。
+    """出題設定の「分野」に並べる選択肢。
 
     分類は科目ごとに別なので、画面では科目に合わせて出し分ける。
-    選ぶ前に薄い分野が分かるよう、持っている問題数も渡す。
+    テンプレートに model を渡さず素の値にしてあるのは、そのまま
+    json_script で JavaScript へ渡し、科目の切替に使うため。
+    選ぶ前に薄い分野が分かるよう、持っている問題数も添える。
     """
-    counts = {
-        row['category']: row['n']
-        for row in Question.objects.active().owned_by(user)
-        .values('category').annotate(n=Count('id'))
-    }
+    counts = {}
+    for row in (
+        Question.objects.active().owned_by(user)
+        .values('category', 'subject').annotate(n=Count('id'))
+    ):
+        counts.setdefault(row['category'], {})[row['subject']] = row['n']
+
     return [
         {
-            'category': category,
+            'code': category.code,
+            'label': category.label,
             'subject': category.subject,
-            'question_count': counts.get(category.id, 0),
+            # その分類の科目ぶんだけ数える。取り込み前の古いデータが
+            # 別の科目で残っていても、件数に混ざらないようにする。
+            'question_count': counts.get(category.id, {}).get(category.subject, 0),
         }
         for category in Category.objects.all()
     ]
