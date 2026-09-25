@@ -15,7 +15,7 @@ from datetime import timedelta
 from django.db.models import Count, F, Sum
 from django.utils import timezone
 
-from .models import Category, CategoryProgress, DailyProgress, Question
+from .models import Category, CategoryProgress, DailyProgress, PassReport, Question
 
 # ベイズ平滑化のパラメータ。SMOOTHING_PRIOR は科目基準点（600/1000）に
 # 対応させ、SMOOTHING_STRENGTH 問ぶんの「仮の解答」を上乗せして扱う。
@@ -226,3 +226,63 @@ def daily_counts(user, days=14):
         }
         for offset in range(days)
     ]
+
+
+def site_summary():
+    """全利用者を合わせた集計。のべ解答数・分類別の解答数・合格者数。
+
+    解答ログ（Attempt）は問題の差し替えで消えるので、のべ数は
+    消えない CategoryProgress から数える。個人が特定できる値は返さない。
+    """
+    per_category = {
+        row['category']: row
+        for row in CategoryProgress.objects.values('category').annotate(
+            total=Sum('answered'), correct=Sum('correct'),
+        )
+    }
+
+    subjects = []
+    for value, label in Question.SUBJECT_CHOICES:
+        rows = []
+        for category in categories_for(value):
+            agg = per_category.get(category.id, {})
+            total = agg.get('total') or 0
+            correct = agg.get('correct') or 0
+            rows.append({
+                'category': category,
+                'total': total,
+                'correct': correct,
+                'rate_percent': round(correct / total * 100) if total else None,
+            })
+        subject_total = sum(r['total'] for r in rows)
+        subject_correct = sum(r['correct'] for r in rows)
+        for row in rows:
+            row['share_percent'] = (
+                round(row['total'] / subject_total * 100, 1) if subject_total else 0.0
+            )
+        subjects.append({
+            'value': value,
+            'label': label,
+            'rows': rows,
+            # 分野（テクノロジ系など）は科目Aの中分類にだけ意味がある
+            'fields': field_stats(rows) if value == Question.SUBJECT_A else [],
+            'total': subject_total,
+            'correct': subject_correct,
+            'rate_percent': (
+                round(subject_correct / subject_total * 100) if subject_total else None
+            ),
+        })
+
+    total = sum(s['total'] for s in subjects)
+    correct = sum(s['correct'] for s in subjects)
+    return {
+        'total': total,
+        'correct': correct,
+        'rate_percent': round(correct / total * 100) if total else None,
+        'learners': (
+            CategoryProgress.objects.filter(answered__gt=0)
+            .values('user').distinct().count()
+        ),
+        'passers': PassReport.objects.count(),
+        'subjects': subjects,
+    }

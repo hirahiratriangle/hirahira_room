@@ -22,13 +22,13 @@ from .generators import REGISTRY, generate_question
 from .importer import ImportError_, parse, replace_all, validate
 from .learning import note_menu, pick_note
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
-                     LearningNote, LearningRound,
+                     LearningNote, LearningRound, PassReport,
                      Question, QuestionTemplate, StudySession)
 from .selection import (REVIEW_DUE_GAP, _due_for_review,
                         _last_result_map, _recent_answer_times, pick_question)
 from .stats import (WEAK_MIN_ATTEMPTS, category_options, category_stats,
                     overall_stats,
-                    record_progress, smoothed_rate, weak_categories)
+                    record_progress, site_summary, smoothed_rate, weak_categories)
 
 
 def seed_masters():
@@ -1044,6 +1044,83 @@ class LearningModeTests(TestCase):
             self.assertEqual(
                 self.client.get(reverse(name, args=[round_.pk])).status_code, 404,
             )
+
+
+class SiteSummaryTests(TestCase):
+    """ダッシュボードの「みんなの集計」。全利用者の合計と、合格の申告。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+        cls.alice = make_user('alice')
+        cls.bob = make_user('bob')
+        make_user('idle')  # 1問も解いていない人は「学習した人」に数えない
+        build_questions(cls.alice)
+        build_questions(cls.bob)
+
+    def setUp(self):
+        self.client.force_login(self.alice)
+
+    def _question(self, user, code):
+        return Question.objects.filter(owner=user, category__code=code).first()
+
+    def test_counts_every_users_answers_by_category(self):
+        answer(self.alice, self._question(self.alice, 11), True)
+        answer(self.alice, self._question(self.alice, 11), False)
+        answer(self.bob, self._question(self.bob, 11), True)
+        answer(self.bob, self._question(self.bob, 101), False)
+
+        summary = site_summary()
+        self.assertEqual(summary['total'], 4)
+        self.assertEqual(summary['correct'], 2)
+        self.assertEqual(summary['learners'], 2)
+
+        subject_a, subject_b = summary['subjects']
+        security = next(r for r in subject_a['rows'] if r['category'].code == 11)
+        self.assertEqual((security['total'], security['correct']), (3, 2))
+        self.assertEqual(security['share_percent'], 100.0)
+        self.assertEqual(subject_b['total'], 1)
+        # 分野の内訳は科目Aだけに付く
+        self.assertTrue(subject_a['fields'])
+        self.assertEqual(subject_b['fields'], [])
+
+    def test_total_survives_reimport(self):
+        """のべ解答数は、問題を取り込み直しても減らない。"""
+        answer(self.alice, self._question(self.alice, 11), True)
+        build_questions(self.alice)
+        self.assertFalse(Attempt.objects.filter(user=self.alice).exists())
+        self.assertEqual(site_summary()['total'], 1)
+
+    def test_dashboard_shows_summary(self):
+        answer(self.bob, self._question(self.bob, 11), True)
+        response = self.client.get(reverse('fe:index'))
+        self.assertContains(response, 'みんなの集計')
+        self.assertEqual(response.context['summary']['total'], 1)
+        # 他人の名前は出さない
+        self.assertNotContains(response, 'bob')
+
+    def test_report_and_withdraw_pass(self):
+        url = reverse('fe:pass_report')
+        response = self.client.post(url, {'passed_on': '2026-06-01'})
+        self.assertRedirects(response, reverse('fe:index') + '#summary')
+        self.assertEqual(site_summary()['passers'], 1)
+
+        # 申告し直しても1人は1件のまま
+        self.client.post(url, {'passed_on': '2026-07-01'})
+        self.assertEqual(PassReport.objects.count(), 1)
+        self.assertEqual(str(PassReport.objects.get().passed_on), '2026-07-01')
+
+        self.client.post(url, {'action': 'withdraw'})
+        self.assertEqual(site_summary()['passers'], 0)
+
+    def test_future_date_is_rejected(self):
+        self.client.post(reverse('fe:pass_report'), {'passed_on': '2999-01-01'})
+        self.assertFalse(PassReport.objects.exists())
+
+    def test_pass_report_requires_login(self):
+        self.client.logout()
+        self.client.post(reverse('fe:pass_report'), {'passed_on': '2026-06-01'})
+        self.assertFalse(PassReport.objects.exists())
 
 
 class SeedCommandTests(TestCase):

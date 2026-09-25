@@ -437,3 +437,25 @@ class LearningItem(models.Model):
         if self.selected_index is None:
             return ''
         return Question.choice_label(self.selected_index)
+
+
+class PassReport(models.Model):
+    """本番に合格したという本人の申告。集計ページの「合格者数」はこれを数える。
+
+    アプリには本番の結果を確かめる手段がないので、自己申告をそのまま信じる。
+    1人1件。取り消せば行ごと消し、数えなくなる。
+    """
+
+    user = models.OneToOneField(
+        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
+        related_name='fe_pass_report',
+    )
+    passed_on = models.DateField(verbose_name='合格した試験の受験日')
+    reported_at = models.DateTimeField(verbose_name='申告日時', auto_now_add=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE 合格の申告'
+        ordering = ['-passed_on']
+
+    def __str__(self):
+        return '{} {}'.format(self.user, self.passed_on)

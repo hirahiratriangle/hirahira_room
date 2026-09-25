@@ -19,14 +19,16 @@ from django.utils import timezone
 from django.views import generic
 
 from .exam import EXAM, build_prompt
-from .forms import QuestionUploadForm
+from .forms import PassReportForm, QuestionUploadForm
 from .importer import export_records, replace_all
 from .learning import current_item, grade, note_menu, start_round
 from .models import (Attempt, Category, CategoryProgress, LearningNote,
-                     LearningRound, Question, QuestionTemplate, StudySession)
+                     LearningRound, PassReport, Question, QuestionTemplate,
+                     StudySession)
 from .selection import pick_question
 from .stats import (categories_for, category_options, category_stats, daily_counts,
-                    field_stats, overall_stats, record_progress, weak_categories)
+                    field_stats, overall_stats, record_progress, site_summary,
+                    weak_categories)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,10 @@ class IndexView(LoginRequiredMixin, generic.TemplateView):
         ).count()
         context['template_total'] = QuestionTemplate.objects.filter(is_active=True).count()
         context['max_daily'] = max([d['total'] for d in context['daily']] + [1])
+        # 全利用者を合わせた集計と、自分の合格申告
+        context['summary'] = site_summary()
+        context['my_report'] = PassReport.objects.filter(user=user).first()
+        context['pass_form'] = PassReportForm()
         return context
 
 
@@ -244,6 +250,28 @@ class StatsView(LoginRequiredMixin, generic.TemplateView):
             weight = row['category'].exam_weight * (0.3 + 2.0 * row['weakness'])
             row['focus_share'] = round(weight / total_weight * 100, 1) if row['question_count'] else 0.0
         return context
+
+
+class PassReportView(LoginRequiredMixin, generic.View):
+    """本番合格の申告と取り消し。1人1件で、申告し直すと受験日を上書きする。"""
+
+    def post(self, request, *args, **kwargs):
+        back = reverse('fe:index') + '#summary'
+        if request.POST.get('action') == 'withdraw':
+            PassReport.objects.filter(user=request.user).delete()
+            messages.info(request, '合格の申告を取り消しました。')
+            return redirect(back)
+
+        form = PassReportForm(request.POST)
+        if not form.is_valid():
+            for error in form.errors.get('passed_on', []):
+                messages.error(request, error)
+            return redirect(back)
+        PassReport.objects.update_or_create(
+            user=request.user, defaults={'passed_on': form.cleaned_data['passed_on']},
+        )
+        messages.success(request, '合格おめでとうございます。合格者数に数えました。')
+        return redirect(back)
 
 
 class HistoryView(LoginRequiredMixin, generic.ListView):

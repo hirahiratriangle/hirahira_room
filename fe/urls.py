@@ -17,6 +17,8 @@ urlpatterns = [
 
     path('stats/', views.StatsView.as_view(), name='stats'),
     path('history/', views.HistoryView.as_view(), name='history'),
+    # 本番合格の申告（集計はダッシュボードに出す）
+    path('pass/', views.PassReportView.as_view(), name='pass_report'),
 
     # 問題の管理（自分の問題のみ。登録は JSON の一括差し替えで行う）
     path('manage/', views.ManageListView.as_view(), name='manage_list'),

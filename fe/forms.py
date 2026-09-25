@@ -7,6 +7,7 @@
 
 from django import forms
 from django.conf import settings
+from django.utils import timezone
 
 from .importer import ImportError_, parse, validate
 
@@ -46,3 +47,18 @@ class QuestionUploadForm(forms.Form):
         except ImportError_ as exc:
             raise forms.ValidationError(str(exc))
         return upload
+
+
+class PassReportForm(forms.Form):
+    """本番に合格したことの申告。受験日だけを聞く。"""
+
+    passed_on = forms.DateField(
+        label='合格した試験の受験日',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control form-control-sm'}),
+    )
+
+    def clean_passed_on(self):
+        passed_on = self.cleaned_data['passed_on']
+        if passed_on > timezone.localdate():
+            raise forms.ValidationError('受験日が未来になっています。')
+        return passed_on

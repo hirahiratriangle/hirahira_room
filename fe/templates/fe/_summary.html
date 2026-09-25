@@ -1,0 +1,139 @@
+{% comment %}
+ダッシュボードに載せる、全利用者を合わせた集計。個人の成績は出さない。
+summary（stats.site_summary）、my_report、pass_form を受け取る。
+{% endcomment %}
+<section class="mb-5" id="summary">
+    <h2 class="h5 mb-3" style="color:#2c5aa0;">みんなの集計</h2>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">
+            <div class="border rounded p-3 h-100">
+                <div class="small text-muted">のべ解答数</div>
+                <div class="h3 mb-0" style="color:#2c5aa0;">{{ summary.total }}<span class="fs-6">問</span></div>
+                <div class="small text-muted">うち正解 {{ summary.correct }} 問</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="border rounded p-3 h-100">
+                <div class="small text-muted">全体の正答率</div>
+                <div class="h3 mb-0" style="color:#2c5aa0;">
+                    {% if summary.rate_percent is not None %}{{ summary.rate_percent }}<span class="fs-6">％</span>{% else %}—{% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="border rounded p-3 h-100">
+                <div class="small text-muted">学習した人</div>
+                <div class="h3 mb-0" style="color:#2c5aa0;">{{ summary.learners }}<span class="fs-6">人</span></div>
+                <div class="small text-muted">1問以上解いた人</div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="border rounded p-3 h-100">
+                <div class="small text-muted">合格者数</div>
+                <div class="h3 mb-0" style="color:#2c5aa0;">{{ summary.passers }}<span class="fs-6">人</span></div>
+                <div class="small text-muted">本番合格の申告数</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 合格の申告 -->
+    <div class="border rounded p-3 mb-3">
+        {% if my_report %}
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <strong>合格を申告済みです</strong>
+                <span class="small text-muted ms-2">受験日 {{ my_report.passed_on|date:"Y年n月j日" }}</span>
+            </div>
+            <form method="post" action="{% url 'fe:pass_report' %}" class="m-0">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="withdraw">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">申告を取り消す</button>
+            </form>
+        </div>
+        {% else %}
+        <div class="mb-2"><strong>本番に合格したら、ここで申告してください</strong></div>
+        <form method="post" action="{% url 'fe:pass_report' %}" class="d-flex align-items-end flex-wrap gap-2 m-0">
+            {% csrf_token %}
+            <div>
+                <label class="form-label small text-muted mb-1" for="{{ pass_form.passed_on.id_for_label }}">{{ pass_form.passed_on.label }}</label>
+                {{ pass_form.passed_on }}
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">合格を申告する</button>
+        </form>
+        <div class="small text-muted mt-2">合格者数に1人ぶん加わります。名前は表示されません。あとから取り消せます。</div>
+        {% endif %}
+    </div>
+
+    <!-- 科目・分類別 -->
+    {% for subject in summary.subjects %}
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-baseline mb-2">
+            <h3 class="h6 fw-bold mb-0">{{ subject.label }}</h3>
+            <span class="small text-muted">
+                のべ {{ subject.total }} 問
+                {% if subject.rate_percent is not None %}・正答率 {{ subject.rate_percent }}％{% endif %}
+            </span>
+        </div>
+
+        {% if subject.fields %}
+        <div class="row g-3 mb-2">
+            {% for field in subject.fields %}
+            <div class="col-12 col-md-4">
+                <div class="border rounded p-3">
+                    <div class="d-flex justify-content-between">
+                        <strong>{{ field.field_label }}</strong>
+                        <span>{{ field.total }} 問</span>
+                    </div>
+                    <div class="small text-muted">
+                        正答率 {% if field.rate_percent is not None %}{{ field.rate_percent }}％{% else %}—{% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <details>
+            <summary class="small" style="color:#2c5aa0; cursor:pointer;">分類別の のべ解答数を見る</summary>
+            <div class="table-responsive mt-2">
+                <table class="table table-sm align-middle">
+                    <thead>
+                    <tr class="small text-muted">
+                        <th>分類</th>
+                        <th class="text-end" style="width:12%;">のべ解答数</th>
+                        <th style="width:28%;">解答の割合</th>
+                        <th class="text-end" style="width:10%;">正答率</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in subject.rows %}
+                    <tr>
+                        <td>{{ row.category.label }}</td>
+                        <td class="text-end">{{ row.total }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress flex-grow-1" style="height:8px;">
+                                    <div class="progress-bar" role="progressbar"
+                                         style="width: {{ row.share_percent }}%; background-color:#2c5aa0;"></div>
+                                </div>
+                                <span class="small text-muted" style="min-width:3.5em; text-align:right;">{{ row.share_percent }}％</span>
+                            </div>
+                        </td>
+                        <td class="text-end">
+                            {% if row.rate_percent is not None %}{{ row.rate_percent }}％{% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    </div>
+    {% endfor %}
+
+    <div class="small text-muted">
+        全利用者の合計です。のべ解答数は問題を取り込み直しても減りません。
+        合格者数は本人の申告どおりで、本番の結果とは照合していません。
+    </div>
+</section>

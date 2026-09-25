@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
-                     Question, QuestionTemplate, StudySession)
+                     PassReport, Question, QuestionTemplate, StudySession)
 
 
 @admin.register(Category)
@@ -42,6 +42,12 @@ class CategoryProgressAdmin(admin.ModelAdmin):
 class DailyProgressAdmin(admin.ModelAdmin):
     list_display = ('user', 'date', 'answered', 'correct')
     date_hierarchy = 'date'
+
+
+@admin.register(PassReport)
+class PassReportAdmin(admin.ModelAdmin):
+    list_display = ('user', 'passed_on', 'reported_at')
+    date_hierarchy = 'passed_on'
 
 
 admin.site.register(StudySession)
