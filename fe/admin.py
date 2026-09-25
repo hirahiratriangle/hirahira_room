@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
-                     PassReport, Question, QuestionTemplate, StudySession)
+                     Learner, PassReport, Question, QuestionTemplate, StudySession)
 
 
 @admin.register(Category)
@@ -13,7 +13,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('__str__', 'owner', 'subject', 'category', 'topic', 'difficulty')
+    list_display = ('__str__', 'learner', 'subject', 'category', 'topic', 'difficulty')
     list_filter = ('subject', 'category', 'difficulty', 'is_active')
     search_fields = ('stem', 'topic')
     ordering = ('category__code', 'id')
@@ -27,27 +27,33 @@ class QuestionTemplateAdmin(admin.ModelAdmin):
 
 @admin.register(Attempt)
 class AttemptAdmin(admin.ModelAdmin):
-    list_display = ('user', 'question', 'category', 'is_correct', 'answered_at')
+    list_display = ('learner', 'question', 'category', 'is_correct', 'answered_at')
     list_filter = ('is_correct', 'category')
     date_hierarchy = 'answered_at'
 
 
 @admin.register(CategoryProgress)
 class CategoryProgressAdmin(admin.ModelAdmin):
-    list_display = ('user', 'category', 'subject', 'answered', 'correct', 'last_answered_at')
+    list_display = ('learner', 'category', 'subject', 'answered', 'correct', 'last_answered_at')
     list_filter = ('subject', 'category')
 
 
 @admin.register(DailyProgress)
 class DailyProgressAdmin(admin.ModelAdmin):
-    list_display = ('user', 'date', 'answered', 'correct')
+    list_display = ('learner', 'date', 'answered', 'correct')
     date_hierarchy = 'date'
 
 
 @admin.register(PassReport)
 class PassReportAdmin(admin.ModelAdmin):
-    list_display = ('user', 'passed_on', 'reported_at')
+    list_display = ('learner', 'passed_on', 'reported_at')
     date_hierarchy = 'passed_on'
+
+
+@admin.register(Learner)
+class LearnerAdmin(admin.ModelAdmin):
+    list_display = ('code', 'created_at')
+    search_fields = ('code',)
 
 
 admin.site.register(StudySession)

@@ -3,11 +3,13 @@
 分析の単位は試験要綱の出題範囲の分類。科目Aは中分類（1〜23）、科目Bは
 要綱が別に定める5項目（101〜105）で、両者は重ならない。苦手分野の把握・
 重点出題はすべてこの粒度で行う。分類は Category、出題は Question、解答履歴は
-Attempt が持つ。計算問題は QuestionTemplate から数値を振り直して
-Question を生成するため、固定問題とテンプレート問題を同じ導線で扱える。
+Attempt が持つ。成績も問題も Learner（本アプリの中の ID）ごとに持ち、
+hirahira_room のアカウントとは紐づけない。計算問題は QuestionTemplate から
+数値を振り直して Question を生成するため、固定問題とテンプレート問題を
+同じ導線で扱える。
 """
 
-from accounts.models import CustomUser
+from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Count, Q
 
@@ -15,6 +17,32 @@ from django.db.models import Count, Q
 SUBJECT_A = 'A'
 SUBJECT_B = 'B'
 SUBJECT_CHOICES = [(SUBJECT_A, '科目A'), (SUBJECT_B, '科目B')]
+
+
+class Learner(models.Model):
+    """本アプリの中の ID。成績も問題も、この ID ごとに持つ。
+
+    hirahira_room のアカウントとは紐づけない。ID は本人が決め、入力した人を
+    本人として扱う（合言葉などの確認はしない）。入った ID はブラウザの
+    セッションが覚えていて、ダッシュボードは /fe/<ID>/ で開く。
+    大文字小文字は区別せず、小文字にそろえて持つ。
+    """
+
+    code = models.CharField(
+        verbose_name='ID', max_length=30, unique=True,
+        validators=[RegexValidator(
+            r'^[a-z0-9_-]{3,30}$',
+            'ID は半角の英小文字・数字・「_」「-」で、3〜30文字にしてください。',
+        )],
+    )
+    created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE 学習者ID'
+        ordering = ['code']
+
+    def __str__(self):
+        return self.code
 
 
 class Category(models.Model):
@@ -95,9 +123,9 @@ class QuestionQuerySet(models.QuerySet):
             return self.filter(subject=subject)
         return self
 
-    def owned_by(self, user):
-        """その利用者の問題。問題はアカウントごとに持ち、他人の分は混ざらない。"""
-        return self.filter(owner=user)
+    def owned_by(self, learner):
+        """その ID の問題。問題は ID ごとに持ち、他人の分は混ざらない。"""
+        return self.filter(learner=learner)
 
 
 class Question(models.Model):
@@ -109,9 +137,9 @@ class Question(models.Model):
 
     DIFFICULTY_CHOICES = [(1, '基本'), (2, '標準'), (3, '応用')]
 
-    owner = models.ForeignKey(
-        CustomUser, verbose_name='所有者', on_delete=models.CASCADE,
-        related_name='fe_questions',
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='questions',
     )
     subject = models.CharField(
         verbose_name='科目', max_length=1, choices=SUBJECT_CHOICES, default=SUBJECT_A
@@ -146,7 +174,7 @@ class Question(models.Model):
     class Meta:
         verbose_name = verbose_name_plural = 'FE 問題'
         ordering = ['category__code', 'id']
-        indexes = [models.Index(fields=['owner', 'subject', 'category'])]
+        indexes = [models.Index(fields=['learner', 'subject', 'category'], name='fe_question_learner_subj_idx')]
 
     def __str__(self):
         return self.stem[:40]
@@ -186,8 +214,9 @@ class Attempt(models.Model):
     ここが消えても正答率や苦手分野の判定は失われない。
     """
 
-    user = models.ForeignKey(
-        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE, related_name='fe_attempts'
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='attempts',
     )
     question = models.ForeignKey(
         Question, verbose_name='問題', on_delete=models.CASCADE, related_name='attempts'
@@ -204,12 +233,12 @@ class Attempt(models.Model):
         verbose_name = verbose_name_plural = 'FE 解答ログ'
         ordering = ['-answered_at']
         indexes = [
-            models.Index(fields=['user', '-answered_at']),
-            models.Index(fields=['user', 'category']),
+            models.Index(fields=['learner', '-answered_at'], name='fe_attempt_learner_at_idx'),
+            models.Index(fields=['learner', 'category'], name='fe_attempt_learner_cat_idx'),
         ]
 
     def __str__(self):
-        return '{} {}'.format(self.user, '○' if self.is_correct else '×')
+        return '{} {}'.format(self.learner, '○' if self.is_correct else '×')
 
     @property
     def selected_label(self):
@@ -224,9 +253,9 @@ class CategoryProgress(models.Model):
     何問正解したか」は残す。苦手分野の判定と重点出題はここを見る。
     """
 
-    user = models.ForeignKey(
-        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
-        related_name='fe_progress',
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='progress',
     )
     category = models.ForeignKey(
         Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='progress'
@@ -244,22 +273,22 @@ class CategoryProgress(models.Model):
         ordering = ['category__code']
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'category', 'subject'], name='fe_unique_progress'
+                fields=['learner', 'category', 'subject'], name='fe_unique_progress'
             ),
         ]
 
     def __str__(self):
         return '{} {} {}/{}'.format(
-            self.user, self.category.name, self.correct, self.answered
+            self.learner, self.category.name, self.correct, self.answered
         )
 
 
 class DailyProgress(models.Model):
     """日ごとの解答数。学習の継続を見るための記録で、問題とは独立している。"""
 
-    user = models.ForeignKey(
-        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
-        related_name='fe_daily_progress',
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='daily_progress',
     )
     date = models.DateField(verbose_name='日付')
     answered = models.PositiveIntegerField(verbose_name='解答数', default=0)
@@ -269,11 +298,11 @@ class DailyProgress(models.Model):
         verbose_name = verbose_name_plural = 'FE 日別の学習記録'
         ordering = ['-date']
         constraints = [
-            models.UniqueConstraint(fields=['user', 'date'], name='fe_unique_daily_progress'),
+            models.UniqueConstraint(fields=['learner', 'date'], name='fe_unique_daily_progress'),
         ]
 
     def __str__(self):
-        return '{} {} {}問'.format(self.user, self.date, self.answered)
+        return '{} {} {}問'.format(self.learner, self.date, self.answered)
 
 
 class StudySession(models.Model):
@@ -292,8 +321,9 @@ class StudySession(models.Model):
         (MODE_CATEGORY, '分野を指定'),
     ]
 
-    user = models.OneToOneField(
-        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE, related_name='fe_session'
+    learner = models.OneToOneField(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='study_session',
     )
     mode = models.CharField(
         verbose_name='出題モード', max_length=10, choices=MODE_CHOICES, default=MODE_FOCUS
@@ -311,7 +341,7 @@ class StudySession(models.Model):
         verbose_name = verbose_name_plural = 'FE 出題設定'
 
     def __str__(self):
-        return '{} / {}'.format(self.user, self.get_mode_display())
+        return '{} / {}'.format(self.learner, self.get_mode_display())
 
 
 class LearningNote(models.Model):
@@ -319,11 +349,12 @@ class LearningNote(models.Model):
 
     問題は「解けるか」を測るものなので、断片的にしか説明できない。
     先にこちらを読んでから解くために、独立した教材として持つ。
-    問題と同じくアカウントごとで、JSON の一括差し替えで入れ替える。
+    問題と同じく ID ごとで、JSON の一括差し替えで入れ替える。
     """
 
-    owner = models.ForeignKey(
-        CustomUser, verbose_name='所有者', on_delete=models.CASCADE, related_name='fe_notes',
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='notes',
     )
     category = models.ForeignKey(
         Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='notes'
@@ -363,9 +394,9 @@ class LearningRound(models.Model):
     DEFAULT_MINUTES = 5
     QUESTION_COUNT = 10
 
-    user = models.ForeignKey(
-        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
-        related_name='fe_rounds',
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='rounds',
     )
     note = models.ForeignKey(
         LearningNote, verbose_name='読んだ解説', on_delete=models.SET_NULL,
@@ -388,7 +419,7 @@ class LearningRound(models.Model):
         ordering = ['-started_at']
 
     def __str__(self):
-        return '{} {:%Y-%m-%d %H:%M}'.format(self.user, self.started_at)
+        return '{} {:%Y-%m-%d %H:%M}'.format(self.learner, self.started_at)
 
     @property
     def total(self):
@@ -446,9 +477,9 @@ class PassReport(models.Model):
     1人1件。取り消せば行ごと消し、数えなくなる。
     """
 
-    user = models.OneToOneField(
-        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
-        related_name='fe_pass_report',
+    learner = models.OneToOneField(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='pass_report',
     )
     passed_on = models.DateField(verbose_name='合格した試験の受験日')
     reported_at = models.DateTimeField(verbose_name='申告日時', auto_now_add=True)
@@ -458,4 +489,4 @@ class PassReport(models.Model):
         ordering = ['-passed_on']
 
     def __str__(self):
-        return '{} {}'.format(self.user, self.passed_on)
+        return '{} {}'.format(self.learner, self.passed_on)

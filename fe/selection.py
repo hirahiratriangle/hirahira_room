@@ -44,11 +44,11 @@ REVIEW_RATIO = 0.4
 REVIEW_WINDOW = 60
 
 
-def _category_weights(user, subject, mode):
+def _category_weights(learner, subject, mode):
     """モードに応じた中分類ごとの抽選重みを返す。"""
     from .models import StudySession
 
-    rows = category_stats(user, subject=subject)
+    rows = category_stats(learner, subject=subject)
     available = {r['category'].id: r for r in rows if r['question_count'] > 0}
 
     weights = {}
@@ -80,10 +80,10 @@ def _weighted_choice(weights):
     return random.choices(keys, weights=[weights[k] for k in keys], k=1)[0]
 
 
-def _last_result_map(user, question_ids):
+def _last_result_map(learner, question_ids):
     """問題ごとの「直近の解答が正解だったか」「最終解答日時」「落とした回数」。"""
     rows = (
-        Attempt.objects.filter(user=user, question_id__in=question_ids)
+        Attempt.objects.filter(learner=learner, question_id__in=question_ids)
         .values('question_id')
         .annotate(last_at=Max('answered_at'), misses=Count('id', filter=Q(is_correct=False)))
     )
@@ -93,7 +93,7 @@ def _last_result_map(user, question_ids):
     misses = {r['question_id']: r['misses'] for r in rows}
 
     latest = Attempt.objects.filter(
-        user=user, question_id__in=list(last_at), answered_at__in=list(last_at.values())
+        learner=learner, question_id__in=list(last_at), answered_at__in=list(last_at.values())
     ).values('question_id', 'is_correct', 'answered_at')
 
     result = {}
@@ -106,10 +106,10 @@ def _last_result_map(user, question_ids):
     return result
 
 
-def _recent_answer_times(user):
+def _recent_answer_times(learner):
     """直近の解答時刻を古い順に。「何問前か」を数えるものさしになる。"""
     times = list(
-        Attempt.objects.filter(user=user)
+        Attempt.objects.filter(learner=learner)
         .order_by('-answered_at')
         .values_list('answered_at', flat=True)[:REVIEW_WINDOW]
     )
@@ -137,10 +137,10 @@ def _due_for_review(wrong, history, recent_times):
     return due
 
 
-def _pick_from_category(user, category, subject, exclude_ids):
+def _pick_from_category(learner, category, subject, exclude_ids):
     """中分類の中から1問を選ぶ。未出題 → 前回不正解 → 久しく解いていない順。"""
     questions = list(
-        Question.objects.active().for_subject(subject).owned_by(user)
+        Question.objects.active().for_subject(subject).owned_by(learner)
         .filter(category=category).exclude(id__in=exclude_ids)
     )
     # 計算問題のテンプレートは科目A用なので，科目Bのときは使わない
@@ -149,7 +149,7 @@ def _pick_from_category(user, category, subject, exclude_ids):
         if subject != Question.SUBJECT_B else []
     )
 
-    history = _last_result_map(user, [q.id for q in questions]) if questions else {}
+    history = _last_result_map(learner, [q.id for q in questions]) if questions else {}
     unseen = [q for q in questions if q.id not in history]
     wrong = [q for q in questions if history.get(q.id, {}).get('is_correct') is False]
     stale = [q for q in questions if history.get(q.id, {}).get('is_correct') is True]
@@ -157,7 +157,7 @@ def _pick_from_category(user, category, subject, exclude_ids):
 
     # 落とした問題は、間隔をあけてから未出題より先に戻す。未出題を出し切るまで
     # 復習しない作りだと、まちがえた1問がいつまでも放置される。
-    due = _due_for_review(wrong, history, _recent_answer_times(user)) if wrong else []
+    due = _due_for_review(wrong, history, _recent_answer_times(learner)) if wrong else []
     if due and (not unseen or random.random() < REVIEW_RATIO):
         # 期限を過ぎているものほど先に戻す
         overdue = max(d[1] for d in due)
@@ -166,7 +166,7 @@ def _pick_from_category(user, category, subject, exclude_ids):
 
     # 未出題の固定問題が無い中分類では、テンプレートがあれば新しい数値で作る
     if generators and (not unseen or random.random() < TEMPLATE_RATIO):
-        question = generate_question(random.choice(generators), user)
+        question = generate_question(random.choice(generators), learner)
         if question and question.id not in exclude_ids:
             return question, 'テンプレートから新しい数値で生成'
 
@@ -182,16 +182,16 @@ def _pick_from_category(user, category, subject, exclude_ids):
     return None, None
 
 
-def _pick_review(user, subject, exclude_ids):
+def _pick_review(learner, subject, exclude_ids):
     """直近の解答が不正解だった問題だけを対象にする復習モード。"""
     answered_ids = list(
-        Attempt.objects.filter(user=user)
+        Attempt.objects.filter(learner=learner)
         .values_list('question_id', flat=True).distinct()
     )
     if not answered_ids:
         return None, None
 
-    history = _last_result_map(user, answered_ids)
+    history = _last_result_map(learner, answered_ids)
     wrong_ids = [
         qid for qid, row in history.items()
         if not row['is_correct'] and qid not in exclude_ids
@@ -200,18 +200,18 @@ def _pick_review(user, subject, exclude_ids):
         return None, None
 
     questions = list(
-        Question.objects.active().for_subject(subject).owned_by(user)
+        Question.objects.active().for_subject(subject).owned_by(learner)
         .filter(id__in=wrong_ids)
     )
     if not questions:
         return None, None
     # 苦手な中分類の問題を優先する
-    rows = {r['category'].id: r for r in category_stats(user, subject=subject)}
+    rows = {r['category'].id: r for r in category_stats(learner, subject=subject)}
     weights = [max(0.1, rows[q.category_id]['weakness']) for q in questions]
     return random.choices(questions, weights=weights, k=1)[0], '前回まちがえた問題'
 
 
-def pick_question(user, session, exclude_ids=()):
+def pick_question(learner, session, exclude_ids=()):
     """出題する1問と、選んだ理由を返す。出せる問題が無ければ (None, None)。"""
     from .models import StudySession
 
@@ -221,24 +221,24 @@ def pick_question(user, session, exclude_ids=()):
 
     if mode == StudySession.MODE_CATEGORY and session.category_id:
         question, reason = _pick_from_category(
-            user, session.category, subject, exclude_ids
+            learner, session.category, subject, exclude_ids
         )
         if question:
             return question, reason
         # 指定分野を解き切ったら、除外を解いてもう一度
-        return _pick_from_category(user, session.category, subject, [])
+        return _pick_from_category(learner, session.category, subject, [])
 
     if mode == StudySession.MODE_REVIEW:
-        question, reason = _pick_review(user, subject, exclude_ids)
+        question, reason = _pick_review(learner, subject, exclude_ids)
         if question:
             return question, reason
         # 復習対象が無ければ通常の重点出題にフォールバックする
         mode = StudySession.MODE_FOCUS
 
-    weights, rows = _category_weights(user, subject, mode)
+    weights, rows = _category_weights(learner, subject, mode)
     if not weights and mode == StudySession.MODE_WEAK:
         # まだ苦手が定まっていない場合は重点出題に切り替える
-        weights, rows = _category_weights(user, subject, StudySession.MODE_FOCUS)
+        weights, rows = _category_weights(learner, subject, StudySession.MODE_FOCUS)
 
     tried = set()
     while weights:
@@ -247,7 +247,7 @@ def pick_question(user, session, exclude_ids=()):
             break
         tried.add(category_id)
         category = rows[category_id]['category']
-        question, reason = _pick_from_category(user, category, subject, exclude_ids)
+        question, reason = _pick_from_category(learner, category, subject, exclude_ids)
         if question:
             if mode in (StudySession.MODE_FOCUS, StudySession.MODE_WEAK) and rows[category_id]['is_weak']:
                 reason = '苦手分野のため重点出題'
@@ -256,5 +256,5 @@ def pick_question(user, session, exclude_ids=()):
 
     # すべて出題済みなら除外を解いて選び直す
     if exclude_ids:
-        return pick_question(user, session, exclude_ids=[])
+        return pick_question(learner, session, exclude_ids=[])
     return None, None

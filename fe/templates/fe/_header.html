@@ -2,6 +2,7 @@
 全ページ共通のヘッダー。どのページからでも同じ場所へ戻れるようにする。
 page_title に見出し、current に居場所（index / quiz / learn / stats /
 history / manage）を渡す。sub があれば見出しの右に小さく添える。
+入っている ID は request.fe_learner（fe.views.LearnerRequiredMixin が載せる）。
 {% endcomment %}
 <header style="background-color: #2c5aa0; padding-top: 5rem;">
     <div class="container px-5 py-4">
@@ -11,7 +12,7 @@ history / manage）を渡す。sub があれば見出しの右に小さく添え
                 {% if sub %}<span class="small" style="color:#c3d6ee;">{{ sub }}</span>{% endif %}
             </div>
             <nav class="small d-flex flex-wrap gap-3">
-                {% if current != 'index' %}<a class="text-white text-decoration-none" href="{% url 'fe:index' %}">ダッシュボード</a>
+                {% if current != 'index' %}<a class="text-white text-decoration-none" href="{% if request.fe_learner %}{% url 'fe:dashboard' request.fe_learner.code %}{% else %}{% url 'fe:index' %}{% endif %}">ダッシュボード</a>
                 {% else %}<span style="color:#93aecd;">ダッシュボード</span>{% endif %}
 
                 {% if current != 'quiz' %}<a class="text-white text-decoration-none" href="{% url 'fe:quiz' %}">1問1答</a>
@@ -28,6 +29,8 @@ history / manage）を渡す。sub があれば見出しの右に小さく添え
 
                 {% if current != 'manage' %}<a class="text-white text-decoration-none" href="{% url 'fe:manage_list' %}">自分の問題</a>
                 {% else %}<span style="color:#93aecd;">自分の問題</span>{% endif %}
+
+                {% if request.fe_learner %}{% include 'fe/_learner_badge.html' %}{% endif %}
             </nav>
         </div>
     </div>

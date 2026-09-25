@@ -30,11 +30,11 @@ WEAK_MIN_ATTEMPTS = 3
 RECENT_DAYS = 7
 
 
-def record_progress(user, question, is_correct):
+def record_progress(learner, question, is_correct):
     """解答を理解度に反映する。問題が消えても残る記録はここだけ。"""
     now = timezone.now()
     progress, _ = CategoryProgress.objects.get_or_create(
-        user=user, category=question.category, subject=question.subject
+        learner=learner, category=question.category, subject=question.subject
     )
     CategoryProgress.objects.filter(pk=progress.pk).update(
         answered=F('answered') + 1,
@@ -43,7 +43,7 @@ def record_progress(user, question, is_correct):
     )
 
     daily, _ = DailyProgress.objects.get_or_create(
-        user=user, date=timezone.localdate(now)
+        learner=learner, date=timezone.localdate(now)
     )
     DailyProgress.objects.filter(pk=daily.pk).update(
         answered=F('answered') + 1,
@@ -68,9 +68,9 @@ def smoothed_rate(correct, total):
     return (correct + SMOOTHING_STRENGTH * SMOOTHING_PRIOR) / (total + SMOOTHING_STRENGTH)
 
 
-def category_stats(user, subject=None):
+def category_stats(learner, subject=None):
     """中分類ごとの成績を、要綱の中分類順に返す。"""
-    progress = CategoryProgress.objects.filter(user=user)
+    progress = CategoryProgress.objects.filter(learner=learner)
     if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
         progress = progress.filter(subject=subject)
 
@@ -86,7 +86,7 @@ def category_stats(user, subject=None):
 
     available = {
         row['category']: row['n']
-        for row in Question.objects.active().for_subject(subject).owned_by(user)
+        for row in Question.objects.active().for_subject(subject).owned_by(learner)
         .values('category').annotate(n=Count('id'))
     }
 
@@ -113,7 +113,7 @@ def category_stats(user, subject=None):
     return rows
 
 
-def category_options(user):
+def category_options(learner):
     """出題設定の「分野」に並べる選択肢。
 
     分類は科目ごとに別なので、画面では科目に合わせて出し分ける。
@@ -123,7 +123,7 @@ def category_options(user):
     """
     counts = {}
     for row in (
-        Question.objects.active().owned_by(user)
+        Question.objects.active().owned_by(learner)
         .values('category', 'subject').annotate(n=Count('id'))
     ):
         counts.setdefault(row['category'], {})[row['subject']] = row['n']
@@ -176,22 +176,22 @@ def field_stats(rows):
     return result
 
 
-def overall_stats(user):
+def overall_stats(learner):
     """全体成績と、直近の調子。"""
-    totals = CategoryProgress.objects.filter(user=user).aggregate(
+    totals = CategoryProgress.objects.filter(learner=learner).aggregate(
         total=Sum('answered'), correct=Sum('correct')
     )
     total = totals['total'] or 0
     correct = totals['correct'] or 0
 
     since = timezone.localdate() - timedelta(days=RECENT_DAYS - 1)
-    recent = DailyProgress.objects.filter(user=user, date__gte=since).aggregate(
+    recent = DailyProgress.objects.filter(learner=learner, date__gte=since).aggregate(
         total=Sum('answered'), correct=Sum('correct')
     )
     recent_total = recent['total'] or 0
     recent_correct = recent['correct'] or 0
 
-    study_days = DailyProgress.objects.filter(user=user, answered__gt=0).count()
+    study_days = DailyProgress.objects.filter(learner=learner, answered__gt=0).count()
 
     return {
         'total': total,
@@ -210,13 +210,13 @@ def overall_stats(user):
     }
 
 
-def daily_counts(user, days=14):
+def daily_counts(learner, days=14):
     """直近の日別解答数（学習の継続を見るため）。"""
     today = timezone.localdate()
     start = today - timedelta(days=days - 1)
     by_date = {
         row.date: row
-        for row in DailyProgress.objects.filter(user=user, date__gte=start)
+        for row in DailyProgress.objects.filter(learner=learner, date__gte=start)
     }
     return [
         {
@@ -229,7 +229,7 @@ def daily_counts(user, days=14):
 
 
 def site_summary():
-    """全利用者を合わせた集計。のべ解答数・分類別の解答数・合格者数。
+    """全 ID を合わせた集計。のべ解答数・分類別の解答数・合格者数。
 
     解答ログ（Attempt）は問題の差し替えで消えるので、のべ数は
     消えない CategoryProgress から数える。個人が特定できる値は返さない。
@@ -281,7 +281,7 @@ def site_summary():
         'rate_percent': round(correct / total * 100) if total else None,
         'learners': (
             CategoryProgress.objects.filter(answered__gt=0)
-            .values('user').distinct().count()
+            .values('learner').distinct().count()
         ),
         'passers': PassReport.objects.count(),
         'subjects': subjects,

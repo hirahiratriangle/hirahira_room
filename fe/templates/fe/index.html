@@ -14,6 +14,7 @@
                 <a class="text-white text-decoration-none" href="{% url 'fe:stats' %}">分野別正答率</a>
                 <a class="text-white text-decoration-none" href="{% url 'fe:history' %}">履歴</a>
                 <a class="text-white text-decoration-none" href="{% url 'fe:manage_list' %}">自分の問題</a>
+                {% include 'fe/_learner_badge.html' %}
             </nav>
         </div>
     </div>

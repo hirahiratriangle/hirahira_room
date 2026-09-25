@@ -17,7 +17,7 @@ from .stats import category_stats
 
 
 @transaction.atomic
-def start_round(user, session, minutes, count=None, note=None):
+def start_round(learner, session, minutes, count=None, note=None):
     """読む解説を1本選び、その分野から出題ぶんを取ってラウンドを作る。
 
     note を渡せばそれを読む。渡さなければ苦手な分野から選ぶ。
@@ -26,19 +26,19 @@ def start_round(user, session, minutes, count=None, note=None):
     count = count or LearningRound.QUESTION_COUNT
 
     if note is None:
-        note = pick_note(user, session.subject)
+        note = pick_note(learner, session.subject)
     elif note.category.subject != session.subject:
         # 別の科目の解説を指定されても、その科目の問題は出せない
         return None
     if note is None:
         return None
 
-    questions = questions_for_note(user, note, session.subject, count)
+    questions = questions_for_note(learner, note, session.subject, count)
     if not questions:
         return None
 
     round_ = LearningRound.objects.create(
-        user=user, note=note, subject=session.subject, reading_seconds=minutes * 60,
+        learner=learner, note=note, subject=session.subject, reading_seconds=minutes * 60,
     )
     order = list(questions)
     random.shuffle(order)
@@ -49,7 +49,7 @@ def start_round(user, session, minutes, count=None, note=None):
     return round_
 
 
-def pick_note(user, subject):
+def pick_note(learner, subject):
     """次に読む解説を選ぶ。苦手な分野のものを優先する。
 
     同じ分野に解説が複数あるときは、まだ読んでいないものから出す。
@@ -57,7 +57,7 @@ def pick_note(user, subject):
     # 分類は科目ごとに別なので、解説も科目で絞る。絞らないと、科目Aの回で
     # 科目Bの解説を読まされ、そのあと出題できる問題が無いことになる。
     notes = list(
-        LearningNote.objects.filter(owner=user, category__subject=subject)
+        LearningNote.objects.filter(learner=learner, category__subject=subject)
         .select_related('category')
     )
     if not notes:
@@ -65,11 +65,11 @@ def pick_note(user, subject):
 
     weakness = {
         row['category'].id: row['weakness']
-        for row in category_stats(user, subject=subject)
+        for row in category_stats(learner, subject=subject)
     }
     read_counts = {}
     for note in notes:
-        read_counts[note.id] = note.rounds.filter(user=user).count()
+        read_counts[note.id] = note.rounds.filter(learner=learner).count()
 
     fewest = min(read_counts.values())
     fresh = [n for n in notes if read_counts[n.id] == fewest]
@@ -78,22 +78,22 @@ def pick_note(user, subject):
     return random.choices(fresh, weights=weights, k=1)[0]
 
 
-def note_menu(user, subject):
+def note_menu(learner, subject):
     """学習対象の一覧。中分類でまとめ、その下に小分類（解説）を並べる。
 
     どれを選ぶか決められるように、中分類の正答率と、解説ごとの学習回数を添える。
     """
     notes = list(
-        LearningNote.objects.filter(owner=user, category__subject=subject)
+        LearningNote.objects.filter(learner=learner, category__subject=subject)
         .select_related('category')
     )
     if not notes:
         return []
 
-    stats = {row['category'].id: row for row in category_stats(user, subject=subject)}
+    stats = {row['category'].id: row for row in category_stats(learner, subject=subject)}
     counts = {
         row['note']: row['n']
-        for row in LearningRound.objects.filter(user=user, note__isnull=False)
+        for row in LearningRound.objects.filter(learner=learner, note__isnull=False)
         .values('note').annotate(n=Count('id'))
     }
 
@@ -111,14 +111,14 @@ def note_menu(user, subject):
     return sorted(groups.values(), key=lambda g: g['category'].code)
 
 
-def questions_for_note(user, note, subject, count):
+def questions_for_note(learner, note, subject, count):
     """解説が扱う範囲から出題する問題を選ぶ。
 
     小分類が一致するものを優先し、足りなければ同じ中分類から補う。
     読んだ内容と出題がずれないようにするため。
     """
     pool = (
-        Question.objects.active().for_subject(subject).owned_by(user)
+        Question.objects.active().for_subject(subject).owned_by(learner)
         .filter(category=note.category).select_related('category')
     )
     same_topic = [q for q in pool if note.topic and q.topic == note.topic]

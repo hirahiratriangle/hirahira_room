@@ -1,0 +1,6 @@
+{% comment %}入っている ID と、ID から出るボタン。ヘッダーの nav に並べる。{% endcomment %}
+<form method="post" action="{% url 'fe:leave' %}" class="d-inline-flex align-items-center gap-2 m-0">
+    {% csrf_token %}
+    <span style="color:#c3d6ee;">ID: <strong class="text-white">{{ request.fe_learner.code }}</strong></span>
+    <button type="submit" class="btn btn-link btn-sm p-0 text-white small" style="text-decoration: underline;">切り替える</button>
+</form>

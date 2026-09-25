@@ -5,7 +5,9 @@ from . import views
 app_name = 'fe'
 
 urlpatterns = [
+    # 入口。ID を入力して入る（入っていれば自分のダッシュボードへ送る）
     path('', views.IndexView.as_view(), name='index'),
+    path('leave/', views.LeaveView.as_view(), name='leave'),
     path('quiz/', views.QuizView.as_view(), name='quiz'),
     path('quiz/settings/', views.QuizSettingsView.as_view(), name='quiz_settings'),
     # 学習モード（先に解説を読み、そのあと同じ範囲を解く）
@@ -24,4 +26,7 @@ urlpatterns = [
     path('manage/', views.ManageListView.as_view(), name='manage_list'),
     path('manage/upload/', views.QuestionUploadView.as_view(), name='manage_upload'),
     path('manage/export/', views.QuestionExportView.as_view(), name='manage_export'),
+
+    # ダッシュボード（マイページ）。ほかの画面の URL と重ならないよう最後に置く
+    path('<str:code>/', views.DashboardView.as_view(), name='dashboard'),
 ]

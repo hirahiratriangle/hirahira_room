@@ -1,6 +1,6 @@
 """問題 JSON の検証と一括取り込み。
 
-問題はアカウントごとに持ち、JSON の取り込みが唯一の登録経路になる。
+問題は ID ごとに持ち、JSON の取り込みが唯一の登録経路になる。
 取り込みは常に一括差し替え。既存の問題との一致・不一致は見ず、
 ファイルの内容をそのままその人の問題集にする。
 
@@ -137,7 +137,7 @@ def validate(payload):
 
 
 @transaction.atomic
-def replace_all(user, payload):
+def replace_all(learner, payload):
     """その人の問題集と技術解説を、渡された内容にそっくり入れ替える。
 
     古い問題は削除し、それに紐づく解答履歴も一緒に消える。分野別の正答率は
@@ -147,7 +147,7 @@ def replace_all(user, payload):
     records = payload['questions']
     removed, _ = (
         Question.objects
-        .filter(owner=user, template__isnull=True)
+        .filter(learner=learner, template__isnull=True)
         .delete()
     )
 
@@ -155,10 +155,10 @@ def replace_all(user, payload):
 
     # 技術解説も同じタイミングで入れ替える。問題だけの JSON を取り込んだ
     # ときに前の解説だけ残ると、問題と噛み合わない教材が居座るため。
-    LearningNote.objects.filter(owner=user).delete()
+    LearningNote.objects.filter(learner=learner).delete()
     LearningNote.objects.bulk_create([
         LearningNote(
-            owner=user,
+            learner=learner,
             category=categories[note['category']],
             topic=note.get('topic', ''),
             title=note['title'],
@@ -171,7 +171,7 @@ def replace_all(user, payload):
     created = []
     for record in records:
         created.append(Question(
-            owner=user,
+            learner=learner,
             subject=record.get('subject', Question.SUBJECT_A),
             category=categories[record['category']],
             topic=record.get('topic', ''),
@@ -187,7 +187,7 @@ def replace_all(user, payload):
     return len(created), removed, len(payload['notes'])
 
 
-def export_records(user, subject=None):
+def export_records(learner, subject=None):
     """その人の問題と技術解説を、取り込みと同じ形式で書き出す。
 
     取り込みは解説も一括で差し替えるので、問題だけを書き出すと、
@@ -197,8 +197,8 @@ def export_records(user, subject=None):
     subject を指定すると、その科目のぶんだけを出す。取り込み直せば
     もう一方の科目は消えるので、控えを取るなら指定しない。
     """
-    questions = Question.objects.filter(owner=user, template__isnull=True, is_active=True)
-    notes = LearningNote.objects.filter(owner=user)
+    questions = Question.objects.filter(learner=learner, template__isnull=True, is_active=True)
+    notes = LearningNote.objects.filter(learner=learner)
     if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
         questions = questions.filter(subject=subject)
         # 分類が科目ごとに別なので、解説もその科目のものだけになる

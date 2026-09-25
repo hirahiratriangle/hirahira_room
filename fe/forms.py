@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from .importer import ImportError_, parse, validate
+from .models import Learner
 
 # 上限は設定に一本化してある。Django 側の上限とずれないようにするため。
 MAX_UPLOAD_BYTES = settings.FE_MAX_UPLOAD_BYTES
@@ -62,3 +63,47 @@ class PassReportForm(forms.Form):
         if passed_on > timezone.localdate():
             raise forms.ValidationError('受験日が未来になっています。')
         return passed_on
+
+
+# /fe/ 直下のほかの画面と同じ名前は、ダッシュボードの URL（/fe/<ID>/）と
+# ぶつかるので ID にできない。
+RESERVED_CODES = {'quiz', 'learn', 'stats', 'history', 'pass', 'manage', 'leave'}
+
+
+class LearnerForm(forms.Form):
+    """ID の入力。入るときは既にある ID、作るときはまだ無い ID を受け付ける。
+
+    打ち間違えた ID で新しく作ってしまわないよう、「入る」と「作る」を分ける。
+    """
+
+    code = forms.CharField(
+        label='ID', max_length=30,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 'autocomplete': 'username',
+            'autocapitalize': 'none', 'spellcheck': 'false',
+        }),
+        help_text='半角の英小文字・数字・「_」「-」で、3〜30文字。',
+    )
+
+    def __init__(self, *args, creating=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.creating = creating
+        self.learner = None
+
+    def clean_code(self):
+        code = self.cleaned_data['code'].strip().lower()
+        for validator in Learner._meta.get_field('code').validators:
+            validator(code)
+        exists = Learner.objects.filter(code=code).first()
+        if self.creating:
+            if code in RESERVED_CODES:
+                raise forms.ValidationError('この ID は使えません。別の ID にしてください。')
+            if exists:
+                raise forms.ValidationError('その ID は既に使われています。')
+        else:
+            if exists is None:
+                raise forms.ValidationError(
+                    'その ID はまだありません。初めてなら「新しく作る」を押してください。'
+                )
+            self.learner = exists
+        return code

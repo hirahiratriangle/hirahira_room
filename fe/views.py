@@ -2,6 +2,10 @@
 
 出題は 1 問 1 答。GET で 1 問出し，POST で採点してその場で解説を出す。
 出題する問題の選定は fe.selection，成績の集計は fe.stats に分けてある。
+
+成績も問題も Learner（本アプリの中の ID）ごとに持つ。/fe/ で ID を入力すると
+セッションが覚え、以後の画面はその ID の分を出す。ダッシュボードだけは
+/fe/<ID>/ に置き、ほかの ID のものは開けない（404）。
 """
 
 import logging
@@ -12,17 +16,17 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views import generic
 
 from .exam import EXAM, build_prompt
-from .forms import PassReportForm, QuestionUploadForm
+from .forms import LearnerForm, PassReportForm, QuestionUploadForm
 from .importer import export_records, replace_all
 from .learning import current_item, grade, note_menu, start_round
-from .models import (Attempt, Category, CategoryProgress, LearningNote,
+from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
                      LearningRound, PassReport, Question, QuestionTemplate,
                      StudySession)
 from .selection import pick_question
@@ -37,49 +41,137 @@ RECENT_LIMIT = 12
 SESSION_RECENT = 'fe_recent_question_ids'
 SESSION_PENDING = 'fe_pending_question_id'
 SESSION_SHOWN_AT = 'fe_question_shown_at'
+# 入っている ID。hirahira_room のアカウントとは別に、ブラウザのセッションで持つ。
+SESSION_LEARNER = 'fe_learner_id'
 
 
-def _get_study_session(user):
-    session, _ = StudySession.objects.get_or_create(user=user)
+def _get_study_session(learner):
+    session, _ = StudySession.objects.get_or_create(learner=learner)
     return session
 
 
-class IndexView(LoginRequiredMixin, generic.TemplateView):
-    """ダッシュボード。今の実力と，次に何をやるべきかを一目で分かるようにする。"""
+def _enter(request, learner):
+    """その ID で入る。前の ID の出題途中の状態は持ち越さない。"""
+    for key in (SESSION_RECENT, SESSION_PENDING, SESSION_SHOWN_AT):
+        request.session.pop(key, None)
+    request.session[SESSION_LEARNER] = learner.pk
+
+
+def current_learner(request):
+    """セッションが覚えている ID。入っていなければ None。"""
+    pk = request.session.get(SESSION_LEARNER)
+    if pk is None:
+        return None
+    learner = Learner.objects.filter(pk=pk).first()
+    if learner is None:
+        request.session.pop(SESSION_LEARNER, None)
+    return learner
+
+
+class LearnerRequiredMixin(LoginRequiredMixin):
+    """ID で入っている人向けの画面。入っていなければ ID の入力へ戻す。
+
+    入っている ID は self.learner に置く。ヘッダーに ID を出すため、
+    request.fe_learner にも載せておく。
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            self.learner = current_learner(request)
+            if self.learner is None:
+                return redirect('fe:index')
+            request.fe_learner = self.learner
+        return super().dispatch(request, *args, **kwargs)
+
+
+def dashboard_url(learner):
+    return reverse('fe:dashboard', args=[learner.code])
+
+
+class IndexView(LoginRequiredMixin, generic.FormView):
+    """アプリの入口。ID で入るか、新しく作る。
+
+    入っていれば、そのまま自分のダッシュボードへ送る。
+    """
+
+    template_name = 'fe/enter.html'
+    form_class = LearnerForm
+
+    def get(self, request, *args, **kwargs):
+        learner = current_learner(request)
+        if learner is not None:
+            return redirect(dashboard_url(learner))
+        return super().get(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['creating'] = self.request.POST.get('action') == 'create'
+        return kwargs
+
+    def form_valid(self, form):
+        if form.creating:
+            learner = Learner.objects.create(code=form.cleaned_data['code'])
+            messages.success(self.request, 'ID「{}」を作りました。'.format(learner.code))
+        else:
+            learner = form.learner
+        _enter(self.request, learner)
+        return redirect(dashboard_url(learner))
+
+
+class LeaveView(LoginRequiredMixin, generic.View):
+    """ID から出る。別の ID で入り直すときに使う。"""
+
+    def post(self, request, *args, **kwargs):
+        for key in (SESSION_LEARNER, SESSION_RECENT, SESSION_PENDING, SESSION_SHOWN_AT):
+            request.session.pop(key, None)
+        return redirect('fe:index')
+
+
+class DashboardView(LearnerRequiredMixin, generic.TemplateView):
+    """ダッシュボード（マイページ）。今の実力と，次に何をやるべきかを一目で分かるようにする。
+
+    URL の ID は、いま入っている ID のときだけ開ける。ほかの ID なら 404。
+    """
 
     template_name = 'fe/index.html'
 
+    def get(self, request, code, *args, **kwargs):
+        if code.lower() != self.learner.code:
+            raise Http404
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
+        learner = self.learner
+        context['learner'] = learner
 
-        rows = category_stats(user)
-        context['overall'] = overall_stats(user)
+        rows = category_stats(learner)
+        context['overall'] = overall_stats(learner)
         context['fields'] = field_stats(rows)
         context['weak'] = weak_categories(rows, limit=5)
         context['untouched'] = [r for r in rows if r['is_untouched'] and r['question_count']]
-        context['study_session'] = _get_study_session(user)
+        context['study_session'] = _get_study_session(learner)
         # 出題設定のフォームを他の画面と共有しているので、分野の選択肢も渡す
-        context['categories'] = category_options(user)
-        context['daily'] = daily_counts(user, days=14)
+        context['categories'] = category_options(learner)
+        context['daily'] = daily_counts(learner, days=14)
         context['exam'] = EXAM
-        context['question_total'] = Question.objects.active().owned_by(user).filter(
+        context['question_total'] = Question.objects.active().owned_by(learner).filter(
             template__isnull=True
         ).count()
         context['template_total'] = QuestionTemplate.objects.filter(is_active=True).count()
         context['max_daily'] = max([d['total'] for d in context['daily']] + [1])
-        # 全利用者を合わせた集計と、自分の合格申告
+        # 全 ID を合わせた集計と、自分の合格申告
         context['summary'] = site_summary()
-        context['my_report'] = PassReport.objects.filter(user=user).first()
+        context['my_report'] = PassReport.objects.filter(learner=learner).first()
         context['pass_form'] = PassReportForm()
         return context
 
 
-class QuizSettingsView(LoginRequiredMixin, generic.View):
+class QuizSettingsView(LearnerRequiredMixin, generic.View):
     """出題モード・科目・分野の変更。"""
 
     def post(self, request, *args, **kwargs):
-        session = _get_study_session(request.user)
+        session = _get_study_session(self.learner)
         mode = request.POST.get('mode')
         subject = request.POST.get('subject')
         category_code = request.POST.get('category')
@@ -107,24 +199,24 @@ class QuizSettingsView(LoginRequiredMixin, generic.View):
         # ダッシュボードから変えたときは、そのまま戻して結果を確かめられるようにする。
         # 演習画面からなら、次の問題へ進む。
         if request.POST.get('next') == 'index':
-            return redirect('fe:index')
+            return redirect(dashboard_url(self.learner))
         return redirect('fe:quiz')
 
 
-class QuizView(LoginRequiredMixin, generic.View):
+class QuizView(LearnerRequiredMixin, generic.View):
     """1 問 1 答の出題と採点。"""
 
     template_name = 'fe/quiz.html'
 
     def get(self, request, *args, **kwargs):
-        study_session = _get_study_session(request.user)
+        study_session = _get_study_session(self.learner)
         recent = request.session.get(SESSION_RECENT, [])
-        question, reason = pick_question(request.user, study_session, exclude_ids=recent)
+        question, reason = pick_question(self.learner, study_session, exclude_ids=recent)
 
         if question is None:
             return render(request, self.template_name, {
                 'study_session': study_session,
-                'categories': category_options(request.user),
+                'categories': category_options(self.learner),
                 'no_question': True,
             })
 
@@ -135,12 +227,12 @@ class QuizView(LoginRequiredMixin, generic.View):
             'question': question,
             'reason': reason,
             'study_session': study_session,
-            'categories': category_options(request.user),
-            'progress': self._progress(request.user, question.category),
+            'categories': category_options(self.learner),
+            'progress': self._progress(self.learner, question.category),
         })
 
     def post(self, request, *args, **kwargs):
-        study_session = _get_study_session(request.user)
+        study_session = _get_study_session(self.learner)
         pending_id = request.session.get(SESSION_PENDING)
         question_id = request.POST.get('question_id')
 
@@ -149,7 +241,10 @@ class QuizView(LoginRequiredMixin, generic.View):
             messages.info(request, 'その問題は既に解答済みです。次の問題を表示します。')
             return redirect('fe:quiz')
 
-        question = Question.objects.filter(id=pending_id).select_related('category').first()
+        question = (
+            Question.objects.owned_by(self.learner).filter(id=pending_id)
+            .select_related('category').first()
+        )
         if question is None:
             return redirect('fe:quiz')
 
@@ -159,8 +254,8 @@ class QuizView(LoginRequiredMixin, generic.View):
             return render(request, self.template_name, {
                 'question': question,
                 'study_session': study_session,
-                'categories': category_options(request.user),
-                'progress': self._progress(request.user, question.category),
+                'categories': category_options(self.learner),
+                'progress': self._progress(self.learner, question.category),
             })
 
         selected = int(selected)
@@ -177,7 +272,7 @@ class QuizView(LoginRequiredMixin, generic.View):
                 elapsed_ms = None
 
         Attempt.objects.create(
-            user=request.user,
+            learner=self.learner,
             question=question,
             category=question.category,
             selected_index=selected,
@@ -185,7 +280,7 @@ class QuizView(LoginRequiredMixin, generic.View):
             elapsed_ms=elapsed_ms,
         )
         # 問題が入れ替わっても残る記録。分野別の正答率と苦手判定はこちらを見る。
-        record_progress(request.user, question, is_correct)
+        record_progress(self.learner, question, is_correct)
 
         # 採点済みなので保留を落とし，直近履歴に積む
         request.session.pop(SESSION_PENDING, None)
@@ -197,19 +292,19 @@ class QuizView(LoginRequiredMixin, generic.View):
         return render(request, self.template_name, {
             'question': question,
             'study_session': study_session,
-            'categories': category_options(request.user),
+            'categories': category_options(self.learner),
             'answered': True,
             'selected': selected,
             'selected_label': Question.choice_label(selected),
             'is_correct': is_correct,
             'elapsed_ms': elapsed_ms,
-            'progress': self._progress(request.user, question.category),
+            'progress': self._progress(self.learner, question.category),
         })
 
     @staticmethod
-    def _progress(user, category):
+    def _progress(learner, category):
         """その中分類の現在の成績（解答直後に見せる）。"""
-        totals = CategoryProgress.objects.filter(user=user, category=category).aggregate(
+        totals = CategoryProgress.objects.filter(learner=learner, category=category).aggregate(
             total=Sum('answered'), correct=Sum('correct')
         )
         total = totals['total'] or 0
@@ -222,22 +317,22 @@ class QuizView(LoginRequiredMixin, generic.View):
         }
 
 
-class StatsView(LoginRequiredMixin, generic.TemplateView):
+class StatsView(LearnerRequiredMixin, generic.TemplateView):
     """分野別の正答率の一覧。"""
 
     template_name = 'fe/stats.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
+        learner = self.learner
         subject = self.request.GET.get('subject')
         if subject not in (Question.SUBJECT_A, Question.SUBJECT_B):
             subject = None
 
-        rows = category_stats(user, subject=subject)
+        rows = category_stats(learner, subject=subject)
         context['rows'] = rows
         context['fields'] = field_stats(rows)
-        context['overall'] = overall_stats(user)
+        context['overall'] = overall_stats(learner)
         context['weak'] = weak_categories(rows, limit=5)
         context['subject'] = subject
         context['subject_choices'] = Question.SUBJECT_CHOICES
@@ -252,13 +347,13 @@ class StatsView(LoginRequiredMixin, generic.TemplateView):
         return context
 
 
-class PassReportView(LoginRequiredMixin, generic.View):
+class PassReportView(LearnerRequiredMixin, generic.View):
     """本番合格の申告と取り消し。1人1件で、申告し直すと受験日を上書きする。"""
 
     def post(self, request, *args, **kwargs):
-        back = reverse('fe:index') + '#summary'
+        back = dashboard_url(self.learner) + '#summary'
         if request.POST.get('action') == 'withdraw':
-            PassReport.objects.filter(user=request.user).delete()
+            PassReport.objects.filter(learner=self.learner).delete()
             messages.info(request, '合格の申告を取り消しました。')
             return redirect(back)
 
@@ -268,13 +363,13 @@ class PassReportView(LoginRequiredMixin, generic.View):
                 messages.error(request, error)
             return redirect(back)
         PassReport.objects.update_or_create(
-            user=request.user, defaults={'passed_on': form.cleaned_data['passed_on']},
+            learner=self.learner, defaults={'passed_on': form.cleaned_data['passed_on']},
         )
         messages.success(request, '合格おめでとうございます。合格者数に数えました。')
         return redirect(back)
 
 
-class HistoryView(LoginRequiredMixin, generic.ListView):
+class HistoryView(LearnerRequiredMixin, generic.ListView):
     """解答履歴。まちがえた問題を見返すために使う。"""
 
     template_name = 'fe/history.html'
@@ -283,7 +378,7 @@ class HistoryView(LoginRequiredMixin, generic.ListView):
 
     def get_queryset(self):
         queryset = (
-            Attempt.objects.filter(user=self.request.user)
+            Attempt.objects.filter(learner=self.learner)
             .select_related('question', 'category')
         )
         if self.request.GET.get('result') == 'wrong':
@@ -297,18 +392,18 @@ class HistoryView(LoginRequiredMixin, generic.ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['categories'] = categories_for(_get_study_session(self.request.user).subject)
+        context['categories'] = categories_for(_get_study_session(self.learner).subject)
         context['result_filter'] = self.request.GET.get('result', '')
         context['category_filter'] = self.request.GET.get('category', '')
         return context
 
 
 # ================================================================ 問題の管理
-# 問題はアカウントごとに持ち、JSON の取り込みが唯一の作成・更新経路。
+# 問題は ID ごとに持ち、JSON の取り込みが唯一の作成・更新経路。
 # 画面に入力フォームを置かないので、手元の JSON と画面の内容がずれない。
 
 
-class ManageListView(LoginRequiredMixin, generic.ListView):
+class ManageListView(LearnerRequiredMixin, generic.ListView):
     """自分の問題の一覧。中身の確認と、出題対象の切り替えだけを行う。"""
 
     template_name = 'fe/manage_list.html'
@@ -316,10 +411,10 @@ class ManageListView(LoginRequiredMixin, generic.ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        user = self.request.user
+        learner = self.learner
         queryset = (
             Question.objects.select_related('category', 'template')
-            .filter(owner=user)
+            .filter(learner=learner)
             .annotate(attempt_count=Count('attempts'))
         )
         params = self.request.GET
@@ -336,7 +431,7 @@ class ManageListView(LoginRequiredMixin, generic.ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        mine = Question.objects.filter(owner=self.request.user, template__isnull=True)
+        mine = Question.objects.filter(learner=self.learner, template__isnull=True)
         context['categories'] = Category.objects.all()  # 一覧は両科目を横断して絞り込む
         context['filters'] = self.request.GET
         context['query_string'] = self.request.GET.urlencode()
@@ -345,13 +440,13 @@ class ManageListView(LoginRequiredMixin, generic.ListView):
             'subject_a': mine.filter(subject=Question.SUBJECT_A).count(),
             'subject_b': mine.filter(subject=Question.SUBJECT_B).count(),
             'generated': Question.objects.filter(
-                owner=self.request.user, template__isnull=False
+                learner=self.learner, template__isnull=False
             ).count(),
         }
         return context
 
 
-class QuestionUploadView(LoginRequiredMixin, generic.FormView):
+class QuestionUploadView(LearnerRequiredMixin, generic.FormView):
     """JSON を取り込んで、自分の問題にする。"""
 
     template_name = 'fe/manage_upload.html'
@@ -365,7 +460,7 @@ class QuestionUploadView(LoginRequiredMixin, generic.FormView):
         return context
 
     def form_valid(self, form):
-        created, removed, notes = replace_all(self.request.user, form.records)
+        created, removed, notes = replace_all(self.learner, form.records)
         note = '問題集を {} 問に差し替えました。'.format(created)
         if notes:
             note += ' 技術解説 {} 本も取り込みました。'.format(notes)
@@ -376,21 +471,21 @@ class QuestionUploadView(LoginRequiredMixin, generic.FormView):
         return super().form_valid(form)
 
 
-class LearnStartView(LoginRequiredMixin, generic.View):
+class LearnStartView(LearnerRequiredMixin, generic.View):
     """学習モードの入口。読む時間を決めてラウンドを始める。"""
 
     template_name = 'fe/learn_start.html'
 
     def get(self, request, *args, **kwargs):
-        session = _get_study_session(request.user)
+        session = _get_study_session(self.learner)
         return render(request, self.template_name, {
             'minute_choices': LearningRound.MINUTE_CHOICES,
             'default_minutes': LearningRound.DEFAULT_MINUTES,
             'count': LearningRound.QUESTION_COUNT,
             'study_session': session,
-            'groups': note_menu(request.user, session.subject),
+            'groups': note_menu(self.learner, session.subject),
             'recent': LearningRound.objects.filter(
-                user=request.user, phase=LearningRound.PHASE_DONE
+                learner=self.learner, phase=LearningRound.PHASE_DONE
             )[:5],
         })
 
@@ -405,14 +500,14 @@ class LearnStartView(LoginRequiredMixin, generic.View):
         chosen = request.POST.get('note')
         if chosen and chosen.isdigit():
             note = LearningNote.objects.filter(
-                pk=chosen, owner=request.user
+                pk=chosen, learner=self.learner
             ).select_related('category').first()
             if note is None:
                 messages.error(request, 'その解説は見つかりませんでした。')
                 return redirect('fe:learn_start')
 
-        session = _get_study_session(request.user)
-        round_ = start_round(request.user, session, minutes, note=note)
+        session = _get_study_session(self.learner)
+        round_ = start_round(self.learner, session, minutes, note=note)
         if round_ is None:
             if note is not None:
                 messages.error(
@@ -430,13 +525,13 @@ class LearnStartView(LoginRequiredMixin, generic.View):
         return redirect('fe:learn_read', pk=round_.pk)
 
 
-class LearnReadView(LoginRequiredMixin, generic.View):
+class LearnReadView(LearnerRequiredMixin, generic.View):
     """読む段階。設問ではなく、分野ごとにまとめた技術解説を出す。"""
 
     template_name = 'fe/learn_read.html'
 
     def get(self, request, pk, *args, **kwargs):
-        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        round_ = get_object_or_404(LearningRound, pk=pk, learner=self.learner)
         # 終わったラウンドの解説は、結果画面から読み返せるようにしておく
         if round_.phase == LearningRound.PHASE_QUIZ:
             return redirect('fe:learn_quiz', pk=round_.pk)
@@ -451,20 +546,20 @@ class LearnReadView(LoginRequiredMixin, generic.View):
         })
 
     def post(self, request, pk, *args, **kwargs):
-        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        round_ = get_object_or_404(LearningRound, pk=pk, learner=self.learner)
         if round_.phase == LearningRound.PHASE_READING:
             round_.phase = LearningRound.PHASE_QUIZ
             round_.save(update_fields=['phase'])
         return redirect('fe:learn_quiz', pk=round_.pk)
 
 
-class LearnQuizView(LoginRequiredMixin, generic.View):
+class LearnQuizView(LearnerRequiredMixin, generic.View):
     """解く段階。読んだ範囲をそのまま1問1答で出す。"""
 
     template_name = 'fe/learn_quiz.html'
 
     def get(self, request, pk, *args, **kwargs):
-        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        round_ = get_object_or_404(LearningRound, pk=pk, learner=self.learner)
         if round_.phase == LearningRound.PHASE_READING:
             return redirect('fe:learn_read', pk=round_.pk)
         if round_.phase == LearningRound.PHASE_DONE:
@@ -478,7 +573,7 @@ class LearnQuizView(LoginRequiredMixin, generic.View):
         })
 
     def post(self, request, pk, *args, **kwargs):
-        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        round_ = get_object_or_404(LearningRound, pk=pk, learner=self.learner)
         item = current_item(round_)
         if item is None:
             return self._finish(round_)
@@ -496,10 +591,10 @@ class LearnQuizView(LoginRequiredMixin, generic.View):
             is_correct = grade(item, selected)
             # 演習と同じ記録に積む。学習モードで解いた分も理解度に反映する。
             Attempt.objects.create(
-                user=request.user, question=question, category=question.category,
+                learner=self.learner, question=question, category=question.category,
                 selected_index=selected, is_correct=is_correct,
             )
-            record_progress(request.user, question, is_correct)
+            record_progress(self.learner, question, is_correct)
 
         return render(request, self.template_name, {
             'round': round_, 'item': item, 'question': question,
@@ -517,11 +612,11 @@ class LearnQuizView(LoginRequiredMixin, generic.View):
         return redirect('fe:learn_result', pk=round_.pk)
 
 
-class LearnNextView(LoginRequiredMixin, generic.View):
+class LearnNextView(LearnerRequiredMixin, generic.View):
     """採点結果を見てから次の1問へ進む。"""
 
     def post(self, request, pk, *args, **kwargs):
-        round_ = get_object_or_404(LearningRound, pk=pk, user=request.user)
+        round_ = get_object_or_404(LearningRound, pk=pk, learner=self.learner)
         item = current_item(round_)
         if item is not None and item.is_correct is not None:
             round_.position += 1
@@ -534,14 +629,14 @@ class LearnNextView(LoginRequiredMixin, generic.View):
         return redirect('fe:learn_quiz', pk=round_.pk)
 
 
-class LearnResultView(LoginRequiredMixin, generic.DetailView):
+class LearnResultView(LearnerRequiredMixin, generic.DetailView):
     """ラウンドの結果。まちがえた問題を読み返せるようにする。"""
 
     template_name = 'fe/learn_result.html'
     context_object_name = 'round'
 
     def get_queryset(self):
-        return LearningRound.objects.filter(user=self.request.user)
+        return LearningRound.objects.filter(learner=self.learner)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -551,12 +646,12 @@ class LearnResultView(LoginRequiredMixin, generic.DetailView):
         return context
 
 
-class QuestionExportView(LoginRequiredMixin, generic.View):
+class QuestionExportView(LearnerRequiredMixin, generic.View):
     """自分の問題を、取り込みと同じ形式の JSON で書き出す。"""
 
     def get(self, request, *args, **kwargs):
         subject = request.GET.get('subject')
-        payload = export_records(request.user, subject)
+        payload = export_records(self.learner, subject)
         body = json.dumps(payload, ensure_ascii=False, indent=1)
         response = HttpResponse(body, content_type='application/json; charset=utf-8')
         name = 'fe_{}.json'.format(subject.lower()) if subject in ('A', 'B') else 'fe_all.json'
