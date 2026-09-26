@@ -23,7 +23,7 @@ urlpatterns = [
     # 本番合格の申告（集計はダッシュボードに出す）
     path('pass/', views.PassReportView.as_view(), name='pass_report'),
 
-    # 問題の管理（自分の問題のみ。登録は JSON の一括差し替えで行う）
+    # 問題の管理（全 ID で共有する問題集。管理用の ID だけが使え、登録は JSON の一括差し替えで行う）
     path('manage/', views.ManageListView.as_view(), name='manage_list'),
     path('manage/upload/', views.QuestionUploadView.as_view(), name='manage_upload'),
     path('manage/export/', views.QuestionExportView.as_view(), name='manage_export'),
