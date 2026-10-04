@@ -36,6 +36,36 @@
         </a>
     </div>
 
+    <div class="border rounded p-3 mb-4" style="background-color:#fdf5ee; border-color:#e5a26c !important;">
+        <div class="fw-bold mb-1" style="color:#8f5a30;">
+            <i class="fas fa-triangle-exclamation me-1"></i>このアプリで出せない問題
+        </div>
+        <p class="small mb-2" style="color:#8f5a30;">
+            問題文も解説も<strong>文字だけ</strong>を表示します。画像を持つ仕組みがありません。
+            下のプロンプトにも同じ注意を書いてありますが、自分で問題を直すときもここに気をつけてください。
+        </p>
+        <ul class="small mb-0" style="color:#8f5a30;">
+            <li>
+                <strong>図が本質の問題は作れません。</strong>
+                流れ図、アローダイアグラム、回路図とタイミングチャート、木構造の図、
+                UML の多重度を示す図、盤面、ネットワーク構成図、散布図。
+                本番にはこれらが毎回出ますが、文字に落とすと設問として成立しないので外します。
+                <span class="text-muted">表は、改行と全角スペースで桁をそろえれば入ります。</span>
+            </li>
+            <li>
+                <strong>文字の装飾は出ません。</strong>
+                Markdown（#、-、**）や HTML タグは記号がそのまま画面に出ます。
+                上付き・下付き文字も使えないので「2のn乗」「xの2乗」と書きます。
+                保たれるのは改行と全角スペースの字下げだけです。
+            </li>
+            <li>
+                <strong>選択肢を選ぶ形だけです。</strong>
+                記述、入力、並べ替えには対応しません。正解は1つだけで、部分点もありません。
+                空欄が複数ある問題は「a は○、b は△」のように組合せを1つの選択肢にまとめます。
+            </li>
+        </ul>
+    </div>
+
     <div class="border rounded p-3 mb-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
             <div>

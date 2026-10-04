@@ -365,6 +365,33 @@ class ViewTests(TestCase):
     def setUp(self):
         enter(self.client, self.learner)
 
+    def test_unsupported_formats_are_stated_up_front(self):
+        """対応していない問題形式の注意書きを、ダッシュボードと入口に畳まずに出す。"""
+        for url in (dashboard(self.learner), reverse('fe:enter')):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode('utf-8')
+                self.assertIn('このアプリが対応していない問題・問題形式', html)
+                self.assertIn('図を見ないと解けない問題', html)
+                self.assertIn('本番どおりの模擬試験', html)
+                self.assertIn('記述・入力・並べ替え', html)
+
+    def test_import_screen_states_what_cannot_be_rendered(self):
+        """取り込み画面では、作る側が踏む制約も併せて示す。"""
+        admin = make_learner('noticeadmin', is_admin=True)
+        enter(self.client, admin)
+        html = self.client.get(reverse('fe:manage_upload')).content.decode('utf-8')
+        self.assertIn('このアプリで出せない問題', html)
+        for word in ('図が本質の問題は作れません', '上付き', '組合せを1つの選択肢'):
+            self.assertIn(word, html)
+
+    def test_prompt_states_unsupported_formats(self):
+        """利用者が AI に渡すプロンプトにも、扱えない形式を書いておく。"""
+        from .exam import build_prompt
+        prompt = build_prompt()
+        self.assertIn('【このアプリが扱えないもの】', prompt)
+        for word in ('図が必要な問題は作らない', '2のn乗', 'ルビ', '複数正解や部分点はない'):
+            self.assertIn(word, prompt)
+
     def test_index_renders(self):
         response = self.client.get(dashboard(self.learner))
         self.assertEqual(response.status_code, 200)
