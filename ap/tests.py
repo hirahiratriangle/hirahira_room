@@ -365,6 +365,28 @@ class ViewTests(TestCase):
     def setUp(self):
         enter(self.client, self.learner)
 
+    def test_unsupported_formats_are_stated_up_front(self):
+        """対応していない問題形式の注意書きを、ダッシュボードと入口に畳まずに出す。"""
+        for url in (dashboard(self.learner), reverse('ap:enter')):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode('utf-8')
+                self.assertIn('このアプリが対応していない問題・問題形式', html)
+                self.assertIn('科目B（旧 午後）の記述式', html)
+                self.assertIn('図を見ないと解けない問題', html)
+                self.assertIn('本番どおりの模擬試験', html)
+
+    def test_subject_b_question_says_it_is_converted(self):
+        """科目Bを解いているときは、本番が記述式であることをその場で伝える。"""
+        session, _ = StudySession.objects.get_or_create(learner=self.learner)
+        for subject, shown in ((Question.SUBJECT_A, False), (Question.SUBJECT_B, True)):
+            with self.subTest(subject=subject):
+                session.mode = StudySession.MODE_FOCUS
+                session.subject = subject
+                session.category = None
+                session.save()
+                html = self.client.get(reverse('ap:quiz')).content.decode('utf-8')
+                self.assertEqual('設問を択一に直して出しています' in html, shown)
+
     def test_index_renders(self):
         response = self.client.get(dashboard(self.learner))
         self.assertEqual(response.status_code, 200)
