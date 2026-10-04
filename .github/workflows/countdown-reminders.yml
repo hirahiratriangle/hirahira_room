@@ -1,0 +1,30 @@
+name: カウントダウンのリマインド送信
+
+# Azure App Service (Linux) には cron が無いため、ここから定期的に叩く。
+# cron は UTC 指定。15:00 UTC = 翌日 0:00 JST。
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:  # 手動実行（動作確認用）
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リマインド送信を起動する
+        env:
+          ENDPOINT: ${{ secrets.COUNTDOWN_REMINDER_URL }}
+          TOKEN: ${{ secrets.COUNTDOWN_REMINDER_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ENDPOINT}" ] || [ -z "${TOKEN}" ]; then
+            echo "COUNTDOWN_REMINDER_URL と COUNTDOWN_REMINDER_TOKEN を Secrets に設定してください。" >&2
+            exit 1
+          fi
+          # --fail-with-body: 4xx/5xx のときも本文を出したうえで失敗させる
+          curl --silent --show-error --fail-with-body \
+               --max-time 120 \
+               --retry 3 --retry-delay 30 --retry-all-errors \
+               -X POST "${ENDPOINT}" \
+               -H "X-Reminder-Token: ${TOKEN}"
+          echo

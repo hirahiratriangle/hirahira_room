@@ -8,12 +8,27 @@ az webapp up --name hirahira-room --runtime "PYTHON|3.11" --resource-group hirah
 
 # ポータル画面でVNETを追加する。
 
+# データベース（PostgreSQL サーバー hirahira-db 上の専用DB hirahira_room を使う）
+# 同じサーバーに funitclub 用の DB もあるため、既定の postgres DB は使わない。
+# サーバーは公開アクセス無効だが、DB の作成は管理用の経路なので手元から実行できる。
+az postgres flexible-server db create --resource-group hirahira --server-name hirahira-db --database-name hirahira_room --charset UTF8 --collation en_US.utf8
+az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings DB_NAME=hirahira_room
+
 # 起動プローブの待ち時間を延ばす（既定230秒。B1では起動が間に合わずコンテナが落とされる）
 az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings WEBSITES_CONTAINER_START_TIME_LIMIT=600
 
-# マイグレーション
-python manage.py migrate
-python manage.py train_iris_model （初期モデルのトレーニング）
+# マイグレーション（本番＝Azure 上で実行する）
+# Oryx の圧縮ビルドのため、アプリの実体は /tmp/<ID>/ に展開されている。
+# ID は起動ごとに変わるので探して移動し、同梱の antenv を有効にしてから実行する。
+az webapp ssh --name hirahira-room --resource-group hirahira
+#   cd "$(dirname "$(ls -d /tmp/*/manage.py | head -1)")" && source antenv/bin/activate
+#   python manage.py showmigrations   （未適用の [ ] を確認）
+#   python manage.py migrate
+#   python manage.py train_iris_model （初期モデルのトレーニング）
+
+# ローカルで本番設定のまま動かすことはできない（psycopg2 と DB 接続情報が要るため）。
+# ローカル開発は開発用設定を明示する:
+#   python manage.py runserver --settings=config.settings_dev
 
 # 再起動
 az webapp restart --name hirahira-room --resource-group hirahira
@@ -39,8 +54,37 @@ python manage.py collectstatic --noinput --settings=config.settings
 # SECRET_KEY を生成
 python -c "import secrets; import string; chars = string.ascii_letters + string.digits + '-_'; print(''.join(secrets.choice(chars) for _ in range(50)))"
 
-# Gmailアプリパスワード
-rdrl wtcj kidj gdcj
+# Gmail アプリパスワード（送信メール用）
+# 値はここに書かない。Git 履歴に平文で残り続けるため。
+# 発行: https://myaccount.google.com/apppasswords （2段階認証が有効なことが前提）
+# 発行した16文字は Azure のアプリ設定にだけ入れる。
+az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings EMAIL_HOST_USER=hirahiratriangle@gmail.com
+az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings EMAIL_HOST_PASSWORD="＜発行した16文字＞"
+
+# アプリパスワードは、2段階認証をオフにしたり Google のパスワードを変えると失効する。
+# 失効するとサインアップの確認メールもパスワードリセットも届かなくなるので、
+# 届かなくなったらまず再発行して上の設定を入れ直す。
+
+# ローカルから実際に送って確かめる場合（.env.local は gitignore 済み）
+# cat > .env.local <<'EOF'
+# EMAIL_HOST_USER=hirahiratriangle@gmail.com
+# EMAIL_HOST_PASSWORD=＜発行した16文字＞
+# EOF
+# set -a && . ./.env.local && set +a && python manage.py send_countdown_reminders --settings=config.settings_dev
+# ※ settings_dev は、この2つが環境変数にあるときだけ Gmail で送る。無ければコンソール出力。
+
+# カウントダウンのリマインド（毎日0:00、GitHub Actions から起動）
+# 1. トークンを生成する
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# 2. Azure のアプリ設定に入れる
+az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings COUNTDOWN_REMINDER_TOKEN="＜生成した値＞"
+# 3. GitHub の Settings → Secrets and variables → Actions に登録する
+#    COUNTDOWN_REMINDER_TOKEN = 同じ値
+#    COUNTDOWN_REMINDER_URL   = https://hirahira-room.azurewebsites.net/countdown/tasks/send-reminders/
+# 4. Actions タブの「カウントダウンのリマインド送信」→ Run workflow で疎通確認
+
+# アプリ設定の一覧（値はマスクされるのでキーの確認用）
+az webapp config appsettings list --name hirahira-room --resource-group hirahira --query "[].name" -o tsv
 
 
 

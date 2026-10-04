@@ -30,3 +30,6 @@ iris_classifier/models/
 
 # Claude Code のローカル設定
 .claude/
+
+# ローカルの認証情報（メール送信の動作確認など）
+.env.local

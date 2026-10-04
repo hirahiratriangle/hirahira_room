@@ -1,0 +1,1 @@
+[{{ site_name }}] これからの予定{{ rows|length }}件のお知らせ（{{ today|date:"n月j日" }}）

@@ -1,0 +1,16 @@
+{{ user.username }} さん
+
+{{ site_name }} からのお知らせです。{{ today|date:"Y年n月j日" }}時点の、これからの予定は次のとおりです。
+
+{% for row in rows %}──────────────────────────────
+{{ row.name }}
+  予定日: {{ row.date|date:"Y年n月j日 (D)" }}
+  {% if row.days_left == 0 %}本日です{% else %}あと{{ row.days_left }}日{% endif %}
+{% if row.memo %}  メモ: {{ row.memo }}
+{% endif %}
+{% endfor %}──────────────────────────────
+
+一覧はこちらから確認できます。
+https://hirahira-room.azurewebsites.net/countdown/events/
+
+通知を止めたい場合は、一覧画面から対象の予定を編集し、「メールで知らせる」のチェックを外してください。

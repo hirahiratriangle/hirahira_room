@@ -10,6 +10,10 @@ class CountEvent(models.Model):
     name = models.CharField(verbose_name='名前', max_length=50)
     date = models.DateField(verbose_name='日付')
     memo = models.TextField(verbose_name='メモ', blank=True, null=True)
+    notify = models.BooleanField(
+        verbose_name='メールで知らせる', default=False,
+        help_text='毎日0時に、これからの予定をまとめてメールで通知します。',
+    )
     created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
 
@@ -66,3 +70,28 @@ class CountEvent(models.Model):
         if (today.month, today.day) < (self.date.month, self.date.day):
             years -= 1
         return years
+
+
+class ReminderLog(models.Model):
+    """日次リマインドの送信記録。1日に二重送信しないために使う。"""
+
+    user = models.ForeignKey(
+        CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE,
+        related_name='countdown_reminder_logs',
+    )
+    sent_on = models.DateField(verbose_name='送信日')
+    event_count = models.PositiveSmallIntegerField(verbose_name='通知した予定の件数')
+    sent_at = models.DateTimeField(verbose_name='送信日時', auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = 'Countdown リマインド送信記録'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'sent_on'],
+                name='countdown_reminder_once_per_day',
+            ),
+        ]
+        ordering = ['-sent_on']
+
+    def __str__(self):
+        return f'{self.user} / {self.sent_on}'

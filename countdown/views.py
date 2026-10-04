@@ -1,14 +1,21 @@
+import hmac
 import logging
 
+from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.views import generic
+from django.utils.decorators import method_decorator
+from django.views import View, generic
+from django.views.decorators.csrf import csrf_exempt
 
 from .forms import CountEventForm
 from .models import CountEvent
+from .notifications import send_reminders
 
 logger = logging.getLogger(__name__)
 
@@ -103,3 +110,35 @@ class EventDeleteView(LoginRequiredMixin, OnlyYouMixin, generic.DeleteView):
     def form_valid(self, form):
         messages.success(self.request, '「{}」を削除しました。'.format(self.object.name))
         return super().form_valid(form)
+
+
+@method_decorator(login_not_required, name='dispatch')
+@method_decorator(csrf_exempt, name='dispatch')
+class SendRemindersView(View):
+    """リマインド送信を外部スケジューラから起動するためのエンドポイント。
+
+    Azure App Service には cron が無いため、GitHub Actions の定期実行から
+    POST で叩く。ログインの代わりに共有トークンで認証する。
+    """
+
+    def post(self, request):
+        expected = getattr(settings, 'COUNTDOWN_REMINDER_TOKEN', '')
+        if not expected:
+            logger.error('COUNTDOWN_REMINDER_TOKEN が未設定のため実行できません。')
+            return JsonResponse(
+                {'detail': 'リマインド用トークンが未設定です。'}, status=503)
+
+        provided = request.headers.get('X-Reminder-Token', '')
+        if not hmac.compare_digest(provided, expected):
+            logger.warning('リマインド起動が不正なトークンで試みられました。')
+            return JsonResponse({'detail': '認証できません。'}, status=403)
+
+        result = send_reminders()
+        logger.info(
+            'リマインドを実行しました（%s人 / %s件）', result['users'], result['events'])
+        return JsonResponse({
+            'users': result['users'],
+            'events': result['events'],
+            'failed': result['failed'],
+            'skipped_no_email': result['skipped_no_email'],
+        })

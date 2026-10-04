@@ -157,6 +157,13 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 # 使われてしまうため明示する。
 ACCOUNT_EMAIL_SUBJECT_PREFIX = f'[{SITE_DISPLAY_NAME}] '
 
+# ==================================
+# カウントダウンのリマインド通知
+# ==================================
+# 定期実行（GitHub Actions）から送信を起動するときの共有トークン。
+# 未設定ならエンドポイントは 503 を返し、何も送らない。
+COUNTDOWN_REMINDER_TOKEN = os.environ.get('COUNTDOWN_REMINDER_TOKEN', '')
+
 
 # ==================================
 # アップロードの上限

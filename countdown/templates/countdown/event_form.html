@@ -20,6 +20,7 @@
             <form method="post">
                 {% csrf_token %}
                 {% for field in form %}
+                {% if field.name == 'notify' %}{% else %}
                 <div class="mb-3">
                     <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
                     {{ field }}
@@ -28,10 +29,35 @@
                     <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
                 </div>
+                {% endif %}
                 {% endfor %}
                 <p class="text-muted small">
                     今日より後の日付は残り日数のカウントダウン、今日より前の日付は経過日数のカウントアップになります。
                 </p>
+
+                <!-- メール通知の設定 -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <i class="fas fa-envelope me-1" style="color:#2c5aa0;"></i> メール通知
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check mb-3">
+                            {{ form.notify }}
+                            <label class="form-check-label" for="{{ form.notify.id_for_label }}">
+                                {{ form.notify.label }}
+                            </label>
+                            {% for error in form.notify.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <p class="text-muted small mb-0">
+                            毎日0時に、通知をオンにしたこれからの予定を1通にまとめて、
+                            ログインに使っているメールアドレス宛にお送りします。
+                            過ぎた出来事には送られません。
+                        </p>
+                    </div>
+                </div>
                 <div class="d-flex gap-2">
                     <button type="submit" class="btn btn-primary">保存</button>
                     <a href="{% url 'countdown:event_list' %}" class="btn btn-outline-secondary">

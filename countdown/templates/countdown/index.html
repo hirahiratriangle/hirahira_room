@@ -71,6 +71,7 @@
             <li class="mb-2"><i class="fas fa-check-circle me-2" style="color:#2c5aa0;"></i>「新規登録」から名前と日付を入力して保存します。</li>
             <li class="mb-2"><i class="fas fa-check-circle me-2" style="color:#2c5aa0;"></i>一覧画面で、予定（カウントダウン）と出来事（カウントアップ）が別々に並びます。</li>
             <li class="mb-2"><i class="fas fa-check-circle me-2" style="color:#2c5aa0;"></i>登録したデータはログインユーザー本人だけが閲覧・編集できます。</li>
+            <li class="mb-2"><i class="fas fa-check-circle me-2" style="color:#2c5aa0;"></i>予定ごとに「メールで知らせる」を選べます。毎日0時に、これからの予定を1通にまとめてお知らせします。</li>
         </ul>
         {% if user.is_authenticated %}
         <a href="{% url 'countdown:event_list' %}" class="btn btn-primary mt-2">一覧へ進む</a>
