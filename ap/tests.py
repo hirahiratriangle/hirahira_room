@@ -1025,6 +1025,17 @@ class LearningModeTests(TestCase):
                 body=note['body'], source=note['source'],
             )
 
+    def test_notes_are_listed_in_the_order_they_were_imported(self):
+        """解説は取り込んだ順（シラバスの小分類順）に並べ、名前の文字順にしない。"""
+        category = Category.objects.get(code=1)
+        LearningNote.objects.filter(category=category).delete()
+        topics = ['離散数学', '応用数学', '情報に関する理論', '通信に関する理論', '計測・制御に関する理論']
+        for topic in topics:
+            LearningNote.objects.create(category=category, topic=topic, title=topic, body='本文')
+        group = next(g for g in note_menu(self.learner, Question.SUBJECT_A)
+                     if g['category'].code == 1)
+        self.assertEqual([e['note'].topic for e in group['notes']], topics)
+
     def test_a_round_needs_a_note(self):
         """解説が無ければ始められない。管理用の ID なら取り込み画面へ案内する。"""
         build_questions()
@@ -1120,7 +1131,7 @@ class LearningModeTests(TestCase):
         self.assertEqual([g['category'].code for g in groups], [9, 11])
         self.assertEqual(len(groups[0]['notes']), 2)
         self.assertEqual(
-            [n['note'].topic for n in groups[0]['notes']], ['SQL', '正規化'],
+            [n['note'].topic for n in groups[0]['notes']], ['正規化', 'SQL'],
         )
 
     def test_choosing_a_note_uses_that_note(self):
@@ -1276,6 +1287,33 @@ class SiteSummaryTests(TestCase):
         self.client.logout()
         self.client.post(reverse('ap:pass_report'), {'passed_on': '2026-06-01'})
         self.assertFalse(PassReport.objects.exists())
+
+
+class SubjectBMasterTests(TestCase):
+    def test_numbers_follow_the_table_in_the_exam_guideline(self):
+        """科目Bの番号は、要綱の別紙「科目B試験の分野別出題数」の表の並び順。
+
+        問題集の JSON はこの番号で分野を指す。公開問題の問番号順（問1 情報
+        セキュリティ、問2 経営戦略、問3 プログラミング…）で振ると、見出しと
+        中身がずれる（学習モードで「情報セキュリティ」の下に経営戦略の解説が出た）。
+        """
+        seed_masters()
+        self.assertEqual(
+            list(Category.objects.filter(subject='B').values_list('code', 'name', 'field')),
+            [
+                (101, '経営戦略・情報戦略・戦略立案', 'S'),
+                (102, 'システムアーキテクチャ', 'T'),
+                (103, 'ネットワーク', 'T'),
+                (104, 'データベース', 'T'),
+                (105, '組込みシステム開発', 'T'),
+                (106, '情報システム開発', 'T'),
+                (107, 'プログラミング（アルゴリズム）', 'T'),
+                (108, '情報セキュリティ', 'T'),
+                (109, 'プロジェクトマネジメント', 'M'),
+                (110, 'サービスマネジメント', 'M'),
+                (111, 'システム監査', 'M'),
+            ],
+        )
 
 
 class SeedCommandTests(TestCase):

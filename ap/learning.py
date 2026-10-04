@@ -106,8 +106,11 @@ def note_menu(learner, subject):
         })
         group['notes'].append({'note': note, 'rounds': counts.get(note.id, 0)})
 
+    # 小分類は取り込んだ順（＝JSON の順）に並べる。JSON はシラバスの小分類順に
+    # 書いてあるので、そのまま出せば「離散数学 → 応用数学 → …」と学ぶ順になる。
+    # 名前の文字順で並べ替えると、カタカナ・漢字の文字コード順になって崩れる。
     for group in groups.values():
-        group['notes'].sort(key=lambda n: (n['note'].topic, n['note'].title))
+        group['notes'].sort(key=lambda n: n['note'].id)
     return sorted(groups.values(), key=lambda g: g['category'].code)
 
 
