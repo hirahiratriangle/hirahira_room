@@ -1,0 +1,6 @@
+{% comment %}入っている ID と、別の ID に切り替える入口。ヘッダーの nav に並べる。
+テキストのリンクに埋もれないよう、枠つきのボタンにする。{% endcomment %}
+<span class="d-inline-flex align-items-center gap-2">
+    <span style="color:#c3d6ee;">ID: <strong class="text-white">{{ request.ap_learner.code }}</strong></span>
+    <a class="btn btn-outline-light btn-sm py-0" href="{% url 'ap:enter' %}">ID を切り替える</a>
+</span>

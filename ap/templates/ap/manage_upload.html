@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}JSONを取り込む - AP 応用情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+{% include 'ap/_header.html' with page_title='JSONを取り込む' current='manage' %}
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 960px;">
+
+    <p class="text-muted">
+        取り込んだ問題は<strong>全 ID で共有する問題集</strong>になります。
+        取り込みは<strong>常に一括差し替え</strong>で、ファイルの内容がそのまま全員の問題集になります。
+        古い問題に紐づく全 ID の解答履歴は消えますが、分野ごとの正答率と苦手分野の判定は残ります。
+        技術解説（学習モードで読む教材）を含むファイルなら、解説も同時に入れ替わります。
+    </p>
+
+    <div class="border rounded p-3 mb-4" style="background-color:#eef3fa;">
+        <div class="fw-bold mb-1" style="color:#2c5aa0;">問題を作るのに必要な資料</div>
+        <p class="small text-muted mb-2">
+            このアプリは{{ exam.name }}の資料も問題も同梱していません。{{ exam.note }}
+            資料を見ずに作らせると、範囲外の問題や誤った正解が混ざります。
+        </p>
+        <ul class="small mb-2">
+            {% for m in exam.materials %}
+            <li>
+                <strong>{{ m.name }}</strong>
+                {% if m.required %}<span class="badge bg-secondary ms-1">必須</span>{% endif %}
+                <span class="text-muted">— {{ m.purpose }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="{{ exam.url }}" target="_blank" rel="noopener" class="small">
+            {{ exam.authority }}の配布ページを開く <i class="fas fa-external-link-alt"></i>
+        </a>
+    </div>
+
+    <div class="border rounded p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div>
+                <span class="fw-bold" style="color:#2c5aa0;">問題を作ってもらうプロンプト</span>
+                <span class="small text-muted ms-2">
+                    自分の Claude Code に貼り付けると、この画面に取り込める形式で返ってきます
+                </span>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="copyPrompt">
+                <i class="far fa-copy me-1"></i>コピー
+            </button>
+        </div>
+        <details>
+            <summary class="small text-muted" style="cursor:pointer;">プロンプトを表示する</summary>
+<pre id="promptText" class="small mt-2 mb-0 p-3 rounded" style="white-space: pre-wrap; background-color:#f6f8fb; max-height: 22rem; overflow-y: auto;">{{ prompt }}</pre>
+        </details>
+        <div class="form-text mt-2">
+            最後の【依頼】に、作ってほしい分野と問数を書き足してから渡してください。
+            問題は JSON ファイルに書き出させ、そのファイルを下で選びます。
+        </div>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+        {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="mb-4">
+            <label for="{{ form.upload.id_for_label }}" class="form-label small fw-bold">JSONファイル</label>
+            {{ form.upload }}
+            <div class="form-text">{{ form.upload.help_text }}</div>
+            {% for e in form.upload.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="alert alert-warning">
+            <strong>取り込むと、いまの問題集はこのファイルの内容に入れ替わります。</strong>
+            これまでの問題と、その解答履歴は削除されます。
+            ただし<strong>分野ごとの理解度は問題とは別に積み上げている</strong>ので、
+            正答率と苦手分野の判定は取り込み後もそのまま続きます。
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'ap:manage_list' %}" class="btn btn-outline-secondary btn-sm">キャンセル</a>
+            <button type="submit" class="btn btn-primary">取り込む</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// プロンプトをクリップボードへ。各自の Claude Code に貼って使う。
+(function () {
+    var button = document.getElementById('copyPrompt');
+    var source = document.getElementById('promptText');
+    if (!button || !source) { return; }
+    button.addEventListener('click', function () {
+        var text = source.textContent;
+        var done = function () {
+            var original = button.innerHTML;
+            button.innerHTML = 'コピーしました';
+            setTimeout(function () { button.innerHTML = original; }, 1600);
+        };
+        // 選択してコピーする方法。http のときや、クリップボードの許可が
+        // 下りなかったときはこちらに落とす。
+        var fallback = function () {
+            var area = document.createElement('textarea');
+            area.value = text;
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            try { document.execCommand('copy'); done(); } finally { document.body.removeChild(area); }
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done).catch(fallback);
+            return;
+        }
+        fallback();
+    });
+})();
+</script>
+{% endblock %}

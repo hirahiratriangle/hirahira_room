@@ -26,6 +26,8 @@ urlpatterns = [
 
     # 基本情報技術者試験（FE）対策アプリ
     path('fe/', include('fe.urls', namespace='fe')),
+    # 応用情報技術者試験（AP）対策アプリ
+    path('ap/', include('ap.urls', namespace='ap')),
 ]
 
 # メディアファイルの配信設定

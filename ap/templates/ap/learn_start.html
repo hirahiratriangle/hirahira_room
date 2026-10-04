@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}学習モード - AP 応用情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+{% include 'ap/_header.html' with page_title='学習モード' current='learn' %}
+{% endblock %}
+
+{% block head %}
+<style>
+    /* いま選んでいる行と、それを含む中分類を目立たせる。
+       畳んだままでも「どこを選んだか」が分かるようにする。 */
+    .ap-pick .ap-row { cursor: pointer; }
+    .ap-pick .ap-row:hover { background-color: #eef3fa; }
+    .ap-pick .ap-row:has(input:checked) {
+        background-color: #e3ecf9;
+        box-shadow: inset 3px 0 0 #2c5aa0;
+        font-weight: 700;
+    }
+    .ap-pick .ap-here { display: none; }
+    .ap-pick .ap-group:has(input:checked) > summary { background-color: #eef3fa; }
+    .ap-pick .ap-group:has(input:checked) .ap-here { display: inline; }
+</style>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 760px;">
+
+    <p class="text-muted">
+        技術解説を<strong>時間を決めて読み</strong>、そのあと同じ範囲から<strong>{{ count }}問</strong>解きます。
+        読むものは中分類から選べます。おまかせにすると、苦手な分野の未読から選ばれます。
+    </p>
+
+    <form method="post" class="border rounded p-4 mb-4">
+        {% csrf_token %}
+
+        <div class="fw-bold" style="color:#2c5aa0;">学習対象</div>
+        <div class="small text-muted mb-2">
+            いま選んでいるもの：<span class="fw-bold text-body" id="picked">おまかせ</span>
+        </div>
+        {% if groups %}
+        <div class="border rounded mb-4 ap-pick">
+            <label class="ap-row ap-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
+                <input class="form-check-input mt-0" type="radio" name="note" value="" checked>
+                <span class="fw-bold">おまかせ</span>
+                <span class="text-muted small">苦手な分野の、まだ読んでいない解説から選びます</span>
+            </label>
+
+            {% for group in groups %}
+            <details class="ap-group border-bottom">
+                <summary class="d-flex justify-content-between align-items-center p-2 px-3"
+                         style="cursor:pointer;">
+                    <span>
+                        <span class="text-muted small me-2">{{ group.category.code }}</span>
+                        <span class="fw-bold">{{ group.category.name }}</span>
+                        <span class="text-muted small ms-2">解説{{ group.notes|length }}本</span>
+                        <span class="badge bg-primary ms-2 ap-here">選択中</span>
+                    </span>
+                    <span class="small">
+                        {% if group.stats.rate_percent is not None %}
+                        <span class="{% if group.stats.is_weak %}text-danger fw-bold{% else %}text-muted{% endif %}">
+                            正答率 {{ group.stats.rate_percent }}％
+                        </span>
+                        {% else %}
+                        <span class="text-muted">未着手</span>
+                        {% endif %}
+                        <span class="text-muted ms-2">問題{{ group.stats.question_count }}問</span>
+                    </span>
+                </summary>
+                <div style="background-color:#f6f8fb;">
+                    {% for entry in group.notes %}
+                    <label class="ap-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0"
+                           data-name="{{ group.category.name }} ／ {{ entry.note.title }}">
+                        <input class="form-check-input mt-0" type="radio" name="note"
+                               value="{{ entry.note.pk }}">
+                        {% if entry.note.topic %}
+                        <span class="badge bg-secondary">{{ entry.note.topic }}</span>
+                        {% endif %}
+                        <span>{{ entry.note.title }}</span>
+                        {% if entry.rounds %}
+                        <span class="text-muted small">学習{{ entry.rounds }}回</span>
+                        {% else %}
+                        <span class="text-primary small">未読</span>
+                        {% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-warning">
+            技術解説はまだ用意されていません。
+            {% if request.ap_learner.is_admin %}<a href="{% url 'ap:manage_upload' %}">解説を含む JSON を取り込んで</a>ください。{% endif %}
+        </div>
+        {% endif %}
+
+        <div class="fw-bold mb-3" style="color:#2c5aa0;">読む時間</div>
+        <div class="d-flex flex-wrap gap-3 mb-4">
+            {% for m in minute_choices %}
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="minutes" id="m{{ m }}"
+                       value="{{ m }}"{% if m == default_minutes %} checked{% endif %}>
+                <label class="form-check-label" for="m{{ m }}">{{ m }}分</label>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="form-text mb-3">
+            時間が来ると解答に進みます。読み終われば途中でも進めます。
+        </div>
+        <button type="submit" class="btn btn-primary"{% if not groups %} disabled{% endif %}>
+            はじめる
+        </button>
+    </form>
+
+    {% if recent %}
+    <div class="border rounded p-3">
+        <div class="small fw-bold mb-2" style="color:#2c5aa0;">これまでのラウンド</div>
+        <ul class="list-unstyled small mb-0">
+            {% for r in recent %}
+            <li class="d-flex justify-content-between border-bottom py-2">
+                <a href="{% url 'ap:learn_result' r.pk %}" class="text-decoration-none">
+                    {% if r.note %}{{ r.note.title }}{% else %}（削除された解説）{% endif %}
+                </a>
+                <span class="text-muted">{{ r.correct }}/{{ r.total }}問　{{ r.started_at|date:"n/j H:i" }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 「いま選んでいるもの」を出す。畳んだ中分類の中を選んでも分かるように。
+// :has() が効かないブラウザでも、この行だけは正しく出る。
+(function () {
+    var label = document.getElementById('picked');
+    var form = label && label.closest('form');
+    if (!form) { return; }
+
+    var update = function () {
+        var checked = form.querySelector('input[name="note"]:checked');
+        var row = checked && checked.closest('.ap-row');
+        label.textContent = (row && row.dataset.name) ? row.dataset.name : 'おまかせ';
+    };
+    form.addEventListener('change', update);
+
+    // 前の選択が残って再表示されたときは、その中分類を開いておく
+    var checked = form.querySelector('.ap-group input[name="note"]:checked');
+    if (checked) { checked.closest('details').open = true; }
+    update();
+})();
+</script>
+{% endblock %}

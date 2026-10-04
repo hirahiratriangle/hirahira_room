@@ -1,0 +1,294 @@
+"""理解度の記録と集計。
+
+問題は取り込みのたびに入れ替わって消えるので、成績を問題や解答ログから
+集計すると、差し替えのたびに実力の記録まで失われてしまう。
+そこで解答するたびに「分野ごとの理解度」と「日ごとの学習量」を積み上げ、
+集計はそちらから行う。問題が消えても、この人の到達点は残る。
+
+苦手度は素の正答率ではなく、事前分布（合格ライン相当の 0.6）へ寄せた
+平滑化正答率から求める。1〜2問しか解いていない中分類が「正答率0%の
+最重要苦手分野」として暴れるのを防ぐため。
+"""
+
+from datetime import timedelta
+
+from django.db.models import Count, F, Sum
+from django.utils import timezone
+
+from .models import Category, CategoryProgress, DailyProgress, PassReport, Question
+
+# ベイズ平滑化のパラメータ。SMOOTHING_PRIOR は科目基準点（60/100）に
+# 対応させ、SMOOTHING_STRENGTH 問ぶんの「仮の解答」を上乗せして扱う。
+SMOOTHING_PRIOR = 0.6
+SMOOTHING_STRENGTH = 5
+
+# 「苦手」と判定する平滑化正答率のしきい値と、判定に必要な最低解答数
+WEAK_THRESHOLD = 0.6
+WEAK_MIN_ATTEMPTS = 3
+
+# 「直近の調子」を見る日数
+RECENT_DAYS = 7
+
+
+def record_progress(learner, question, is_correct):
+    """解答を理解度に反映する。問題が消えても残る記録はここだけ。"""
+    now = timezone.now()
+    progress, _ = CategoryProgress.objects.get_or_create(
+        learner=learner, category=question.category, subject=question.subject
+    )
+    CategoryProgress.objects.filter(pk=progress.pk).update(
+        answered=F('answered') + 1,
+        correct=F('correct') + (1 if is_correct else 0),
+        last_answered_at=now,
+    )
+
+    daily, _ = DailyProgress.objects.get_or_create(
+        learner=learner, date=timezone.localdate(now)
+    )
+    DailyProgress.objects.filter(pk=daily.pk).update(
+        answered=F('answered') + 1,
+        correct=F('correct') + (1 if is_correct else 0),
+    )
+
+
+def categories_for(subject=None):
+    """その科目の分類。科目を指定しなければ全部返す。
+
+    科目Aは中分類（1〜23）、科目Bは要綱の別紙が定める11分野（101〜111）で、
+    重なりがない。科目を絞らずに並べると、解きようのない分類が混ざる。
+    """
+    queryset = Category.objects.all()
+    if subject in (Category.SUBJECT_A, Category.SUBJECT_B):
+        queryset = queryset.filter(subject=subject)
+    return queryset
+
+
+def smoothed_rate(correct, total):
+    """平滑化した正答率。未解答なら事前分布そのもの。"""
+    return (correct + SMOOTHING_STRENGTH * SMOOTHING_PRIOR) / (total + SMOOTHING_STRENGTH)
+
+
+def category_stats(learner, subject=None):
+    """中分類ごとの成績を、要綱の中分類順に返す。"""
+    progress = CategoryProgress.objects.filter(learner=learner)
+    if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
+        progress = progress.filter(subject=subject)
+
+    aggregated = {}
+    for row in progress.values('category').annotate(
+        total=Sum('answered'), correct=Sum('correct'),
+    ):
+        aggregated[row['category']] = row
+    last_answered = {
+        row['category']: row['last']
+        for row in progress.values('category').annotate(last=F('last_answered_at'))
+    }
+
+    available = {
+        row['category']: row['n']
+        for row in Question.objects.active().for_subject(subject)
+        .values('category').annotate(n=Count('id'))
+    }
+
+    rows = []
+    for category in categories_for(subject):
+        agg = aggregated.get(category.id, {})
+        total = agg.get('total') or 0
+        correct = agg.get('correct') or 0
+        smooth = smoothed_rate(correct, total)
+        rows.append({
+            'category': category,
+            'total': total,
+            'correct': correct,
+            'wrong': total - correct,
+            'rate': (correct / total) if total else None,
+            'rate_percent': round(correct / total * 100) if total else None,
+            'smoothed': smooth,
+            'weakness': 1.0 - smooth,
+            'last_answered': last_answered.get(category.id),
+            'question_count': available.get(category.id, 0),
+            'is_weak': total >= WEAK_MIN_ATTEMPTS and smooth < WEAK_THRESHOLD,
+            'is_untouched': total == 0,
+        })
+    return rows
+
+
+def category_options(learner):
+    """出題設定の「分野」に並べる選択肢。
+
+    分類は科目ごとに別なので、画面では科目に合わせて出し分ける。
+    テンプレートに model を渡さず素の値にしてあるのは、そのまま
+    json_script で JavaScript へ渡し、科目の切替に使うため。
+    選ぶ前に薄い分野が分かるよう、持っている問題数も添える。
+    """
+    counts = {}
+    for row in (
+        Question.objects.active()
+        .values('category', 'subject').annotate(n=Count('id'))
+    ):
+        counts.setdefault(row['category'], {})[row['subject']] = row['n']
+
+    return [
+        {
+            'code': category.code,
+            'label': category.label,
+            'subject': category.subject,
+            # その分類の科目ぶんだけ数える。取り込み前の古いデータが
+            # 別の科目で残っていても、件数に混ざらないようにする。
+            'question_count': counts.get(category.id, {}).get(category.subject, 0),
+        }
+        for category in Category.objects.all()
+    ]
+
+
+def weak_categories(rows, limit=5):
+    """苦手な順に中分類を返す。解答実績のあるものだけが対象。"""
+    answered = [r for r in rows if r['total'] >= WEAK_MIN_ATTEMPTS]
+    answered.sort(key=lambda r: (r['smoothed'], -r['total']))
+    return answered[:limit]
+
+
+def field_stats(rows):
+    """分野（テクノロジ系／マネジメント系／ストラテジ系）単位の集計。
+
+    分野の内訳（80問中 50・10・20）に意味があるのは科目Aだけなので、
+    科目Bの分類は数えない。
+    """
+    buckets = {}
+    for row in rows:
+        if row['category'].subject != Category.SUBJECT_A:
+            continue
+        key = row['category'].field
+        bucket = buckets.setdefault(key, {
+            'field': key,
+            'field_label': row['category'].get_field_display(),
+            'total': 0,
+            'correct': 0,
+            'weight': 0,
+        })
+        bucket['total'] += row['total']
+        bucket['correct'] += row['correct']
+        bucket['weight'] += row['category'].exam_weight
+
+    result = []
+    for key in (Category.FIELD_TECHNOLOGY, Category.FIELD_MANAGEMENT, Category.FIELD_STRATEGY):
+        bucket = buckets.get(key)
+        if not bucket:
+            continue
+        total = bucket['total']
+        bucket['rate'] = (bucket['correct'] / total) if total else None
+        bucket['rate_percent'] = round(bucket['correct'] / total * 100) if total else None
+        result.append(bucket)
+    return result
+
+
+def overall_stats(learner):
+    """全体成績と、直近の調子。"""
+    totals = CategoryProgress.objects.filter(learner=learner).aggregate(
+        total=Sum('answered'), correct=Sum('correct')
+    )
+    total = totals['total'] or 0
+    correct = totals['correct'] or 0
+
+    since = timezone.localdate() - timedelta(days=RECENT_DAYS - 1)
+    recent = DailyProgress.objects.filter(learner=learner, date__gte=since).aggregate(
+        total=Sum('answered'), correct=Sum('correct')
+    )
+    recent_total = recent['total'] or 0
+    recent_correct = recent['correct'] or 0
+
+    study_days = DailyProgress.objects.filter(learner=learner, answered__gt=0).count()
+
+    return {
+        'total': total,
+        'correct': correct,
+        'wrong': total - correct,
+        'rate': (correct / total) if total else None,
+        'rate_percent': round(correct / total * 100) if total else None,
+        'recent_days': RECENT_DAYS,
+        'recent_total': recent_total,
+        'recent_rate_percent': (
+            round(recent_correct / recent_total * 100) if recent_total else None
+        ),
+        'study_days': study_days,
+        # 基準点は両科目とも100点満点の60点。科目Aは各1.25点なので正答率60%が基準。
+        'pass_line_percent': 60,
+    }
+
+
+def daily_counts(learner, days=14):
+    """直近の日別解答数（学習の継続を見るため）。"""
+    today = timezone.localdate()
+    start = today - timedelta(days=days - 1)
+    by_date = {
+        row.date: row
+        for row in DailyProgress.objects.filter(learner=learner, date__gte=start)
+    }
+    return [
+        {
+            'date': start + timedelta(days=offset),
+            'total': getattr(by_date.get(start + timedelta(days=offset)), 'answered', 0),
+            'correct': getattr(by_date.get(start + timedelta(days=offset)), 'correct', 0),
+        }
+        for offset in range(days)
+    ]
+
+
+def site_summary():
+    """全 ID を合わせた集計。のべ解答数・分類別の解答数・合格者数。
+
+    解答ログ（Attempt）は問題の差し替えで消えるので、のべ数は
+    消えない CategoryProgress から数える。個人が特定できる値は返さない。
+    """
+    per_category = {
+        row['category']: row
+        for row in CategoryProgress.objects.values('category').annotate(
+            total=Sum('answered'), correct=Sum('correct'),
+        )
+    }
+
+    subjects = []
+    for value, label in Question.SUBJECT_CHOICES:
+        rows = []
+        for category in categories_for(value):
+            agg = per_category.get(category.id, {})
+            total = agg.get('total') or 0
+            correct = agg.get('correct') or 0
+            rows.append({
+                'category': category,
+                'total': total,
+                'correct': correct,
+                'rate_percent': round(correct / total * 100) if total else None,
+            })
+        subject_total = sum(r['total'] for r in rows)
+        subject_correct = sum(r['correct'] for r in rows)
+        for row in rows:
+            row['share_percent'] = (
+                round(row['total'] / subject_total * 100, 1) if subject_total else 0.0
+            )
+        subjects.append({
+            'value': value,
+            'label': label,
+            'rows': rows,
+            # 分野（テクノロジ系など）は科目Aの中分類にだけ意味がある
+            'fields': field_stats(rows) if value == Question.SUBJECT_A else [],
+            'total': subject_total,
+            'correct': subject_correct,
+            'rate_percent': (
+                round(subject_correct / subject_total * 100) if subject_total else None
+            ),
+        })
+
+    total = sum(s['total'] for s in subjects)
+    correct = sum(s['correct'] for s in subjects)
+    return {
+        'total': total,
+        'correct': correct,
+        'rate_percent': round(correct / total * 100) if total else None,
+        'learners': (
+            CategoryProgress.objects.filter(answered__gt=0)
+            .values('learner').distinct().count()
+        ),
+        'passers': PassReport.objects.count(),
+        'subjects': subjects,
+    }

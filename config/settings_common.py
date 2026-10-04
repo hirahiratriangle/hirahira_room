@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'jpcore',
     'countdown',
     'fe',
+    'ap',
 ]
 
 MIDDLEWARE = [
@@ -174,10 +175,13 @@ COUNTDOWN_REMINDER_TOKEN = os.environ.get('COUNTDOWN_REMINDER_TOKEN', '')
 # 実際に弾くのはこの値で、fe.forms がここを見る。
 FE_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
+# 応用情報（AP）対策アプリの上限。ap.forms がここを見る。考え方は FE と同じ。
+AP_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+
 # ファイル本体は multipart で送られ、この値の対象外になる（Django の仕様）。
 # ここで効くのは、本文に JSON をそのまま載せて POST したときだけ。
 # 画面からのアップロードには関係しないが、上の上限と食い違わないよう合わせておく。
-DATA_UPLOAD_MAX_MEMORY_SIZE = FE_MAX_UPLOAD_BYTES + 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = max(FE_MAX_UPLOAD_BYTES, AP_MAX_UPLOAD_BYTES) + 1024 * 1024
 
 # FILE_UPLOAD_MAX_MEMORY_SIZE は拒否の上限ではなく、メモリに載せるか
 # 一時ファイルに流すかの分かれ目。既定（2.5MB）のままにしておく。

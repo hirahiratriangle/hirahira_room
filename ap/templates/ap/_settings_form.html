@@ -1,0 +1,100 @@
+{% comment %}出題モードの切替フォーム。quiz 画面とダッシュボードで共有する。
+categories には ap.stats.category_options の結果（科目ごとの件数つき）を渡す。
+
+stay を渡すと、保存したあとその場に留まる。ダッシュボードには「いまの設定で
+解く」ボタンが別にあるので、設定を変えた瞬間に演習が始まると、何が保存された
+のか確かめられない。演習画面では、そのまま次の問題へ進むほうが自然なので渡さない。
+{% endcomment %}
+<form method="post" action="{% url 'ap:quiz_settings' %}" class="row g-2 align-items-end" id="quizSettings">
+    {% csrf_token %}
+    {% if stay %}<input type="hidden" name="next" value="index">{% endif %}
+    <div class="col-12 col-md-4">
+        <label for="mode" class="form-label small text-muted mb-1">出題モード</label>
+        <select class="form-select form-select-sm" id="mode" name="mode">
+            {% for value, label in study_session.MODE_CHOICES %}
+            <option value="{{ value }}" {% if study_session.mode == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-6 col-md-3">
+        <label for="subject" class="form-label small text-muted mb-1">科目</label>
+        <select class="form-select form-select-sm" id="subject" name="subject">
+            <option value="A" {% if study_session.subject == 'A' %}selected{% endif %}>科目A（知識・旧午前）</option>
+            <option value="B" {% if study_session.subject == 'B' %}selected{% endif %}>科目B（技能・旧午後）</option>
+        </select>
+    </div>
+    <div class="col-6 col-md-3">
+        <label for="category" class="form-label small text-muted mb-1">分野</label>
+        {% comment %}分野が効くのは「分野を指定」のときだけ。ほかのモードでも
+        保存値を映すと、効いていない分野が選ばれたままに見える。{% endcomment %}
+        <select class="form-select form-select-sm" id="category" name="category"
+                {% if study_session.mode != 'category' %}disabled{% endif %}>
+            <option value="">指定なし</option>
+            {% for option in categories %}{% if option.subject == study_session.subject %}
+            <option value="{{ option.code }}"{% if study_session.mode == 'category' and study_session.category.code == option.code %} selected{% endif %}>{{ option.label }}{% if option.question_count %}（{{ option.question_count }}問）{% endif %}</option>
+            {% endif %}{% endfor %}
+        </select>
+    </div>
+    <div class="col-12 col-md-2 d-grid">
+        <button type="submit" class="btn btn-sm btn-outline-primary">
+            {% if stay %}設定を保存{% else %}この設定で出題{% endif %}
+        </button>
+    </div>
+</form>
+
+{{ categories|json_script:"categoryOptions" }}
+<script>
+// 分野の欄は、出題モードと科目で決まる。
+//
+// ・分野が効くのは「分野を指定」のときだけ。ほかのモードでは選べても
+//   保存時に捨てられるので、選べること自体が誤解のもとになる。伏せておく。
+// ・分類は科目ごとに別で、科目Aは中分類（1〜23）、科目Bは11分野（101〜111）。
+//   重なりが無いので、混ぜて並べると解きようのない組み合わせができる。
+//
+// 最初に出す分はサーバーが描いている。全部描いて JavaScript で絞る作りだと、
+// JS が動くまでの一瞬、別の科目の分類まで見えてしまう。
+(function () {
+    var form = document.getElementById('quizSettings');
+    if (!form || form.dataset.bound) { return; }
+    form.dataset.bound = '1';
+
+    var mode = form.querySelector('#mode');
+    var subject = form.querySelector('#subject');
+    var category = form.querySelector('#category');
+    var source = document.getElementById('categoryOptions');
+    if (!mode || !subject || !category || !source) { return; }
+
+    var all = JSON.parse(source.textContent);
+
+    var rebuild = function () {
+        var keep = category.value;
+        // 先頭の「指定なし」は残し、その後ろを選んだ科目のものに入れ替える
+        while (category.options.length > 1) { category.remove(1); }
+
+        all.forEach(function (o) {
+            if (o.subject !== subject.value) { return; }
+            var el = document.createElement('option');
+            el.value = o.code;
+            el.textContent = o.label + (o.question_count ? '（' + o.question_count + '問）' : '');
+            category.add(el);
+        });
+
+        // 前の選択が別の科目のものだと value が一致せず selectedIndex が -1 になり、
+        // 何も選ばれていない空欄になる。先頭の「指定なし」へ明示的に戻す。
+        category.value = keep;
+        if (category.selectedIndex < 0) { category.selectedIndex = 0; }
+    };
+
+    var toggle = function () {
+        var usable = mode.value === 'category';
+        category.disabled = !usable;
+        // 使わないモードに移ったら、選んだままにしない。
+        // 保存時にどのみち捨てられるので、画面と保存結果を一致させる。
+        if (!usable) { category.selectedIndex = 0; }
+    };
+
+    mode.addEventListener('change', toggle);
+    subject.addEventListener('change', rebuild);
+    toggle();
+})();
+</script>

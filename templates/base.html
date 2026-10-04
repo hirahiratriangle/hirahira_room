@@ -50,6 +50,14 @@
                         </a>
                     </li>
                     {% endif %}
+                    {% if request.ap_learner %}
+                    <!-- AP 対策アプリで入っている ID（アプリ内の ID で、アカウントとは別） -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'ap:enter' %}" title="AP 対策アプリの ID を切り替える">
+                            <i class="fas fa-id-badge"></i> AP ID: {{ request.ap_learner.code }} ▸ 切り替える
+                        </a>
+                    </li>
+                    {% endif %}
                     {% endblock %}
                 </ul>
                 <ul class="navbar-nav ms-auto">
