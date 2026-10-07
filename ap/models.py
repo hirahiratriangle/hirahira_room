@@ -12,6 +12,7 @@ Attempt が持つ。問題と技術解説は全 ID で共有し、成績は Lear
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Count, Q
+from django.utils import timezone
 
 # 科目。要綱が科目ごとに別の出題範囲を定めているので、分類も科目を持つ。
 SUBJECT_A = 'A'
@@ -20,19 +21,28 @@ SUBJECT_CHOICES = [(SUBJECT_A, '科目A'), (SUBJECT_B, '科目B')]
 
 
 class Learner(models.Model):
-    """本アプリの中の ID。成績は、この ID ごとに持つ。
+    """成績を持つ単位。ID を登録した人と、登録せずに使う人の両方を表す。
 
+    ID を登録すると code が入り、成績が残る。ダッシュボードは /ap/<ID>/ で開く。
     hirahira_room のアカウントとは紐づけない。ID は本人が決め、入力した人を
-    本人として扱う（合言葉などの確認はしない）。入った ID はブラウザの
-    セッションが覚えていて、ダッシュボードは /ap/<ID>/ で開く。
-    大文字小文字は区別せず、小文字にそろえて持つ。
+    本人として扱う（合言葉などの確認はしない）。大文字小文字は区別せず、
+    小文字にそろえて持つ。
+
+    code が空のものは「履歴を残さない」で使っている間の一時的な記録。
+    ブラウザのセッションだけが参照を持ち、URL からはたどれない。苦手重点の
+    出題と学習モードは成績の積み上げが要るので、使っている間は同じ仕組みで
+    記録し、使われなくなったら purge_temp_learners_ap で消す。
 
     問題集は全 ID で共有で、取り込み（差し替え）ができるのは管理用の ID だけ。
     管理用にするのは Django の管理画面から行う。
     """
 
+    # 一時的な記録を消すまでの日数。触られなくなってからの日数で数える。
+    TEMP_RETENTION_DAYS = 30
+
     code = models.CharField(
-        verbose_name='ID', max_length=30, unique=True,
+        verbose_name='ID', max_length=30, unique=True, null=True, blank=True,
+        help_text='空のときは、履歴を残さずに使っている一時的な記録。',
         validators=[RegexValidator(
             r'^[a-z0-9_-]{3,30}$',
             'ID は半角の英小文字・数字・「_」「-」で、3〜30文字にしてください。',
@@ -43,13 +53,25 @@ class Learner(models.Model):
         help_text='問題集の取り込み・書き出しと、問題の一覧ができる。',
     )
     created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+    # 一時的な記録をいつ消してよいかの判断に使う。画面を開くたびに更新する。
+    last_seen_at = models.DateTimeField(verbose_name='最終利用日時', default=timezone.now)
 
     class Meta:
         verbose_name = verbose_name_plural = 'AP 学習者ID'
         ordering = ['code']
 
     def __str__(self):
-        return self.code
+        return self.code or '（履歴を残さない利用）'
+
+    @property
+    def is_temporary(self):
+        """ID を登録していない、使っている間だけの記録か。"""
+        return not self.code
+
+    @property
+    def label(self):
+        """画面に出す呼び名。"""
+        return self.code or '履歴なし'
 
 
 class Category(models.Model):

@@ -375,6 +375,16 @@ class ViewTests(TestCase):
                 self.assertIn('図を見ないと解けない問題', html)
                 self.assertIn('本番どおりの模擬試験', html)
 
+    def test_start_page_is_for_this_exam_and_states_the_limits(self):
+        """まだ始めていない人の入口にも、この区分の試験構成と注意書きを出す。"""
+        session = self.client.session
+        session.pop('ap_learner_id', None)
+        session.save()
+        html = self.client.get(reverse('ap:index')).content.decode('utf-8')
+        self.assertIn('履歴を残さずに始める', html)
+        self.assertIn('科目A 80問／150分', html)
+        self.assertIn('このアプリが対応していない問題・問題形式', html)
+
     def test_subject_b_question_says_it_is_converted(self):
         """科目Bを解いているときは、本番が記述式であることをその場で伝える。"""
         session, _ = StudySession.objects.get_or_create(learner=self.learner)
@@ -607,6 +617,84 @@ class LearnerIdTests(TestCase):
         response = self.client.get(reverse('ap:index'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'この ID で入る')
+
+    def test_top_page_offers_both_ways_to_start(self):
+        """トップでは、履歴を残すかどうかを選べる。"""
+        html = self.client.get(reverse('ap:index')).content.decode('utf-8')
+        self.assertIn('履歴を残さずに始める', html)
+        self.assertIn('履歴を残す（ID を登録）', html)
+
+    def test_can_start_without_registering_an_id(self):
+        """ID を登録せずに始められ、そのままダッシュボードが開く。"""
+        response = self.client.post(reverse('ap:index'), {'action': 'temporary'})
+        self.assertRedirects(response, reverse('ap:index'))
+        learner = Learner.objects.get(code__isnull=True)
+        self.assertTrue(learner.is_temporary)
+        # 入口がそのままダッシュボードになる（URL に ID は出ない）
+        html = self.client.get(reverse('ap:index')).content.decode('utf-8')
+        self.assertIn('履歴なし', html)
+        self.assertNotIn('履歴を残さずに始める', html)
+
+    def test_temporary_use_can_answer_and_keeps_stats_while_in_use(self):
+        """使っている間は、ふつうに解けて成績も積み上がる。"""
+        build_questions()
+        self.client.post(reverse('ap:index'), {'action': 'temporary'})
+        learner = Learner.objects.get(code__isnull=True)
+        question = Question.objects.first()
+        answer(learner, question, correct=True)
+        self.assertEqual(
+            CategoryProgress.objects.get(learner=learner, category=question.category).answered, 1
+        )
+        self.assertEqual(self.client.get(reverse('ap:quiz')).status_code, 200)
+
+    def test_registering_an_id_later_starts_from_zero(self):
+        """履歴なしで使ったあとに ID を登録しても、それまでの解答は引き継がない。"""
+        build_questions()
+        self.client.post(reverse('ap:index'), {'action': 'temporary'})
+        temp = Learner.objects.get(code__isnull=True)
+        answer(temp, Question.objects.first(), correct=True)
+
+        self._post('later_id', 'create')
+        named = Learner.objects.get(code='later_id')
+        self.assertEqual(CategoryProgress.objects.filter(learner=named).count(), 0)
+        # 一時的な記録はそのまま残り、掃除の対象になる
+        self.assertTrue(Learner.objects.filter(pk=temp.pk).exists())
+
+    def test_temporary_use_is_excluded_from_the_site_summary(self):
+        """消える記録は全体集計に数えない。"""
+        build_questions()
+        self.client.post(reverse('ap:index'), {'action': 'temporary'})
+        temp = Learner.objects.get(code__isnull=True)
+        answer(temp, Question.objects.first(), correct=True)
+        self.assertEqual(site_summary()['total'], 0)
+
+        named = make_learner('counted')
+        answer(named, Question.objects.first(), correct=True)
+        self.assertEqual(site_summary()['total'], 1)
+
+    def test_temporary_use_cannot_report_a_pass(self):
+        """履歴を残さない利用からは合格申告できない。"""
+        self.client.post(reverse('ap:index'), {'action': 'temporary'})
+        response = self.client.post(
+            reverse('ap:pass_report'), {'passed_on': '2026-04-01'}
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(PassReport.objects.count(), 0)
+
+    def test_purge_removes_only_stale_temporary_records(self):
+        """掃除は、使われなくなった一時的な記録だけを消す。"""
+        from django.utils import timezone
+        fresh = Learner.objects.create(code=None)
+        stale = Learner.objects.create(code=None)
+        Learner.objects.filter(pk=stale.pk).update(
+            last_seen_at=timezone.now() - timezone.timedelta(days=90)
+        )
+        named = make_learner('keep_me')
+
+        call_command('purge_temp_learners_ap', verbosity=0)
+        self.assertFalse(Learner.objects.filter(pk=stale.pk).exists())
+        self.assertTrue(Learner.objects.filter(pk=fresh.pk).exists())
+        self.assertTrue(Learner.objects.filter(pk=named.pk).exists())
 
     def test_create_opens_the_new_dashboard(self):
         response = self._post('Hira_01', 'create')

@@ -45,8 +45,27 @@ python manage.py createsuperuser --settings=config.settings_dev
 「問題の管理 → JSONを取り込む」から取り込む。
 
 どの画面も hirahira_room へのログインが要る（`LearnerRequiredMixin` は
-`LoginRequiredMixin` を継いでいる）。ログインしたら `/ap/` で本アプリの中の ID
-（`Learner`）を入力するか新しく作る。成績はアカウントではなく、**この ID ごと**に持つ。
+`LoginRequiredMixin` を継いでいる）。ログインしたら `/ap/` で始め方を選ぶ。
+
+| 始め方 | どう持つか |
+|---|---|
+| 履歴を残さずに始める | ID を登録しない。`code` が空の `Learner` を作り、ブラウザのセッションだけが覚える。`/ap/` がそのままダッシュボードになる |
+| 履歴を残す（ID を登録） | 本アプリの中の ID（`Learner`）を入力するか新しく作る。ダッシュボードは `/ap/<ID>/` |
+
+成績はアカウントではなく、**この記録ごと**に持つ。履歴を残さない利用でも、使っている間は
+登録 ID とまったく同じ仕組みで記録するので、重点出題も学習モードも使える。違いは次の3つ。
+
+- **引き継がない。** あとから ID を登録しても、それまでの解答はその ID に移らない（登録画面に明記してある）
+- **全体集計に数えない。** 「みんなの集計」ののべ解答数・学習した人は登録 ID だけ。合格の申告も ID の登録が要る
+- **使われなくなったら消す。** 最終利用（`last_seen_at`）から30日たった記録を、次のコマンドで消す。登録 ID には触れない
+
+```bash
+python manage.py purge_temp_learners_ap            # 既定は30日
+python manage.py purge_temp_learners_ap --dry-run  # 件数だけ見る
+```
+
+コマンド名に `_ap` が付くのは、`fe` の `purge_temp_learners` と名前がぶつかるため
+（管理コマンドの名前はプロジェクト全体で1つで、同名だと `fe` のほうだけが動く）。
 
 管理用の ID は、画面からは作れない。ID を一度作ってから、Django の管理画面の
 「AP 学習者ID」で「管理用」（`is_admin`）に印を付ける。
