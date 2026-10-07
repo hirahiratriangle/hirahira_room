@@ -1,6 +1,12 @@
-{% comment %}入っている ID と、別の ID に切り替える入口。ヘッダーの nav に並べる。
-テキストのリンクに埋もれないよう、枠つきのボタンにする。{% endcomment %}
+{% comment %}いまの状態と、ID を登録・切り替える入口。ヘッダーの nav に並べる。
+テキストのリンクに埋もれないよう、枠つきのボタンにする。
+履歴を残さない利用では、消える記録であることが分かる呼び名にする。{% endcomment %}
 <span class="d-inline-flex align-items-center gap-2">
+    {% if request.fe_learner.is_temporary %}
+    <span style="color:#c3d6ee;"><strong class="text-white">履歴なし</strong>で利用中</span>
+    <a class="btn btn-outline-light btn-sm py-0" href="{% url 'fe:enter' %}">ID を登録して残す</a>
+    {% else %}
     <span style="color:#c3d6ee;">ID: <strong class="text-white">{{ request.fe_learner.code }}</strong></span>
     <a class="btn btn-outline-light btn-sm py-0" href="{% url 'fe:enter' %}">ID を切り替える</a>
+    {% endif %}
 </span>

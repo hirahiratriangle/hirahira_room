@@ -233,10 +233,14 @@ def site_summary():
 
     解答ログ（Attempt）は問題の差し替えで消えるので、のべ数は
     消えない CategoryProgress から数える。個人が特定できる値は返さない。
+
+    履歴を残さない利用（ID のない記録）は数えない。いずれ消える記録なので、
+    数えると、あとで総数が減って辻褄が合わなくなるため。
     """
+    registered = CategoryProgress.objects.filter(learner__code__isnull=False)
     per_category = {
         row['category']: row
-        for row in CategoryProgress.objects.values('category').annotate(
+        for row in registered.values('category').annotate(
             total=Sum('answered'), correct=Sum('correct'),
         )
     }
@@ -280,8 +284,7 @@ def site_summary():
         'correct': correct,
         'rate_percent': round(correct / total * 100) if total else None,
         'learners': (
-            CategoryProgress.objects.filter(answered__gt=0)
-            .values('learner').distinct().count()
+            registered.filter(answered__gt=0).values('learner').distinct().count()
         ),
         'passers': PassReport.objects.count(),
         'subjects': subjects,

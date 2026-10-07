@@ -37,9 +37,15 @@ summary（stats.site_summary）、my_report、pass_form を受け取る。
         </div>
     </div>
 
-    <!-- 合格の申告 -->
+    <!-- 合格の申告。消える記録から申告されると合格者数が実態と合わなくなるので、
+         履歴を残さない利用では案内だけ出す。 -->
     <div class="border rounded p-3 mb-3">
-        {% if my_report %}
+        {% if learner.is_temporary %}
+        <div class="small text-muted mb-0">
+            本番に合格したときの申告には ID の登録が必要です。
+            <a href="{% url 'fe:enter' %}">ID を登録する</a>と申告できます。
+        </div>
+        {% elif my_report %}
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div>
                 <strong>合格を申告済みです</strong>

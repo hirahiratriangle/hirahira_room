@@ -12,7 +12,8 @@ history / manage）を渡す。sub があれば見出しの右に小さく添え
                 {% if sub %}<span class="small" style="color:#c3d6ee;">{{ sub }}</span>{% endif %}
             </div>
             <nav class="small d-flex flex-wrap gap-3">
-                {% if current != 'index' %}<a class="text-white text-decoration-none" href="{% if request.fe_learner %}{% url 'fe:dashboard' request.fe_learner.code %}{% else %}{% url 'fe:index' %}{% endif %}">ダッシュボード</a>
+                {% comment %}履歴を残さない利用には ID がなく、入口がそのままダッシュボードになる。{% endcomment %}
+                {% if current != 'index' %}<a class="text-white text-decoration-none" href="{% if request.fe_learner.code %}{% url 'fe:dashboard' request.fe_learner.code %}{% else %}{% url 'fe:index' %}{% endif %}">ダッシュボード</a>
                 {% else %}<span style="color:#93aecd;">ダッシュボード</span>{% endif %}
 
                 {% if current != 'quiz' %}<a class="text-white text-decoration-none" href="{% url 'fe:quiz' %}">1問1答</a>

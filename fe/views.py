@@ -60,7 +60,10 @@ def _enter(request, learner):
 
 
 def current_learner(request):
-    """セッションが覚えている ID。入っていなければ None。"""
+    """セッションが覚えている記録。始めていなければ None。
+
+    ID を登録した人も、履歴を残さずに使っている人も、同じようにここから取る。
+    """
     pk = request.session.get(SESSION_LEARNER)
     if pk is None:
         return None
@@ -70,10 +73,26 @@ def current_learner(request):
     return learner
 
 
-class LearnerRequiredMixin(LoginRequiredMixin):
-    """ID で入っている人向けの画面。入っていなければ ID の入力へ戻す。
+def start_temporary(request):
+    """履歴を残さずに始める。ID を持たない記録を作ってセッションに結び付ける。"""
+    learner = Learner.objects.create(code=None)
+    _enter(request, learner)
+    return learner
 
-    入っている ID は self.learner に置く。ヘッダーに ID を出すため、
+
+def touch(learner):
+    """最終利用日時を進める。使われなくなった一時的な記録を見分けるため。
+
+    登録済みの ID は消さないので、一時的な記録のときだけ書き込む。
+    """
+    if learner.is_temporary:
+        Learner.objects.filter(pk=learner.pk).update(last_seen_at=timezone.now())
+
+
+class LearnerRequiredMixin(LoginRequiredMixin):
+    """始めている人向けの画面。始めていなければトップへ戻す。
+
+    いまの記録は self.learner に置く。ヘッダーに出すため、
     request.fe_learner にも載せておく。
     """
 
@@ -83,6 +102,7 @@ class LearnerRequiredMixin(LoginRequiredMixin):
             if self.learner is None:
                 return redirect('fe:index')
             request.fe_learner = self.learner
+            touch(self.learner)
             self.check_learner(self.learner)
         return super().dispatch(request, *args, **kwargs)
 
@@ -99,6 +119,9 @@ class AdminRequiredMixin(LearnerRequiredMixin):
 
 
 def dashboard_url(learner):
+    """ダッシュボードの場所。履歴を残さない利用は URL に出さず、入口がそのまま画面になる。"""
+    if learner.is_temporary:
+        return reverse('fe:index')
     return reverse('fe:dashboard', args=[learner.code])
 
 
@@ -124,30 +147,63 @@ class EnterView(LoginRequiredMixin, generic.FormView):
     def form_valid(self, form):
         if form.creating:
             learner = Learner.objects.create(code=form.cleaned_data['code'])
-            messages.success(self.request, 'ID「{}」を作りました。'.format(learner.code))
+            messages.success(
+                self.request,
+                'ID「{}」を作りました。これからの解答はこの ID に残ります。'.format(learner.code),
+            )
         else:
             learner = form.learner
+        # 履歴を残さずに使っていた分は引き継がない。放っておけば掃除で消える。
         _enter(self.request, learner)
         return redirect(dashboard_url(learner))
 
 
 class IndexView(EnterView):
-    """アプリの入口。入っていれば、そのまま自分のダッシュボードへ送る。"""
+    """アプリの入口。
+
+    まだ始めていなければ、履歴を残すかどうかを選ぶ画面を出す。
+    ID で入っていれば /fe/<ID>/ へ送り、履歴を残さない利用なら
+    この場所がそのままダッシュボードになる。
+    """
+
+    template_name = 'fe/start.html'
 
     def get(self, request, *args, **kwargs):
         learner = current_learner(request)
-        if learner is not None:
-            return redirect(dashboard_url(learner))
-        return super().get(request, *args, **kwargs)
+        if learner is None:
+            return super().get(request, *args, **kwargs)
+        if learner.is_temporary:
+            touch(learner)
+            request.fe_learner = learner
+            return DashboardView.render_for(request, learner)
+        return redirect(dashboard_url(learner))
+
+    def post(self, request, *args, **kwargs):
+        """「履歴を残さずに始める」。ID の登録は EnterView 側で扱う。"""
+        if request.POST.get('action') == 'temporary':
+            start_temporary(request)
+            return redirect('fe:index')
+        return super().post(request, *args, **kwargs)
 
 
 class DashboardView(LearnerRequiredMixin, generic.TemplateView):
     """ダッシュボード（マイページ）。今の実力と，次に何をやるべきかを一目で分かるようにする。
 
     URL の ID は、いま入っている ID のときだけ開ける。ほかの ID なら 404。
+    履歴を残さない利用には URL がないので、IndexView から render_for で描く。
     """
 
     template_name = 'fe/index.html'
+
+    @classmethod
+    def render_for(cls, request, learner):
+        """URL を持たない利用のために、ダッシュボードをその場で描く。"""
+        view = cls()
+        view.request = request
+        view.learner = learner
+        view.kwargs = {}
+        view.args = ()
+        return view.render_to_response(view.get_context_data())
 
     def get(self, request, code, *args, **kwargs):
         if code.lower() != self.learner.code:
@@ -362,7 +418,17 @@ class StatsView(LearnerRequiredMixin, generic.TemplateView):
 
 
 class PassReportView(LearnerRequiredMixin, generic.View):
-    """本番合格の申告と取り消し。1人1件で、申告し直すと受験日を上書きする。"""
+    """本番合格の申告と取り消し。1人1件で、申告し直すと受験日を上書きする。
+
+    履歴を残さない利用からは申告できない。消える記録なので、
+    合格者数に数えると実態と合わなくなるため。
+    """
+
+    def check_learner(self, learner):
+        if learner.is_temporary:
+            raise PermissionDenied(
+                '合格の申告には ID の登録が必要です。履歴を残さない利用では申告できません。'
+            )
 
     def post(self, request, *args, **kwargs):
         back = dashboard_url(self.learner) + '#summary'

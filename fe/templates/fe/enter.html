@@ -18,11 +18,20 @@
     <div class="row justify-content-center">
         <div class="col-12 col-md-8 col-lg-5">
             {% if current %}
+            {% if current.is_temporary %}
+            <div class="alert alert-warning small">
+                いまは<strong>履歴を残さず</strong>に使っています。
+                ここで ID を登録すると、これからの解答はその ID に残ります。
+                ただし<strong>それまでの解答は引き継がれません</strong>。ゼロから始まります。
+                <a href="{% url 'fe:index' %}">そのまま続ける</a>
+            </div>
+            {% else %}
             <div class="alert alert-light border small">
                 いまは ID「<strong>{{ current.code }}</strong>」で入っています。
                 別の ID を入力すると切り替わります。
                 <a href="{% url 'fe:dashboard' current.code %}">ダッシュボードに戻る</a>
             </div>
+            {% endif %}
             {% endif %}
             <form method="post" novalidate>
                 {% csrf_token %}

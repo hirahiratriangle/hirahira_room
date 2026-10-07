@@ -46,7 +46,7 @@
                     <!-- FE 対策アプリで入っている ID（アプリ内の ID で、アカウントとは別） -->
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'fe:enter' %}" title="FE 対策アプリの ID を切り替える">
-                            <i class="fas fa-id-badge"></i> FE ID: {{ request.fe_learner.code }} ▸ 切り替える
+                            <i class="fas fa-id-badge"></i> FE {% if request.fe_learner.code %}ID: {{ request.fe_learner.code }} ▸ 切り替える{% else %}履歴なしで利用中 ▸ ID を登録{% endif %}
                         </a>
                     </li>
                     {% endif %}
