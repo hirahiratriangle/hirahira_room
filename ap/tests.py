@@ -521,6 +521,39 @@ class ViewTests(TestCase):
         self.assertIsNone(session.category)
         self.assertEqual(session.mode, StudySession.MODE_FOCUS)
 
+    def test_weights_add_up_to_the_real_exam(self):
+        """想定出題数の合計は、本番の出題数と一致させる。
+
+        1分野でも足し忘れると、重み付き抽選が本番の比率からずれる。
+        """
+        for subject, expected in ((Question.SUBJECT_A, 80), (Question.SUBJECT_B, 11)):
+            with self.subTest(subject=subject):
+                total = sum(
+                    Category.objects.filter(subject=subject)
+                    .values_list('exam_weight', flat=True)
+                )
+                self.assertEqual(total, expected)
+
+    def test_every_category_can_be_drawn(self):
+        """どの中分類にも最低1問の重みを置く。0 だと永久に出題されない。"""
+        for category in Category.objects.all():
+            with self.subTest(category=category.name):
+                self.assertGreaterEqual(category.exam_weight, 1)
+
+    def test_weights_follow_the_published_exams_not_syllabus_volume(self):
+        """配分はシラバスの分量ではなく、公開問題の実測に沿わせる。
+
+        小分類の数で按分すると実態と逆向きになる（セキュリティが薄く、
+        プロジェクトマネジメントが厚くなる）。取り違えを防ぐために固定する。
+        """
+        weight = dict(Category.objects.values_list('code', 'exam_weight'))
+        # セキュリティは本番で最も多く出る中分類（10回の平均で 9.9 問）
+        self.assertEqual(weight[11], max(w for c, w in weight.items() if c < 100))
+        # プロジェクトマネジメントは小分類が11と最多だが、出題は4問前後
+        self.assertLess(weight[14], weight[11])
+        # 科目Bは要綱の別紙のとおり、1分野1問
+        self.assertEqual({w for c, w in weight.items() if c > 100}, {1})
+
     def test_the_two_subjects_have_separate_categories(self):
         """科目Aだけの分類と科目Bだけの分類に分かれ、重なりが無いこと。"""
         a = set(Category.objects.filter(subject='A').values_list('code', flat=True))

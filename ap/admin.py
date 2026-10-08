@@ -52,10 +52,22 @@ class PassReportAdmin(admin.ModelAdmin):
 
 @admin.register(Learner)
 class LearnerAdmin(admin.ModelAdmin):
-    list_display = ('code', 'is_admin', 'created_at')
+    """ID の一覧。管理用の付け外しと、一時的な記録の確認に使う。
+
+    code が空のものは「履歴を残さない」で使われている記録で、
+    purge_temp_learners_ap が最終利用日時を見て消す。消える前にどれだけ
+    溜まっているかを、ここで見られるようにしておく。
+    """
+
+    list_display = ('__str__', 'kind', 'is_admin', 'created_at', 'last_seen_at')
     list_editable = ('is_admin',)
-    list_filter = ('is_admin',)
+    list_filter = ('is_admin', ('code', admin.EmptyFieldListFilter))
     search_fields = ('code',)
+    ordering = ('-last_seen_at',)
+
+    @admin.display(description='種別')
+    def kind(self, obj):
+        return '履歴なし' if obj.is_temporary else '登録'
 
 
 admin.site.register(StudySession)

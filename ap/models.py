@@ -104,8 +104,9 @@ class Category(models.Model):
     major_code = models.PositiveSmallIntegerField(verbose_name='大分類番号')
     major_name = models.CharField(verbose_name='大分類', max_length=40)
     # 本番で何問出るかの想定値。科目Aは80問、科目Bは11問のうちの件数。
-    # 科目Aの内訳は IPA が公表していないため、令和6〜7年度の公開問題を
-    # 数えて割り当てている。科目Bは要綱の別紙のとおり1分野1問。
+    # 科目Aの内訳は IPA が公表していないため、令和3〜7年度の公開問題800問を
+    # 中分類に振り分けて数えた（根拠は data/categories.py）。科目Bは要綱の別紙の
+    # とおり1分野1問。
     exam_weight = models.PositiveSmallIntegerField(verbose_name='想定出題数')
 
     class Meta:
