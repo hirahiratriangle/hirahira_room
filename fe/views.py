@@ -26,7 +26,8 @@ from django.views import generic
 
 from .exam import EXAM, build_prompt
 from .forms import LearnerForm, PassReportForm, QuestionUploadForm
-from .importer import export_records, sync
+from .importer import (ImportError_, export_records, needs_confirmation, parse,
+                       preview, sync, validate)
 from .learning import current_item, grade, note_menu, start_round
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
                      LearningRound, PassReport, Question, QuestionTemplate,
@@ -536,8 +537,9 @@ class QuestionUploadView(AdminRequiredMixin, generic.FormView):
         context['prompt'] = build_prompt()
         return context
 
-    def form_valid(self, form):
-        result = sync(form.records)
+    @staticmethod
+    def _count_lines(result):
+        """追加・更新・変更なし・削除の件数を、画面に出す文にする。"""
         lines = []
         for label, key in (('問題', 'questions'), ('解説', 'notes')):
             counts = result[key]
@@ -550,19 +552,34 @@ class QuestionUploadView(AdminRequiredMixin, generic.FormView):
                     counts['unchanged'], counts['removed'],
                 )
             )
-        messages.success(self.request, '　'.join(lines))
-        # 削除が多いときは取り違えの疑いがあるので、別に目立たせて伝える
-        for label, key in (('問題', 'questions'), ('解説', 'notes')):
-            counts = result[key]
-            if counts and counts['removed'] > counts['unchanged'] + counts['updated']:
-                messages.warning(
-                    self.request,
-                    '{}の削除が {} 件で、残った件数より多くなっています。'
-                    '取り込むファイルを取り違えていないか確かめてください。'.format(
-                        label, counts['removed'],
-                    ),
-                )
+        return lines
+
+    def form_valid(self, form):
+        # まず書き込まずに数える。削除が多いときは、確定の前に一度止める。
+        counts = preview(form.records)
+        if needs_confirmation(counts) and self.request.POST.get('confirm') != '1':
+            return self.render_to_response(self.get_context_data(
+                form=form, confirm=self._count_lines(counts),
+                payload=json.dumps(form.records, ensure_ascii=False),
+            ))
+
+        result = sync(form.records)
+        messages.success(self.request, '　'.join(self._count_lines(result)))
         return super().form_valid(form)
+
+    def post(self, request, *args, **kwargs):
+        """確認のあとの実行。ファイルを選び直さずに済むよう、内容を持ち回す。"""
+        if request.POST.get('confirm') == '1' and 'payload' in request.POST:
+            form = self.get_form()
+            try:
+                form.records = validate(parse(request.POST['payload']))
+            except ImportError_ as exc:
+                messages.error(request, str(exc))
+                return redirect('fe:manage_upload')
+            result = sync(form.records)
+            messages.success(request, '　'.join(self._count_lines(result)))
+            return redirect(self.success_url)
+        return super().post(request, *args, **kwargs)
 
 
 class LearnStartView(LearnerRequiredMixin, generic.View):

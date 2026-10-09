@@ -8,6 +8,7 @@
 
 import json
 import random
+import html
 import re
 
 from accounts.models import CustomUser
@@ -19,7 +20,8 @@ from django.urls import reverse
 
 from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
-from .importer import ImportError_, parse, sync, validate
+from .importer import (ImportError_, needs_confirmation, parse, preview, sync,
+                       validate)
 from .learning import note_menu, pick_note
 from .models import (Attempt, Category, CategoryProgress, DailyProgress, Learner,
                      LearningNote, LearningRound, PassReport,
@@ -802,6 +804,18 @@ class ManageTests(TestCase):
             content_type='application/json',
         )}
 
+    def _post_upload(self, data):
+        """取り込みを最後まで通す。削除が多くて確認が出たら、承認して続ける。"""
+        response = self.client.post(reverse('fe:manage_upload'), data)
+        if response.status_code == 200 and '削除が多いので' in response.content.decode('utf-8'):
+            payload = re.search(
+                r'name="payload" value="(.*?)">', response.content.decode('utf-8'), re.S
+            ).group(1)
+            response = self.client.post(reverse('fe:manage_upload'), {
+                'confirm': '1', 'payload': html.unescape(payload),
+            })
+        return response
+
     def _json_upload(self, records):
         return {'upload': SimpleUploadedFile(
             'q.json', json.dumps(records, ensure_ascii=False).encode('utf-8'),
@@ -873,13 +887,13 @@ class ManageTests(TestCase):
         self.assertTrue(response.context['form'].errors)
 
     def test_upload_deletes_the_old_set_and_its_logs(self):
-        self.client.post(reverse('fe:manage_upload'), self._upload(3, '旧'))
+        self._post_upload(self._upload(3, '旧'))
         old = list(Question.objects.all())
         old_ids = [q.id for q in old]
         answer(self.learner, old[0], correct=True)
         answer(self.other, old[1], correct=False)
 
-        self.client.post(reverse('fe:manage_upload'), self._upload(2, '新'))
+        self._post_upload(self._upload(2, '新'))
 
         self.assertEqual(
             Question.objects.all().count(), 2,
@@ -927,7 +941,7 @@ class ManageTests(TestCase):
 
     def test_upload_replaces_the_set_for_every_id(self):
         build_questions()
-        self.client.post(reverse('fe:manage_upload'), self._upload(2))
+        self._post_upload(self._upload(2))
         self.assertEqual(
             Question.objects.filter(template__isnull=True).count(), 2,
             '問題集は共有なので、取り込むと全員の問題集が入れ替わる',
@@ -1091,6 +1105,71 @@ class ImportNotesTests(TestCase):
         self.assertEqual(result['questions']['removed'], total - 1)
         kept.refresh_from_db()
         self.assertEqual(kept.explanation, '書き直した解説')
+
+    def test_preview_counts_without_writing(self):
+        """下見は数えるだけで、1件も書き込まない。"""
+        build_questions(per_category=1)
+        before = Question.objects.count()
+        counts = preview(validate({
+            'questions': [{
+                'category': 11, 'subject': 'A', 'stem': '新しい問題',
+                'choices': ['a', 'b', 'c', 'd'], 'answer': 0,
+            }],
+            'notes': None,
+        }))
+        self.assertEqual(counts['questions']['added'], 1)
+        self.assertEqual(Question.objects.count(), before, '下見では書き込まない')
+
+    def test_large_removal_needs_confirmation(self):
+        """削除が既存の3割を超えたら、確定の前に止める。"""
+        build_questions(per_category=1)
+        total = Question.objects.filter(template__isnull=True).count()
+        kept = Question.objects.filter(template__isnull=True).first()
+        one = [{
+            'category': kept.category.code, 'subject': kept.subject, 'stem': kept.stem,
+            'choices': kept.choices, 'answer': kept.answer_index,
+            'source': kept.source, 'topic': kept.topic,
+        }]
+        counts = preview(validate({'questions': one, 'notes': None}))
+        self.assertEqual(counts['questions']['removed'], total - 1)
+        self.assertTrue(needs_confirmation(counts))
+
+        # 3割以下なら止めない
+        few = Question.objects.filter(template__isnull=True)[:total - 1]
+        records = [{
+            'category': q.category.code, 'subject': q.subject, 'stem': q.stem,
+            'choices': q.choices, 'answer': q.answer_index,
+            'source': q.source, 'topic': q.topic,
+        } for q in few]
+        self.assertFalse(needs_confirmation(
+            preview(validate({'questions': records, 'notes': None}))
+        ))
+
+    def test_upload_screen_stops_before_a_large_removal(self):
+        """画面でも、削除が多いファイルは一度で取り込まれない。"""
+        build_questions(per_category=1)
+        admin = make_learner('uploader', is_admin=True)
+        enter(self.client, admin)
+        before = Question.objects.count()
+        kept = Question.objects.filter(template__isnull=True).first()
+        payload = json.dumps({'questions': [{
+            'category': kept.category.code, 'subject': kept.subject, 'stem': kept.stem,
+            'choices': kept.choices, 'answer': kept.answer_index,
+        }]}, ensure_ascii=False)
+
+        response = self.client.post(reverse('fe:manage_upload'), {
+            'upload': SimpleUploadedFile('q.json', payload.encode('utf-8')),
+        })
+        self.assertEqual(response.status_code, 200, '遷移せず確認画面を出す')
+        self.assertContains(response, '削除が多いので、一度止めました')
+        self.assertEqual(Question.objects.count(), before, 'まだ消えていない')
+
+        # 確認したうえで実行すると、取り込まれる
+        response = self.client.post(reverse('fe:manage_upload'), {
+            'confirm': '1', 'payload': payload,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Question.objects.filter(template__isnull=True).count(), 1)
 
     def test_duplicate_keys_in_one_file_are_rejected(self):
         """同じ鍵が1つのファイルに2件あると、どちらが勝つか不定なので止める。"""

@@ -91,6 +91,33 @@
         </div>
     </div>
 
+    {% comment %}
+    削除が既存の3割を超えたときの確認。ファイルを取り違えて大量に消すのを防ぐ。
+    内容は payload で持ち回すので、ファイルを選び直さずに実行できる。
+    {% endcomment %}
+    {% if confirm %}
+    <div class="alert alert-danger">
+        <div class="fw-bold mb-2">
+            <i class="fas fa-triangle-exclamation me-1"></i>削除が多いので、一度止めました
+        </div>
+        <p class="small mb-2">
+            このファイルを取り込むと、次のようになります。
+            <strong>削除がいまの件数の3割を超えています。</strong>
+            取り込むファイルを取り違えていないか確かめてください。
+        </p>
+        <ul class="small mb-3">
+            {% for line in confirm %}<li>{{ line }}</li>{% endfor %}
+        </ul>
+        <form method="post" class="d-flex gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="confirm" value="1">
+            <input type="hidden" name="payload" value="{{ payload }}">
+            <button type="submit" class="btn btn-danger btn-sm">このまま取り込む</button>
+            <a href="{% url 'fe:manage_upload' %}" class="btn btn-outline-secondary btn-sm">やめる</a>
+        </form>
+    </div>
+    {% endif %}
+
     {% if form.non_field_errors %}
     <div class="alert alert-danger">
         {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}

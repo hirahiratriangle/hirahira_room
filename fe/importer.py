@@ -196,9 +196,39 @@ def validate(payload):
     return payload
 
 
+# 削除がこの割合を超えたら、確定の前に確認を1枚はさむ。
+# 取り違えたファイルを選んだときに、気づかず全部消してしまうのを防ぐため。
+CONFIRM_REMOVAL_RATIO = 0.3
+
+
+def needs_confirmation(preview):
+    """下見の結果が、確認をはさむべき内容か。
+
+    削除が既存の3割を超えていたら、取り違えを疑って一度止める。
+    """
+    for counts in preview.values():
+        if not counts:
+            continue
+        existing = counts['unchanged'] + counts['updated'] + counts['removed']
+        if existing and counts['removed'] / existing > CONFIRM_REMOVAL_RATIO:
+            return True
+    return False
+
+
+def preview(payload):
+    """取り込まずに、追加・更新・変更なし・削除の件数だけを数える。
+
+    確定の前に件数を見せるため。全差し替えなら「削除が全件」が常態で
+    異常に気づけないが、同期なら削除の件数が取り違えの警報になる。
+    """
+    return sync(payload, apply=False)
+
+
 @transaction.atomic
-def sync(payload):
+def sync(payload, apply=True):
     """ファイルの内容に合わせて、問題と技術解説を追加・更新・削除する。
+
+    apply=False なら数えるだけで書き込まない（下見）。
 
     全差し替えにしない。出題の選び方が問題ごとの解答履歴に乗っているため
     （未出題を先に出し、まちがえた問題は何問かはさんでから戻し、何度も
@@ -256,13 +286,14 @@ def sync(payload):
                 updated += 1
             else:
                 unchanged += 1
-        Question.objects.bulk_create(to_create)
-        if to_update:
-            Question.objects.bulk_update(to_update, list(fields))
         stale = [q.pk for k, q in existing.items() if k not in seen]
         removed = len(stale)
-        if stale:
-            Question.objects.filter(pk__in=stale).delete()
+        if apply:
+            Question.objects.bulk_create(to_create)
+            if to_update:
+                Question.objects.bulk_update(to_update, list(fields))
+            if stale:
+                Question.objects.filter(pk__in=stale).delete()
         result['questions'] = {
             'added': added, 'updated': updated,
             'unchanged': unchanged, 'removed': removed,
@@ -298,13 +329,14 @@ def sync(payload):
                 updated += 1
             else:
                 unchanged += 1
-        LearningNote.objects.bulk_create(to_create)
-        if to_update:
-            LearningNote.objects.bulk_update(to_update, list(fields))
         stale = [n.pk for k, n in existing.items() if k not in seen]
         removed = len(stale)
-        if stale:
-            LearningNote.objects.filter(pk__in=stale).delete()
+        if apply:
+            LearningNote.objects.bulk_create(to_create)
+            if to_update:
+                LearningNote.objects.bulk_update(to_update, list(fields))
+            if stale:
+                LearningNote.objects.filter(pk__in=stale).delete()
         result['notes'] = {
             'added': added, 'updated': updated,
             'unchanged': unchanged, 'removed': removed,
