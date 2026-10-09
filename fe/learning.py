@@ -15,6 +15,7 @@ import random
 from django.db import transaction
 from django.db.models import Count
 
+from .data.categories import topic_rank
 from .models import LearningItem, LearningNote, LearningRound, Question
 from .stats import category_stats
 
@@ -107,6 +108,8 @@ def note_menu(learner, subject):
 
     どれを選ぶか決められるように、中分類の正答率と、解説ごとの学習回数、
     そして解説ごとに出題できる問数を添える。問数が 0 の解説は選べない。
+
+    中分類の中はシラバスの小分類の順に並べる。学ぶ順がそのまま並びになる。
     """
     notes = list(
         LearningNote.objects.filter(category__subject=subject)
@@ -140,7 +143,10 @@ def note_menu(learner, subject):
         group['questions'] = max(group['questions'], questions)
 
     for group in groups.values():
-        group['notes'].sort(key=lambda n: (n['note'].topic, n['note'].title))
+        code = group['category'].code
+        # 同じ小分類に解説が2本あるときは取り込んだ順。JSON の中の並びが
+        # 小分類の中での学ぶ順になっている。
+        group['notes'].sort(key=lambda n: (topic_rank(code, n['note'].topic), n['note'].id))
     return sorted(groups.values(), key=lambda g: g['category'].code)
 
 

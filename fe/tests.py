@@ -1436,7 +1436,7 @@ class LearningModeTests(TestCase):
         """学習対象は、中分類でまとめて小分類（解説）を並べる。"""
         build_questions(per_category=12)
         LearningNote.objects.all().delete()
-        for code, topic in ((9, '正規化'), (9, 'SQL'), (11, '暗号技術')):
+        for code, topic in ((9, 'データベース設計'), (9, 'データベース方式'), (11, '情報セキュリティ')):
             category = Category.objects.get(code=code)
             LearningNote.objects.create(
                 category=category, topic=topic,
@@ -1448,7 +1448,45 @@ class LearningModeTests(TestCase):
         self.assertEqual([g['category'].code for g in groups], [9, 11])
         self.assertEqual(len(groups[0]['notes']), 2)
         self.assertEqual(
-            [n['note'].topic for n in groups[0]['notes']], ['SQL', '正規化'],
+            [n['note'].topic for n in groups[0]['notes']],
+            ['データベース方式', 'データベース設計'],
+        )
+
+    def test_notes_follow_the_syllabus_order(self):
+        """中分類の中はシラバスの小分類の順。取り込んだ順でも文字順でもない。
+
+        文字順にすると「プロジェクトのコスト」が「プロジェクトマネジメント」より
+        先に来てしまい、シラバスとは逆になる。
+        """
+        build_questions(per_category=12)
+        LearningNote.objects.all().delete()
+        pm = Category.objects.get(code=14)
+        # わざとシラバスと違う順で取り込む
+        for topic in ('プロジェクトのコスト', 'プロジェクトマネジメント', 'プロジェクトの資源'):
+            LearningNote.objects.create(
+                category=pm, topic=topic, title='{}の解説'.format(topic), body='本文',
+            )
+
+        groups = note_menu(self.learner, Question.SUBJECT_A)
+        self.assertEqual(
+            [n['note'].topic for n in groups[0]['notes']],
+            ['プロジェクトマネジメント', 'プロジェクトの資源', 'プロジェクトのコスト'],
+        )
+
+    def test_a_topic_outside_the_syllabus_goes_last(self):
+        """シラバスに無い小分類は末尾に回す。並びの正はシラバスに置く。"""
+        build_questions(per_category=12)
+        LearningNote.objects.all().delete()
+        law = Category.objects.get(code=23)
+        for topic in ('独自の小分類', '標準化関連', '知的財産権'):
+            LearningNote.objects.create(
+                category=law, topic=topic, title='{}の解説'.format(topic), body='本文',
+            )
+
+        groups = note_menu(self.learner, Question.SUBJECT_A)
+        self.assertEqual(
+            [n['note'].topic for n in groups[0]['notes']],
+            ['知的財産権', '標準化関連', '独自の小分類'],
         )
 
     def test_choosing_a_note_uses_that_note(self):
