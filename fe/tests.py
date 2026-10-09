@@ -1290,6 +1290,28 @@ class LearningModeTests(TestCase):
     def setUp(self):
         enter(self.client, self.learner)
 
+    @staticmethod
+    def _checked_targets(response):
+        """学習対象のうち、最初から選ばれている行の値。"""
+        html = response.content.decode('utf-8')
+        return [
+            m.group(1) for m in re.finditer(
+                r'name="target"\s+value="([^"]*)"[^>]*\bchecked\b', html
+            )
+        ]
+
+    @staticmethod
+    def _add_questions(category, topic, count):
+        """小分類を指定して問題を足す。build_questions は中分類名を小分類にするため。"""
+        return [
+            Question.objects.create(
+                subject=category.subject, category=category, topic=topic,
+                stem='{}の問題{}'.format(topic, i),
+                choices=['ア', 'イ', 'ウ', 'エ'], answer_index=0,
+            )
+            for i in range(count)
+        ]
+
     def _prepare(self, topic=None):
         build_questions(per_category=12)
         LearningNote.objects.all().delete()
@@ -1334,6 +1356,37 @@ class LearningModeTests(TestCase):
                 item.question.category_id, round_.note.category_id,
                 '読んだ解説と別の分野が出題された',
             )
+
+    def test_only_questions_of_the_note_s_topic_are_asked(self):
+        """出題は解説と同じ小分類だけ。足りなくても中分類からは補わない。"""
+        self._prepare()
+        database = Category.objects.get(code=9)
+        note = LearningNote.objects.get(category=database)
+        # 同じ中分類で、解説とは別の小分類の問題。混ざってはいけない。
+        other = self._add_questions(database, '別の小分類', 5)
+        mine = Question.objects.filter(category=database, topic=note.topic)
+
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5, 'target': 'n{}'.format(note.pk)})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        asked = {item.question_id for item in round_.items.all()}
+        self.assertTrue(asked <= set(mine.values_list('id', flat=True)))
+        self.assertFalse(asked & {q.id for q in other})
+
+    def test_a_round_is_short_when_the_topic_has_few_questions(self):
+        """対応する問題が{}問に足りなければ、その数だけ出す。""".format(
+            LearningRound.QUESTION_COUNT
+        )
+        Question.objects.all().delete()
+        LearningNote.objects.all().delete()
+        law = Category.objects.get(code=23)
+        self._add_questions(law, '知的財産権', 3)
+        note = LearningNote.objects.create(
+            category=law, topic='知的財産権', title='著作権と産業財産権', body='本文',
+        )
+
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5, 'target': 'n{}'.format(note.pk)})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.assertEqual(round_.total, 3)
 
     def test_answering_records_progress(self):
         """学習モードで解いた分も、分野ごとの理解度に積む。"""
@@ -1406,7 +1459,10 @@ class LearningModeTests(TestCase):
             category=database, topic='正規化',
             title='正規化の解説', body='本文', source='テスト',
         )
-        self.client.post(reverse('fe:learn_start'), {'minutes': 5, 'note': chosen.pk})
+        self._add_questions(database, '正規化', 4)
+        self.client.post(
+            reverse('fe:learn_start'), {'minutes': 5, 'target': 'n{}'.format(chosen.pk)}
+        )
         round_ = LearningRound.objects.get(learner=self.learner)
         self.assertEqual(round_.note_id, chosen.pk)
         for item in round_.items.select_related('question'):
@@ -1415,7 +1471,7 @@ class LearningModeTests(TestCase):
     def test_an_unknown_note_is_not_accepted(self):
         self._prepare()
         response = self.client.post(
-            reverse('fe:learn_start'), {'minutes': 5, 'note': 999999}
+            reverse('fe:learn_start'), {'minutes': 5, 'target': 'n999999'}
         )
         self.assertRedirects(response, reverse('fe:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
@@ -1428,10 +1484,40 @@ class LearningModeTests(TestCase):
             topic='法務', title='法務の解説', body='本文',
         )
         response = self.client.post(
-            reverse('fe:learn_start'), {'minutes': 5, 'note': note.pk}
+            reverse('fe:learn_start'), {'minutes': 5, 'target': 'n{}'.format(note.pk)}
         )
         self.assertRedirects(response, reverse('fe:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
+
+    def test_a_note_without_questions_is_never_picked_automatically(self):
+        """おまかせは、出題できる問題を持つ解説だけから選ぶ。
+
+        持たない解説を選ぶと、読ませたあとに出題できず、始められないため。
+        """
+        self._prepare()
+        empty = LearningNote.objects.create(
+            category=Category.objects.get(code=23),
+            topic='出題のない小分類', title='法務の解説', body='本文',
+        )
+        for _ in range(20):
+            self.assertNotEqual(pick_note(self.learner, Question.SUBJECT_A), empty)
+
+    def test_the_menu_tells_how_many_questions_each_note_has(self):
+        """解説ごとに出題できる問数を添える。0問の解説は選べないと分かるように。"""
+        self._prepare()
+        database = Category.objects.get(code=9)
+        LearningNote.objects.create(
+            category=database, topic='出題のない小分類',
+            title='まだ問題のない解説', body='本文',
+        )
+        groups = {
+            g['category'].code: g for g in note_menu(self.learner, Question.SUBJECT_A)
+        }
+        counts = {
+            e['note'].title: e['questions'] for e in groups[9]['notes']
+        }
+        self.assertEqual(counts['まだ問題のない解説'], 0)
+        self.assertEqual(counts['データベースのしくみ'], 12)
 
     def test_notes_are_offered_per_subject(self):
         """解説も科目で絞る。科目Aの回で科目Bの解説が出てはいけない。"""
@@ -1459,10 +1545,74 @@ class LearningModeTests(TestCase):
             title='科目Bの解説', body='本文',
         )
         response = self.client.post(
-            reverse('fe:learn_start'), {'minutes': 5, 'note': theirs.pk}
+            reverse('fe:learn_start'), {'minutes': 5, 'target': 'n{}'.format(theirs.pk)}
         )
         self.assertRedirects(response, reverse('fe:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
+
+    def test_choosing_a_category_reads_a_note_from_it(self):
+        """中分類を選ぶと、その中の解説から読む。"""
+        self._prepare()
+        database = Category.objects.get(code=9)
+        LearningNote.objects.create(
+            category=Category.objects.get(code=11), topic='情報セキュリティ',
+            title='セキュリティのしくみ', body='本文',
+        )
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5, 'target': 'c9'})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.assertEqual(round_.note.category_id, database.pk)
+
+    def test_a_category_from_the_other_subject_is_refused(self):
+        self._prepare()
+        b = Category.objects.filter(subject='B').first()
+        response = self.client.post(
+            reverse('fe:learn_start'), {'minutes': 5, 'target': 'c{}'.format(b.code)}
+        )
+        self.assertRedirects(response, reverse('fe:learn_start'))
+        self.assertEqual(LearningRound.objects.count(), 0)
+
+    def test_the_dashboard_category_is_preselected(self):
+        """ダッシュボードで分野を指定していれば、学習対象もそこを選んだ状態で開く。"""
+        self._prepare()
+        session, _ = StudySession.objects.get_or_create(learner=self.learner)
+        session.mode = StudySession.MODE_CATEGORY
+        session.category = Category.objects.get(code=9)
+        session.save()
+
+        response = self.client.get(reverse('fe:learn_start'))
+        self.assertEqual(response.context['selected_code'], 9)
+        self.assertEqual(self._checked_targets(response), ['c9'])
+
+    def test_nothing_is_preselected_without_a_category(self):
+        """分野を指定していなければ、何も選んでいない状態で開く。"""
+        self._prepare()
+        response = self.client.get(reverse('fe:learn_start'))
+        self.assertIsNone(response.context['selected_code'])
+        self.assertEqual(self._checked_targets(response), [])
+
+    def test_a_category_of_the_other_subject_is_not_preselected(self):
+        """科目を切り替えたあとの指定は引き継がない。その科目では学習できないため。"""
+        self._prepare()
+        session, _ = StudySession.objects.get_or_create(learner=self.learner)
+        session.mode = StudySession.MODE_CATEGORY
+        session.category = Category.objects.filter(subject='B').first()
+        session.save()
+        response = self.client.get(reverse('fe:learn_start'))
+        self.assertIsNone(response.context['selected_code'])
+
+    def test_a_category_without_questions_is_not_preselected(self):
+        """出題できる解説が無い分野は、選んだ状態にしない。"""
+        self._prepare()
+        law = Category.objects.get(code=23)
+        LearningNote.objects.create(
+            category=law, topic='出題のない小分類', title='法務の解説', body='本文',
+        )
+        session, _ = StudySession.objects.get_or_create(learner=self.learner)
+        session.mode = StudySession.MODE_CATEGORY
+        session.category = law
+        session.save()
+        response = self.client.get(reverse('fe:learn_start'))
+        self.assertIsNone(response.context['selected_code'])
 
     def test_another_account_cannot_open_the_round(self):
         self._prepare()
