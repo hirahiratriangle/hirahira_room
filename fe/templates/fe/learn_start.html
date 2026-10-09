@@ -27,12 +27,7 @@
 <div class="container px-5 py-5" style="max-width: 760px;">
 
     <p class="text-muted">
-        技術解説を<strong>時間を決めて読み</strong>、そのあと<strong>読んだ解説と同じ小分類の問題だけ</strong>を
-        最大{{ count }}問解きます。ほかの小分類からは補わないので、
-        <strong>出る問数は解説ごとに違います</strong>。
-        読むものは{% if focus %}下から{% else %}解説ごとに{% endif %}選べます。
-        {% if focus %}選ばずに始めると、ダッシュボードで指定している<strong>{{ focus.name }}</strong>の、
-        まだ読んでいない解説から選ばれます。{% else %}おまかせにすると、苦手な分野の未読から選ばれます。{% endif %}
+        解説を読んでから、その小分類の問題を最大{{ count }}問解きます。
     </p>
 
     <form method="post" class="border rounded p-4 mb-4">
@@ -91,11 +86,7 @@
                         <span class="badge bg-secondary">{{ entry.note.topic }}</span>
                         {% endif %}
                         <span>{{ entry.note.title }}</span>
-                        {% if entry.questions %}
-                        <span class="text-muted small">問題{{ entry.questions }}問</span>
-                        {% else %}
-                        <span class="text-danger small">出題できる問題がありません</span>
-                        {% endif %}
+                        <span class="{% if entry.questions %}text-muted{% else %}text-danger{% endif %} small">問題{{ entry.questions }}問</span>
                         {% if entry.rounds %}
                         <span class="text-muted small">学習{{ entry.rounds }}回</span>
                         {% else %}
@@ -123,9 +114,6 @@
                 <label class="form-check-label" for="m{{ m }}">{{ m }}分</label>
             </div>
             {% endfor %}
-        </div>
-        <div class="form-text mb-3">
-            時間が来ると解答に進みます。読み終われば途中でも進めます。
         </div>
         <button type="submit" class="btn btn-primary"{% if not groups %} disabled{% endif %}>
             はじめる
