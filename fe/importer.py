@@ -25,8 +25,13 @@ class ImportError_(ValueError):
 def parse(payload):
     """文字列を取り込む中身にする。読めなければ理由を添えて失敗させる。
 
-    受け付ける形は2つ。問題だけを並べた配列と、技術解説を添えた
-    {"notes": [...], "questions": [...]} の形。
+    受け付ける形は、問題だけを並べた配列と、{"questions": [...]} だけ、
+    {"notes": [...]} だけ、両方入りの4つ。
+
+    問題と解説は更新の頻度が違う（問題は作問のたびに入れ替わるが、解説は
+    ほぼ固定で、苦戦している分野だけ後から書き足す）ので、別々のファイルで
+    渡せるようにしてある。**入っていない側は触らない。** そのため
+    「空の配列が入っている」と「キーごと無い」を区別して持つ。
     """
     try:
         data = json.loads(payload)
@@ -34,23 +39,73 @@ def parse(payload):
         raise ImportError_('JSON として読めません：{}'.format(exc))
 
     if isinstance(data, list):
-        questions, notes = data, []
+        questions, notes = data, None
     elif isinstance(data, dict):
         questions = data.get('questions')
-        notes = data.get('notes') or []
-        if not isinstance(questions, list):
-            raise ImportError_('"questions" に問題の配列がありません。')
-        if not isinstance(notes, list):
+        notes = data.get('notes')
+        if questions is None and notes is None:
+            raise ImportError_(
+                '"questions" も "notes" もありません。'
+                'どちらか一方だけのファイルでも取り込めます。'
+            )
+        if questions is not None and not isinstance(questions, list):
+            raise ImportError_('"questions" は問題の配列にしてください。')
+        if notes is not None and not isinstance(notes, list):
             raise ImportError_('"notes" は技術解説の配列にしてください。')
     else:
         raise ImportError_(
             '問題を並べた配列（[ ... ]）か、'
-            '{"notes": [...], "questions": [...]} の形で渡してください。'
+            '{"questions": [...]} / {"notes": [...]} の形で渡してください。'
         )
 
-    if not questions:
-        raise ImportError_('問題が1件も含まれていません。')
+    if questions is not None and not questions:
+        raise ImportError_('"questions" が空です。問題を入れるか、キーごと外してください。')
+    if notes is not None and not notes:
+        raise ImportError_('"notes" が空です。解説を入れるか、キーごと外してください。')
     return {'questions': questions, 'notes': notes}
+
+
+def question_key(subject, category, stem):
+    """問題を突き合わせる鍵。空白のゆれは同じものとして扱う。
+
+    stem の文言を変えたら別の問題になる。選択肢・正解・解説・難易度・
+    小分類・出典の変更は、同じ問題への更新として扱う。
+    """
+    return (subject, category, ' '.join(str(stem).split()))
+
+
+def note_key(category, title):
+    """技術解説を突き合わせる鍵。title を変えたら別の解説になる。"""
+    return (category, ' '.join(str(title).split()))
+
+
+def _reject_duplicate_keys(questions, notes):
+    """ファイルの中で鍵が重複していたら止める。どちらが勝つか不定になるため。"""
+    seen = set()
+    for i, r in enumerate(questions, start=1):
+        if not isinstance(r, dict):
+            continue
+        key = question_key(
+            r.get('subject', Question.SUBJECT_A), r.get('category'), r.get('stem', '')
+        )
+        if key in seen:
+            raise ImportError_(
+                '{}件目：同じ問題がファイル内に2件あります（科目・中分類・問題文が同じ）。'
+                .format(i)
+            )
+        seen.add(key)
+
+    seen = set()
+    for i, r in enumerate(notes, start=1):
+        if not isinstance(r, dict):
+            continue
+        key = note_key(r.get('category'), r.get('title', ''))
+        if key in seen:
+            raise ImportError_(
+                '技術解説{}件目：同じ解説がファイル内に2件あります（中分類・見出しが同じ）。'
+                .format(i)
+            )
+        seen.add(key)
 
 
 def validate_notes(records, codes):
@@ -73,11 +128,15 @@ def validate_notes(records, codes):
 
 
 def validate(payload):
-    """取り込む前に全件を検査する。1件でも駄目なら何も入れない。"""
+    """取り込む前に全件を検査する。1件でも駄目なら何も入れない。
+
+    ファイルに入っていない側（None）は検査しない。取り込みでも触らない。
+    """
     subjects = dict(Category.objects.values_list('code', 'subject'))
     codes = set(subjects)
-    records = payload['questions']
-    validate_notes(payload['notes'], codes)
+    records = payload['questions'] or []
+    validate_notes(payload['notes'] or [], codes)
+    _reject_duplicate_keys(records, payload['notes'] or [])
     for i, record in enumerate(records, start=1):
         where = '{}件目'.format(i)
         if not isinstance(record, dict):
@@ -138,63 +197,131 @@ def validate(payload):
 
 
 @transaction.atomic
-def replace_all(payload):
-    """共有の問題集と技術解説を、渡された内容にそっくり入れ替える。
+def sync(payload):
+    """ファイルの内容に合わせて、問題と技術解説を追加・更新・削除する。
 
-    古い問題は削除し、それに紐づく全 ID の解答履歴も一緒に消える。分野別の
-    正答率は解答のたびに ID ごとに積み上げてあるので、問題が消えても残る。
+    全差し替えにしない。出題の選び方が問題ごとの解答履歴に乗っているため
+    （未出題を先に出し、まちがえた問題は何問かはさんでから戻し、何度も
+    落とした問題ほど間隔を詰める）、消して入れ直すと取り込んだ瞬間に全問が
+    未出題へ戻り、復習の待ち行列も間隔計算の土台も消える。解説も同じで、
+    学習モードのラウンドが指す解説が毎回切れる。
+
+    **ファイルに入っていない側は触らない。** 問題だけのファイルを取り込んでも
+    解説は残る。入っている側については、ファイルに無い行を消す。追記だけに
+    すると、アプリの中身と手元のファイルがずれてどちらが正か分からなくなる。
+
     テンプレートが生成した計算問題は JSON に無くて当然なので触らない。
+
+    返すのは件数の内訳。利用者に見せて、削除が異常に多くないかを確かめる。
     """
-    records = payload['questions']
-    removed, _ = (
-        Question.objects
-        .filter(template__isnull=True)
-        .delete()
-    )
-
     categories = {c.code: c for c in Category.objects.all()}
+    result = {}
 
-    # 技術解説も同じタイミングで入れ替える。問題だけの JSON を取り込んだ
-    # ときに前の解説だけ残ると、問題と噛み合わない教材が居座るため。
-    LearningNote.objects.all().delete()
-    LearningNote.objects.bulk_create([
-        LearningNote(
-            category=categories[note['category']],
-            topic=note.get('topic', ''),
-            title=note['title'],
-            body=note['body'],
-            source=note.get('source', ''),
-        )
-        for note in payload['notes']
-    ])
+    records = payload.get('questions')
+    if records is None:
+        result['questions'] = None
+    else:
+        existing = {
+            question_key(q.subject, q.category.code, q.stem): q
+            for q in Question.objects.filter(template__isnull=True)
+            .select_related('category')
+        }
+        added = updated = unchanged = 0
+        seen = set()
+        to_create, to_update = [], []
+        for r in records:
+            subject = r.get('subject', Question.SUBJECT_A)
+            key = question_key(subject, r['category'], r['stem'])
+            seen.add(key)
+            fields = dict(
+                topic=r.get('topic', ''),
+                choices=r['choices'],
+                answer_index=r['answer'],
+                explanation=r.get('explanation', ''),
+                difficulty=r.get('difficulty', 2),
+                source=r.get('source', ''),
+                is_active=True,
+            )
+            current = existing.get(key)
+            if current is None:
+                to_create.append(Question(
+                    subject=subject, category=categories[r['category']],
+                    stem=r['stem'], **fields,
+                ))
+                added += 1
+            elif any(getattr(current, f) != v for f, v in fields.items()):
+                for f, v in fields.items():
+                    setattr(current, f, v)
+                to_update.append(current)
+                updated += 1
+            else:
+                unchanged += 1
+        Question.objects.bulk_create(to_create)
+        if to_update:
+            Question.objects.bulk_update(to_update, list(fields))
+        stale = [q.pk for k, q in existing.items() if k not in seen]
+        removed = len(stale)
+        if stale:
+            Question.objects.filter(pk__in=stale).delete()
+        result['questions'] = {
+            'added': added, 'updated': updated,
+            'unchanged': unchanged, 'removed': removed,
+        }
 
-    created = []
-    for record in records:
-        created.append(Question(
-            subject=record.get('subject', Question.SUBJECT_A),
-            category=categories[record['category']],
-            topic=record.get('topic', ''),
-            stem=record['stem'],
-            choices=record['choices'],
-            answer_index=record['answer'],
-            explanation=record.get('explanation', ''),
-            difficulty=record.get('difficulty', 2),
-            source=record.get('source', ''),
-            is_active=True,
-        ))
-    Question.objects.bulk_create(created)
-    return len(created), removed, len(payload['notes'])
+    notes = payload.get('notes')
+    if notes is None:
+        result['notes'] = None
+    else:
+        existing = {
+            note_key(n.category.code, n.title): n
+            for n in LearningNote.objects.select_related('category')
+        }
+        added = updated = unchanged = 0
+        seen = set()
+        to_create, to_update = [], []
+        for r in notes:
+            key = note_key(r['category'], r['title'])
+            seen.add(key)
+            fields = dict(
+                topic=r.get('topic', ''), body=r['body'], source=r.get('source', ''),
+            )
+            current = existing.get(key)
+            if current is None:
+                to_create.append(LearningNote(
+                    category=categories[r['category']], title=r['title'], **fields,
+                ))
+                added += 1
+            elif any(getattr(current, f) != v for f, v in fields.items()):
+                for f, v in fields.items():
+                    setattr(current, f, v)
+                to_update.append(current)
+                updated += 1
+            else:
+                unchanged += 1
+        LearningNote.objects.bulk_create(to_create)
+        if to_update:
+            LearningNote.objects.bulk_update(to_update, list(fields))
+        stale = [n.pk for k, n in existing.items() if k not in seen]
+        removed = len(stale)
+        if stale:
+            LearningNote.objects.filter(pk__in=stale).delete()
+        result['notes'] = {
+            'added': added, 'updated': updated,
+            'unchanged': unchanged, 'removed': removed,
+        }
+
+    return result
 
 
 def export_records(subject=None):
     """共有の問題と技術解説を、取り込みと同じ形式で書き出す。
 
-    取り込みは解説も一括で差し替えるので、問題だけを書き出すと、
-    それを取り込み直したときに解説が消える。往復しても失われないよう、
-    同じ形（notes と questions）で出す。
+    控えを取る用途なので、問題と解説の両方を1つにまとめて出す。
+    取り込みは同期なので、これをそのまま戻せば書き出した時点の状態に戻る。
 
-    subject を指定すると、その科目のぶんだけを出す。取り込み直せば
-    もう一方の科目は消えるので、控えを取るなら指定しない。
+    subject を指定すると、その科目のぶんだけを出す。ただし取り込みは
+    ファイルに無い行を消すため、片方の科目だけを戻すともう一方は消える。
+    控えを取るなら指定しない。
     """
     questions = Question.objects.filter(template__isnull=True, is_active=True)
     notes = LearningNote.objects.all()

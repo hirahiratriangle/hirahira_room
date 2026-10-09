@@ -26,7 +26,7 @@ from django.views import generic
 
 from .exam import EXAM, build_prompt
 from .forms import LearnerForm, PassReportForm, QuestionUploadForm
-from .importer import export_records, replace_all
+from .importer import export_records, sync
 from .learning import current_item, grade, note_menu, start_round
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
                      LearningRound, PassReport, Question, QuestionTemplate,
@@ -537,14 +537,31 @@ class QuestionUploadView(AdminRequiredMixin, generic.FormView):
         return context
 
     def form_valid(self, form):
-        created, removed, notes = replace_all(form.records)
-        note = '問題集を {} 問に差し替えました。'.format(created)
-        if notes:
-            note += ' 技術解説 {} 本も取り込みました。'.format(notes)
-        if removed:
-            note += ' これまでの {} 問と、全 ID のその解答履歴は削除しました' \
-                    '（分野ごとの正答率と苦手分野の判定は残ります）。'.format(removed)
-        messages.success(self.request, note)
+        result = sync(form.records)
+        lines = []
+        for label, key in (('問題', 'questions'), ('解説', 'notes')):
+            counts = result[key]
+            if counts is None:
+                lines.append('{}：変更なし（ファイルに{}が含まれていません）'.format(label, label))
+                continue
+            lines.append(
+                '{}：追加 {} / 更新 {} / 変更なし {} / 削除 {}'.format(
+                    label, counts['added'], counts['updated'],
+                    counts['unchanged'], counts['removed'],
+                )
+            )
+        messages.success(self.request, '　'.join(lines))
+        # 削除が多いときは取り違えの疑いがあるので、別に目立たせて伝える
+        for label, key in (('問題', 'questions'), ('解説', 'notes')):
+            counts = result[key]
+            if counts and counts['removed'] > counts['unchanged'] + counts['updated']:
+                messages.warning(
+                    self.request,
+                    '{}の削除が {} 件で、残った件数より多くなっています。'
+                    '取り込むファイルを取り違えていないか確かめてください。'.format(
+                        label, counts['removed'],
+                    ),
+                )
         return super().form_valid(form)
 
 

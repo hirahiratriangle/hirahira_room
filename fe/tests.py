@@ -19,7 +19,7 @@ from django.urls import reverse
 
 from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
-from .importer import ImportError_, parse, replace_all, validate
+from .importer import ImportError_, parse, sync, validate
 from .learning import note_menu, pick_note
 from .models import (Attempt, Category, CategoryProgress, DailyProgress, Learner,
                      LearningNote, LearningRound, PassReport,
@@ -82,7 +82,7 @@ def build_questions(per_category=4):
                 'explanation': '解説',
                 'source': 'テスト用',
             })
-    return replace_all(validate({'questions': records, 'notes': []}))
+    return sync(validate({'questions': records, 'notes': None}))
 
 
 def build_notes(codes=(9, 11), topic=None):
@@ -1029,11 +1029,9 @@ class ImportNotesTests(TestCase):
                 'category': 11, 'stem': 'x', 'choices': ['a', 'b', 'c', 'd'], 'answer': 0,
             }],
         }
-        created, _removed, notes = replace_all(validate(parse(
-            json.dumps(payload, ensure_ascii=False)
-        )))
-        self.assertEqual(created, 1)
-        self.assertEqual(notes, 2)
+        result = sync(validate(parse(json.dumps(payload, ensure_ascii=False))))
+        self.assertEqual(result['questions']['added'], 1)
+        self.assertEqual(result['notes']['added'], 2)
         self.assertEqual(LearningNote.objects.all().count(), 2)
 
     def test_plain_array_still_works(self):
@@ -1042,25 +1040,91 @@ class ImportNotesTests(TestCase):
             [{'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0}],
             ensure_ascii=False,
         )
-        created, _removed, notes = replace_all(validate(parse(payload)))
-        self.assertEqual((created, notes), (1, 0))
+        result = sync(validate(parse(payload)))
+        self.assertEqual(result['questions']['added'], 1)
+        self.assertIsNone(result['notes'], '解説を含まないファイルは解説に触れない')
 
-    def test_notes_are_replaced_with_the_questions(self):
-        """問題だけの JSON を入れたら、前の解説も消える。"""
-        replace_all(validate(parse(json.dumps({
+    def test_notes_only_file_is_accepted(self):
+        """解説だけのファイルも取り込める。問題には触らない。"""
+        build_questions(per_category=1)
+        before = Question.objects.count()
+        result = sync(validate(parse(json.dumps(
+            {'notes': build_notes()}, ensure_ascii=False
+        ))))
+        self.assertEqual(result['notes']['added'], 2)
+        self.assertIsNone(result['questions'], '問題を含まないファイルは問題に触れない')
+        self.assertEqual(Question.objects.count(), before)
+
+    def test_sync_keeps_unchanged_rows_and_their_history(self):
+        """変わっていない問題は作り直さない。解答履歴が切れないため。"""
+        build_questions(per_category=1)
+        question = Question.objects.first()
+        learner = make_learner('synced')
+        answer(learner, question, correct=True)
+
+        records = [{
+            'category': q.category.code, 'subject': q.subject, 'topic': q.topic,
+            'stem': q.stem, 'choices': q.choices, 'answer': q.answer_index,
+            'explanation': q.explanation, 'difficulty': q.difficulty,
+            'source': q.source,
+        } for q in Question.objects.filter(template__isnull=True)]
+        result = sync(validate({'questions': records, 'notes': None}))
+
+        self.assertEqual(result['questions']['added'], 0)
+        self.assertEqual(result['questions']['removed'], 0)
+        self.assertEqual(result['questions']['unchanged'], len(records))
+        self.assertTrue(Attempt.objects.filter(learner=learner).exists())
+        self.assertEqual(Question.objects.filter(pk=question.pk).count(), 1)
+
+    def test_sync_updates_in_place_and_removes_missing(self):
+        """解説や正解だけ直したら更新、ファイルから消えたら削除。"""
+        build_questions(per_category=2)
+        total = Question.objects.filter(template__isnull=True).count()
+        kept = Question.objects.filter(template__isnull=True).first()
+        records = [{
+            'category': kept.category.code, 'subject': kept.subject,
+            'stem': kept.stem, 'choices': kept.choices, 'answer': kept.answer_index,
+            'explanation': '書き直した解説',
+        }]
+        result = sync(validate({'questions': records, 'notes': None}))
+        self.assertEqual(result['questions']['updated'], 1)
+        self.assertEqual(result['questions']['removed'], total - 1)
+        kept.refresh_from_db()
+        self.assertEqual(kept.explanation, '書き直した解説')
+
+    def test_duplicate_keys_in_one_file_are_rejected(self):
+        """同じ鍵が1つのファイルに2件あると、どちらが勝つか不定なので止める。"""
+        payload = json.dumps({'questions': [
+            {'category': 11, 'stem': '同じ問題', 'choices': ['a', 'b'], 'answer': 0},
+            {'category': 11, 'stem': '  同じ問題  ', 'choices': ['c', 'd'], 'answer': 1},
+        ]}, ensure_ascii=False)
+        with self.assertRaises(ImportError_):
+            validate(parse(payload))
+
+    def test_empty_side_is_rejected(self):
+        """空の配列は、キーごと外すのと区別して弾く。取り違えの事故を防ぐため。"""
+        for payload in ('{"questions": []}', '{"notes": []}', '{}'):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ImportError_):
+                    parse(payload)
+
+    def test_questions_only_file_leaves_the_notes_alone(self):
+        """問題だけのファイルを入れても、解説は消えない。
+
+        問題と解説は更新の頻度が違うので別のファイルで渡せる。入っていない
+        側に触ると、問題を1問足すだけで解説が全部消えることになる。
+        """
+        sync(validate(parse(json.dumps({
             'notes': build_notes(),
             'questions': [{'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0}],
         }, ensure_ascii=False))))
         self.assertEqual(LearningNote.objects.all().count(), 2)
 
-        replace_all(validate(parse(json.dumps(
+        sync(validate(parse(json.dumps(
             [{'category': 11, 'stem': 'y', 'choices': ['a', 'b'], 'answer': 0}],
             ensure_ascii=False,
         ))))
-        self.assertEqual(
-            LearningNote.objects.all().count(), 0,
-            '問題と噛み合わない解説が残らない',
-        )
+        self.assertEqual(LearningNote.objects.all().count(), 2, '解説はそのまま残る')
 
     def test_a_broken_note_is_rejected(self):
         cases = {
@@ -1317,10 +1381,18 @@ class SiteSummaryTests(TestCase):
         self.assertEqual(subject_b['fields'], [])
 
     def test_total_survives_reimport(self):
-        """のべ解答数は、問題を取り込み直しても減らない。"""
+        """のべ解答数は、問題を取り込み直しても減らない。
+
+        取り込みは同期なので、変わっていない問題はそのまま残り、解答履歴も
+        切れない。仮に問題が入れ替わっても、のべ数は消えない CategoryProgress
+        から数えているので減らない。
+        """
         answer(self.alice, self._question(self.alice, 11), True)
         build_questions()
-        self.assertFalse(Attempt.objects.filter(learner=self.alice).exists())
+        self.assertTrue(
+            Attempt.objects.filter(learner=self.alice).exists(),
+            '同じ内容を取り込み直しただけなら、解答履歴は残る',
+        )
         self.assertEqual(site_summary()['total'], 1)
 
     def test_dashboard_shows_summary(self):
