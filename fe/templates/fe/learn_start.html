@@ -53,9 +53,6 @@
                    data-name="{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}">
                 <input class="form-check-input mt-0" type="radio" name="note" value="">
                 <span class="fw-bold">{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}</span>
-                <span class="text-muted small">
-                    {% if focus %}{{ focus.name }}の{% else %}苦手な分野の{% endif %}、まだ読んでいない解説から選びます
-                </span>
             </label>
 
             {% comment %}
