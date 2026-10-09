@@ -33,10 +33,7 @@
     <form method="post" class="border rounded p-4 mb-4">
         {% csrf_token %}
 
-        <div class="fw-bold" style="color:#2c5aa0;">学習対象</div>
-        <div class="small text-muted mb-2">
-            いま選んでいるもの：<span class="fw-bold text-body" id="picked">{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}</span>
-        </div>
+        <div class="fw-bold mb-2" style="color:#2c5aa0;">学習対象</div>
         {% if groups %}
         <div class="border rounded mb-4 fe-pick">
             {% comment %}
@@ -44,8 +41,7 @@
             ダッシュボードの分野に合わせる。行の名前は「おまかせ」のままにし、
             いま何が選ばれているかは上の行に分野名で出す。
             {% endcomment %}
-            <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom"
-                   data-name="{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}">
+            <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
                 <input class="form-check-input mt-0" type="radio" name="note" value="">
                 <span class="fw-bold">おまかせ</span>
             </label>
@@ -77,8 +73,7 @@
                 </summary>
                 <div style="background-color:#f6f8fb;">
                     {% for entry in group.notes %}
-                    <label class="fe-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0{% if not entry.questions %} text-muted{% endif %}"
-                           data-name="{{ group.category.name }} ／ {{ entry.note.title }}">
+                    <label class="fe-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0{% if not entry.questions %} text-muted{% endif %}">
                         <input class="form-check-input mt-0" type="radio" name="note"
                                value="{{ entry.note.pk }}"
                                {% if not entry.questions %}disabled{% endif %}>
@@ -140,29 +135,11 @@
 
 {% block extra_js %}
 <script>
-// 「いま選んでいるもの」を出す。畳んだ中分類の中を選んでも分かるように。
-// :has() が効かないブラウザでも、この行だけは正しく出る。
+// 前の選択が残って再表示されたときは、その中分類を開いておく。
+// 畳んだままだと、どこを選んだのか見えない。
 (function () {
-    var label = document.getElementById('picked');
-    var form = label && label.closest('form');
-    if (!form) { return; }
-
-    // 何も選ばれていないときは、先頭の行の表示をそのまま出す。
-    // 分野を指定していれば「セキュリティ」、していなければ「おまかせ」。
-    var auto = form.querySelector('.fe-auto');
-    var fallback = (auto && auto.dataset.name) || 'おまかせ';
-
-    var update = function () {
-        var checked = form.querySelector('input[name="note"]:checked');
-        var row = checked && checked.closest('.fe-row');
-        label.textContent = (row && row.dataset.name) ? row.dataset.name : fallback;
-    };
-    form.addEventListener('change', update);
-
-    // 前の選択が残って再表示されたときは、その中分類を開いておく
-    var checked = form.querySelector('.fe-group input[name="note"]:checked');
+    var checked = document.querySelector('.fe-group input[name="note"]:checked');
     if (checked) { checked.closest('details').open = true; }
-    update();
 })();
 </script>
 {% endblock %}
