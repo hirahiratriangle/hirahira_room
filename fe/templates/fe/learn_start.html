@@ -30,9 +30,9 @@
         技術解説を<strong>時間を決めて読み</strong>、そのあと<strong>読んだ解説と同じ小分類の問題だけ</strong>を
         最大{{ count }}問解きます。ほかの小分類からは補わないので、
         <strong>出る問数は解説ごとに違います</strong>。
-        読むものは解説ごとに選べます。おまかせにすると、苦手な分野の未読から選ばれます。
-        {% if focus %}いまはダッシュボードで<strong>{{ focus.name }}</strong>を指定しているので、
-        おまかせの範囲もその分野の中だけになります。{% endif %}
+        読むものは{% if focus %}下から{% else %}解説ごとに{% endif %}選べます。
+        {% if focus %}選ばずに始めると、ダッシュボードで指定している<strong>{{ focus.name }}</strong>の、
+        まだ読んでいない解説から選ばれます。{% else %}おまかせにすると、苦手な分野の未読から選ばれます。{% endif %}
     </p>
 
     <form method="post" class="border rounded p-4 mb-4">
@@ -40,18 +40,19 @@
 
         <div class="fw-bold" style="color:#2c5aa0;">学習対象</div>
         <div class="small text-muted mb-2">
-            いま選んでいるもの：<span class="fw-bold text-body" id="picked">おまかせ{% if focus %}（{{ focus.name }}）{% endif %}</span>
+            いま選んでいるもの：<span class="fw-bold text-body" id="picked">{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}</span>
         </div>
         {% if groups %}
         <div class="border rounded mb-4 fe-pick">
             {% comment %}
-            ダッシュボードで分野を指定しているときは、おまかせの範囲もその分野に絞る。
-            選択肢は増やさず、おまかせの意味のほうを変える。
+            解説を選ばなかったときの行。ダッシュボードで分野を指定していれば
+            その分野名を出し、範囲もその分野に絞る。選択肢は増やさず、
+            この行の意味のほうを変える。小分類を選ぶのは利用者。
             {% endcomment %}
             <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom"
-                   data-name="おまかせ{% if focus %}（{{ focus.name }}）{% endif %}">
+                   data-name="{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}">
                 <input class="form-check-input mt-0" type="radio" name="note" value="">
-                <span class="fw-bold">おまかせ{% if focus %}（{{ focus.name }}）{% endif %}</span>
+                <span class="fw-bold">{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}</span>
                 <span class="text-muted small">
                     {% if focus %}{{ focus.name }}の{% else %}苦手な分野の{% endif %}、まだ読んでいない解説から選びます
                 </span>
@@ -161,8 +162,8 @@
     var form = label && label.closest('form');
     if (!form) { return; }
 
-    // 何も選ばれていないときは「おまかせ」の行の表示をそのまま出す。
-    // 分野を指定していると「おまかせ（セキュリティ）」のように分野名が付く。
+    // 何も選ばれていないときは、先頭の行の表示をそのまま出す。
+    // 分野を指定していれば「セキュリティ」、していなければ「おまかせ」。
     var auto = form.querySelector('.fe-auto');
     var fallback = (auto && auto.dataset.name) || 'おまかせ';
 
