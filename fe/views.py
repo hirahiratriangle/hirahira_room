@@ -589,40 +589,30 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
 
     def get(self, request, *args, **kwargs):
         session = _get_study_session(self.learner)
-        groups = note_menu(self.learner, session.subject)
-        open_code, selected_note = self._initial(session, groups)
         return render(request, self.template_name, {
             'minute_choices': LearningRound.MINUTE_CHOICES,
             'default_minutes': LearningRound.DEFAULT_MINUTES,
             'count': LearningRound.QUESTION_COUNT,
             'study_session': session,
-            'groups': groups,
-            'open_code': open_code,
-            'selected_note': selected_note,
+            'groups': note_menu(self.learner, session.subject),
+            'open_code': self._open_code(session),
             'recent': LearningRound.objects.filter(
                 learner=self.learner, phase=LearningRound.PHASE_DONE
             )[:5],
         })
 
     @staticmethod
-    def _initial(session, groups):
-        """最初から開く中分類と、選んでおく解説。どちらも無ければ None。
+    def _open_code(session):
+        """最初から開いておく中分類のコード。無ければ None。
 
-        ダッシュボードの出題設定で分野を指定しているなら、その中分類を開き、
-        中の最初の解説を選んだ状態にする。並びはシラバスの小分類順なので、
-        その分野で最初に学ぶ解説が選ばれる。出題できる問題を持たない解説は
-        選べないので飛ばす。どれも持たないときは開くだけにする。
-
-        科目を切り替えた直後など、指定が今の科目のものでなければ引き継がない。
+        ダッシュボードの出題設定で分野を指定しているなら、その中分類を開いて
+        解説を見せる。選ぶのは利用者なので、どれも選んだ状態にはしない。
+        科目を切り替えた直後など、指定が今の科目のものでなければ開かない。
         """
         category = session.category
         if category is None or category.subject != session.subject:
-            return None, None
-        group = next((g for g in groups if g['category'].code == category.code), None)
-        if group is None:
-            return None, None
-        entry = next((e for e in group['notes'] if e['questions']), None)
-        return category.code, entry['note'].pk if entry else None
+            return None
+        return category.code
 
     def post(self, request, *args, **kwargs):
         raw = request.POST.get('minutes')

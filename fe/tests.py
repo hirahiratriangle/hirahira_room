@@ -1588,68 +1588,29 @@ class LearningModeTests(TestCase):
         self.assertRedirects(response, reverse('fe:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
 
-    def _set_category(self, code):
+    def test_the_dashboard_category_is_opened(self):
+        """ダッシュボードで分野を指定していれば、その中分類を開いて見せる。
+
+        開くだけで、解説はどれも選ばない。選ぶのは利用者。
+        """
+        self._prepare()
         session, _ = StudySession.objects.get_or_create(learner=self.learner)
         session.mode = StudySession.MODE_CATEGORY
-        session.category = Category.objects.get(code=code)
+        session.category = Category.objects.get(code=9)
         session.save()
-        return session
-
-    def test_the_dashboard_category_is_selected(self):
-        """ダッシュボードで分野を指定していれば、その中分類を開いて最初の解説を選ぶ。"""
-        self._prepare()
-        self._set_category(9)
 
         response = self.client.get(reverse('fe:learn_start'))
-        note = LearningNote.objects.get(category__code=9)
         self.assertEqual(response.context['open_code'], 9)
-        self.assertEqual(response.context['selected_note'], note.pk)
-        self.assertEqual(self._checked_notes(response), [str(note.pk)])
-
-    def test_the_selected_note_is_the_first_one_with_questions(self):
-        """出題できる問題を持たない解説は飛ばす。選んでも始められないため。"""
-        self._prepare()
-        database = Category.objects.get(code=9)
-        # シラバス順で先に来るが、出題できる問題を持たない解説
-        empty = LearningNote.objects.create(
-            category=database, topic='データベース方式',
-            title='データベースの種類', body='本文',
-        )
-        response = self.client.get(reverse('fe:learn_start'))
-        # 指定前は何も選ばない
-        self.assertIsNone(response.context['selected_note'])
-
-        self._set_category(9)
-        response = self.client.get(reverse('fe:learn_start'))
-        self.assertNotEqual(response.context['selected_note'], empty.pk)
-        self.assertEqual(
-            response.context['selected_note'],
-            LearningNote.objects.get(category=database, topic=database.name).pk,
-        )
-
-    def test_a_category_without_questions_is_only_opened(self):
-        """その分野のどの解説も出題できないときは、開くだけで何も選ばない。"""
-        self._prepare()
-        law = Category.objects.get(code=23)
-        LearningNote.objects.create(
-            category=law, topic='出題のない小分類', title='法務の解説', body='本文',
-        )
-        self._set_category(23)
-
-        response = self.client.get(reverse('fe:learn_start'))
-        self.assertEqual(response.context['open_code'], 23)
-        self.assertIsNone(response.context['selected_note'])
         self.assertEqual(self._checked_notes(response), [])
 
-    def test_nothing_is_selected_without_a_category(self):
+    def test_nothing_is_opened_without_a_category(self):
         """分野を指定していなければ、どの中分類も開かず、何も選ばない。"""
         self._prepare()
         response = self.client.get(reverse('fe:learn_start'))
         self.assertIsNone(response.context['open_code'])
-        self.assertIsNone(response.context['selected_note'])
         self.assertEqual(self._checked_notes(response), [])
 
-    def test_a_category_of_the_other_subject_is_not_carried_over(self):
+    def test_a_category_of_the_other_subject_is_not_opened(self):
         """科目を切り替えたあとの指定は引き継がない。その科目には無い分類のため。"""
         self._prepare()
         session, _ = StudySession.objects.get_or_create(learner=self.learner)
@@ -1658,7 +1619,6 @@ class LearningModeTests(TestCase):
         session.save()
         response = self.client.get(reverse('fe:learn_start'))
         self.assertIsNone(response.context['open_code'])
-        self.assertIsNone(response.context['selected_note'])
 
     def test_a_round_can_be_abandoned_from_the_quiz(self):
         """解答の途中でやめて学習モードトップへ戻れる。ラウンドは残さない。"""
