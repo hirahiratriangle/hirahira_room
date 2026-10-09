@@ -589,57 +589,30 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
 
     def get(self, request, *args, **kwargs):
         session = _get_study_session(self.learner)
-        groups = note_menu(self.learner, session.subject)
         return render(request, self.template_name, {
             'minute_choices': LearningRound.MINUTE_CHOICES,
             'default_minutes': LearningRound.DEFAULT_MINUTES,
             'count': LearningRound.QUESTION_COUNT,
             'study_session': session,
-            'groups': groups,
-            # ダッシュボードで分野を指定しているなら、それを初期選択にする。
-            # 指定が無ければ何も選ばない（そのまま送れば「おまかせ」になる）。
-            'selected_code': self._selected_code(session, groups),
+            'groups': note_menu(self.learner, session.subject),
+            'open_code': self._open_code(session),
             'recent': LearningRound.objects.filter(
                 learner=self.learner, phase=LearningRound.PHASE_DONE
             )[:5],
         })
 
     @staticmethod
-    def _selected_code(session, groups):
-        """初期選択にする中分類のコード。無ければ None。
+    def _open_code(session):
+        """最初から開いておく中分類のコード。無ければ None。
 
-        ダッシュボードの出題設定で指定している中分類を引き継ぐ。ただし科目を
-        切り替えた直後など、いまの科目で学習できない分類なら選ばない。
-        選べない行を選んだ状態にすると、そのまま送ったときに何が起きるかが
-        画面と食い違うため。
+        ダッシュボードの出題設定で分野を指定しているなら、その中分類を開いて
+        解説を見せる。選ぶのは利用者なので、どれも選んだ状態にはしない。
+        科目を切り替えた直後など、指定が今の科目のものでなければ開かない。
         """
         category = session.category
         if category is None or category.subject != session.subject:
             return None
-        usable = {g['category'].code for g in groups if g['questions']}
-        return category.code if category.code in usable else None
-
-    def _target(self, request, session):
-        """選んだ学習対象を (解説, 中分類) に直す。どちらも None なら全分野おまかせ。
-
-        値は 'n<解説のID>'、'c<中分類のコード>'、空（おまかせ）のいずれか。
-        """
-        target = (request.POST.get('target') or '').strip()
-        if target.startswith('n') and target[1:].isdigit():
-            note = LearningNote.objects.filter(
-                pk=target[1:]
-            ).select_related('category').first()
-            if note is None:
-                raise ValueError('その解説は見つかりませんでした。')
-            return note, None
-        if target.startswith('c') and target[1:].isdigit():
-            category = Category.objects.filter(
-                code=target[1:], subject=session.subject
-            ).first()
-            if category is None:
-                raise ValueError('その分野は選んだ科目にありません。')
-            return None, category
-        return None, None
+        return category.code
 
     def post(self, request, *args, **kwargs):
         raw = request.POST.get('minutes')
@@ -647,29 +620,22 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
         if minutes not in LearningRound.MINUTE_CHOICES:
             minutes = LearningRound.DEFAULT_MINUTES
 
-        session = _get_study_session(self.learner)
-        try:
-            note, category = self._target(request, session)
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return redirect('fe:learn_start')
+        # 空なら「おまかせ」
+        note = None
+        chosen = request.POST.get('note')
+        if chosen and chosen.isdigit():
+            note = LearningNote.objects.filter(pk=chosen).select_related('category').first()
+            if note is None:
+                messages.error(request, 'その解説は見つかりませんでした。')
+                return redirect('fe:learn_start')
 
-        round_ = start_round(
-            self.learner, session, minutes, note=note, category=category
-        )
+        session = _get_study_session(self.learner)
+        round_ = start_round(self.learner, session, minutes, note=note)
         if round_ is None:
             if note is not None:
                 messages.error(
                     request,
                     '「{}」に出題できる問題がありません。'.format(note.title),
-                )
-                return redirect('fe:learn_start')
-            if category is not None:
-                messages.error(
-                    request,
-                    '{}には、出題できる問題のある技術解説がまだありません。'.format(
-                        category.name
-                    ),
                 )
                 return redirect('fe:learn_start')
             messages.error(request, '学習モードに使う技術解説が、まだ用意されていません。')

@@ -30,7 +30,7 @@
         技術解説を<strong>時間を決めて読み</strong>、そのあと<strong>読んだ解説と同じ小分類の問題だけ</strong>を
         最大{{ count }}問解きます。ほかの小分類からは補わないので、
         <strong>出る問数は解説ごとに違います</strong>。
-        読むものは中分類ごと・解説ごとに選べます。おまかせにすると、苦手な分野の未読から選ばれます。
+        読むものは解説ごとに選べます。おまかせにすると、苦手な分野の未読から選ばれます。
     </p>
 
     <form method="post" class="border rounded p-4 mb-4">
@@ -43,13 +43,17 @@
         {% if groups %}
         <div class="border rounded mb-4 fe-pick">
             <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
-                <input class="form-check-input mt-0" type="radio" name="target" value="">
+                <input class="form-check-input mt-0" type="radio" name="note" value="">
                 <span class="fw-bold">おまかせ</span>
                 <span class="text-muted small">苦手な分野の、まだ読んでいない解説から選びます</span>
             </label>
 
+            {% comment %}
+            ダッシュボードで分野を指定しているなら、その中分類を開いて解説を見せる。
+            選ぶのは利用者なので、どれも選んだ状態にはしない。
+            {% endcomment %}
             {% for group in groups %}
-            <details class="fe-group border-bottom">
+            <details class="fe-group border-bottom"{% if open_code == group.category.code %} open{% endif %}>
                 <summary class="d-flex justify-content-between align-items-center p-2 px-3"
                          style="cursor:pointer;">
                     <span>
@@ -70,24 +74,11 @@
                     </span>
                 </summary>
                 <div style="background-color:#f6f8fb;">
-                    {% comment %}
-                    中分類ごとの「おまかせ」。ダッシュボードの分野指定をそのまま
-                    初期選択にできるよう、解説と同じ並びの中に置く。
-                    {% endcomment %}
-                    <label class="fe-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0 border-bottom"
-                           data-name="{{ group.category.name }}（この分野からおまかせ）">
-                        <input class="form-check-input mt-0" type="radio" name="target"
-                               value="c{{ group.category.code }}"
-                               {% if selected_code == group.category.code %}checked{% endif %}
-                               {% if not group.questions %}disabled{% endif %}>
-                        <span class="fw-bold">この分野からおまかせ</span>
-                        <span class="text-muted small">下の解説のうち、まだ読んでいないものから選びます</span>
-                    </label>
                     {% for entry in group.notes %}
                     <label class="fe-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0{% if not entry.questions %} text-muted{% endif %}"
                            data-name="{{ group.category.name }} ／ {{ entry.note.title }}">
-                        <input class="form-check-input mt-0" type="radio" name="target"
-                               value="n{{ entry.note.pk }}"
+                        <input class="form-check-input mt-0" type="radio" name="note"
+                               value="{{ entry.note.pk }}"
                                {% if not entry.questions %}disabled{% endif %}>
                         {% if entry.note.topic %}
                         <span class="badge bg-secondary">{{ entry.note.topic }}</span>
@@ -162,14 +153,14 @@
     if (!form) { return; }
 
     var update = function () {
-        var checked = form.querySelector('input[name="target"]:checked');
+        var checked = form.querySelector('input[name="note"]:checked');
         var row = checked && checked.closest('.fe-row');
         label.textContent = (row && row.dataset.name) ? row.dataset.name : 'おまかせ';
     };
     form.addEventListener('change', update);
 
     // 前の選択が残って再表示されたときは、その中分類を開いておく
-    var checked = form.querySelector('.fe-group input[name="target"]:checked');
+    var checked = form.querySelector('.fe-group input[name="note"]:checked');
     if (checked) { checked.closest('details').open = true; }
     update();
 })();
