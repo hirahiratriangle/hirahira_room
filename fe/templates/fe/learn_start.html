@@ -31,6 +31,8 @@
         最大{{ count }}問解きます。ほかの小分類からは補わないので、
         <strong>出る問数は解説ごとに違います</strong>。
         読むものは解説ごとに選べます。おまかせにすると、苦手な分野の未読から選ばれます。
+        {% if focus %}いまはダッシュボードで<strong>{{ focus.name }}</strong>を指定しているので、
+        おまかせの範囲もその分野の中だけになります。{% endif %}
     </p>
 
     <form method="post" class="border rounded p-4 mb-4">
@@ -38,22 +40,29 @@
 
         <div class="fw-bold" style="color:#2c5aa0;">学習対象</div>
         <div class="small text-muted mb-2">
-            いま選んでいるもの：<span class="fw-bold text-body" id="picked">おまかせ</span>
+            いま選んでいるもの：<span class="fw-bold text-body" id="picked">おまかせ{% if focus %}（{{ focus.name }}）{% endif %}</span>
         </div>
         {% if groups %}
         <div class="border rounded mb-4 fe-pick">
-            <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
+            {% comment %}
+            ダッシュボードで分野を指定しているときは、おまかせの範囲もその分野に絞る。
+            選択肢は増やさず、おまかせの意味のほうを変える。
+            {% endcomment %}
+            <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom"
+                   data-name="おまかせ{% if focus %}（{{ focus.name }}）{% endif %}">
                 <input class="form-check-input mt-0" type="radio" name="note" value="">
-                <span class="fw-bold">おまかせ</span>
-                <span class="text-muted small">苦手な分野の、まだ読んでいない解説から選びます</span>
+                <span class="fw-bold">おまかせ{% if focus %}（{{ focus.name }}）{% endif %}</span>
+                <span class="text-muted small">
+                    {% if focus %}{{ focus.name }}の{% else %}苦手な分野の{% endif %}、まだ読んでいない解説から選びます
+                </span>
             </label>
 
             {% comment %}
-            ダッシュボードで分野を指定しているなら、その中分類を開いて解説を見せる。
-            選ぶのは利用者なので、どれも選んだ状態にはしない。
+            指定している分野は開いて解説を見せる。選ぶのは利用者なので、
+            どれも選んだ状態にはしない。
             {% endcomment %}
             {% for group in groups %}
-            <details class="fe-group border-bottom"{% if open_code == group.category.code %} open{% endif %}>
+            <details class="fe-group border-bottom"{% if focus.code == group.category.code %} open{% endif %}>
                 <summary class="d-flex justify-content-between align-items-center p-2 px-3"
                          style="cursor:pointer;">
                     <span>
@@ -152,10 +161,15 @@
     var form = label && label.closest('form');
     if (!form) { return; }
 
+    // 何も選ばれていないときは「おまかせ」の行の表示をそのまま出す。
+    // 分野を指定していると「おまかせ（セキュリティ）」のように分野名が付く。
+    var auto = form.querySelector('.fe-auto');
+    var fallback = (auto && auto.dataset.name) || 'おまかせ';
+
     var update = function () {
         var checked = form.querySelector('input[name="note"]:checked');
         var row = checked && checked.closest('.fe-row');
-        label.textContent = (row && row.dataset.name) ? row.dataset.name : 'おまかせ';
+        label.textContent = (row && row.dataset.name) ? row.dataset.name : fallback;
     };
     form.addEventListener('change', update);
 

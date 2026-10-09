@@ -24,13 +24,14 @@ from .stats import category_stats
 def start_round(learner, session, minutes, count=None, note=None):
     """読む解説を1本選び、その解説の範囲から出題ぶんを取ってラウンドを作る。
 
-    note を渡せばそれを読む。渡さなければ苦手な分野から選ぶ。
+    note を渡せばそれを読む。渡さなければ苦手な分野から選ぶ。ダッシュボードで
+    分野を指定しているなら、その中分類の中から選ぶ。
     解説が無ければ始められない。問題と同じく、管理用の ID が JSON で取り込む。
     """
     count = count or LearningRound.QUESTION_COUNT
 
     if note is None:
-        note = pick_note(learner, session.subject)
+        note = pick_note(learner, session.subject, category=focus_category(session))
     elif note.category.subject != session.subject:
         # 別の科目の解説を指定されても、その科目の問題は出せない
         return None
@@ -65,10 +66,24 @@ def abandon_unfinished(learner):
     ).delete()
 
 
-def pick_note(learner, subject):
+def focus_category(session):
+    """おまかせの範囲を絞る中分類。絞らないなら None。
+
+    ダッシュボードの出題設定で指定している分野をそのまま使う。分野は出題モードが
+    「分野を指定」のときだけ保存されるので、指定していなければ自然と None になる。
+    科目を切り替えた直後など、指定が今の科目のものでなければ使わない。
+    """
+    category = session.category
+    if category is None or category.subject != session.subject:
+        return None
+    return category
+
+
+def pick_note(learner, subject, category=None):
     """次に読む解説を選ぶ。苦手な分野のものを優先する。
 
     同じ分野に解説が複数あるときは、まだ読んでいないものから出す。
+    category を渡すと、その中分類の中だけから選ぶ。
 
     出題できる問題を持つ解説だけを候補にする。持たない解説を選ぶと、読ませた
     あとに出題できず、ラウンドを作れないため。
@@ -76,6 +91,8 @@ def pick_note(learner, subject):
     # 分類は科目ごとに別なので、解説も科目で絞る。絞らないと、科目Aの回で
     # 科目Bの解説を読まされ、そのあと出題できる問題が無いことになる。
     notes = LearningNote.objects.filter(category__subject=subject)
+    if category is not None:
+        notes = notes.filter(category=category)
     counts = question_counts(subject)
     notes = [
         note for note in notes.select_related('category')

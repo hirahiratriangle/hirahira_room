@@ -1588,37 +1588,84 @@ class LearningModeTests(TestCase):
         self.assertRedirects(response, reverse('fe:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
 
+    def _set_category(self, category):
+        session, _ = StudySession.objects.get_or_create(learner=self.learner)
+        session.mode = StudySession.MODE_CATEGORY
+        session.category = category
+        session.save()
+        return session
+
     def test_the_dashboard_category_is_opened(self):
         """ダッシュボードで分野を指定していれば、その中分類を開いて見せる。
 
         開くだけで、解説はどれも選ばない。選ぶのは利用者。
         """
         self._prepare()
-        session, _ = StudySession.objects.get_or_create(learner=self.learner)
-        session.mode = StudySession.MODE_CATEGORY
-        session.category = Category.objects.get(code=9)
-        session.save()
+        self._set_category(Category.objects.get(code=9))
 
         response = self.client.get(reverse('fe:learn_start'))
-        self.assertEqual(response.context['open_code'], 9)
+        self.assertEqual(response.context['focus'].code, 9)
         self.assertEqual(self._checked_notes(response), [])
+
+    def test_the_auto_pick_stays_inside_the_dashboard_category(self):
+        """分野を指定していれば、おまかせもその分野の中から選ぶ。"""
+        self._prepare()
+        database = Category.objects.get(code=9)
+        for code in (11, 23):
+            other = Category.objects.get(code=code)
+            LearningNote.objects.create(
+                category=other, topic=other.name,
+                title='{}の解説'.format(other.name), body='本文',
+            )
+        self._set_category(database)
+
+        for _ in range(10):
+            self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+            round_ = LearningRound.objects.get(learner=self.learner)
+            self.assertEqual(round_.note.category_id, database.pk)
+
+    def test_the_auto_pick_covers_every_field_without_a_category(self):
+        """分野を指定していなければ、おまかせは全分野から選ぶ。"""
+        self._prepare()
+        for code in (11, 23):
+            other = Category.objects.get(code=code)
+            LearningNote.objects.create(
+                category=other, topic=other.name,
+                title='{}の解説'.format(other.name), body='本文',
+            )
+        seen = set()
+        for _ in range(30):
+            self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+            seen.add(LearningRound.objects.get(learner=self.learner).note.category.code)
+        self.assertGreater(len(seen), 1)
+
+    def test_a_category_without_notes_is_reported(self):
+        """指定した分野に出題できる解説が無ければ、始めずに知らせる。"""
+        self._prepare()
+        self._set_category(Category.objects.get(code=23))
+
+        response = self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        self.assertRedirects(response, reverse('fe:learn_start'))
+        self.assertEqual(LearningRound.objects.count(), 0)
 
     def test_nothing_is_opened_without_a_category(self):
         """分野を指定していなければ、どの中分類も開かず、何も選ばない。"""
         self._prepare()
         response = self.client.get(reverse('fe:learn_start'))
-        self.assertIsNone(response.context['open_code'])
+        self.assertIsNone(response.context['focus'])
         self.assertEqual(self._checked_notes(response), [])
 
-    def test_a_category_of_the_other_subject_is_not_opened(self):
+    def test_a_category_of_the_other_subject_is_not_used(self):
         """科目を切り替えたあとの指定は引き継がない。その科目には無い分類のため。"""
         self._prepare()
-        session, _ = StudySession.objects.get_or_create(learner=self.learner)
-        session.mode = StudySession.MODE_CATEGORY
-        session.category = Category.objects.filter(subject='B').first()
-        session.save()
+        self._set_category(Category.objects.filter(subject='B').first())
         response = self.client.get(reverse('fe:learn_start'))
-        self.assertIsNone(response.context['open_code'])
+        self.assertIsNone(response.context['focus'])
+
+        # おまかせの範囲も絞らない。絞ると科目Aでは1本も選べなくなる。
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.assertEqual(round_.note.category.subject, Question.SUBJECT_A)
 
     def test_a_round_can_be_abandoned_from_the_quiz(self):
         """解答の途中でやめて学習モードトップへ戻れる。ラウンドは残さない。"""

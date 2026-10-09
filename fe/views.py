@@ -28,7 +28,7 @@ from .exam import EXAM, build_prompt
 from .forms import LearnerForm, PassReportForm, QuestionUploadForm
 from .importer import (ImportError_, export_records, needs_confirmation, parse,
                        preview, sync, validate)
-from .learning import current_item, grade, note_menu, start_round
+from .learning import current_item, focus_category, grade, note_menu, start_round
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
                      LearningRound, PassReport, Question, QuestionTemplate,
                      StudySession)
@@ -595,24 +595,13 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
             'count': LearningRound.QUESTION_COUNT,
             'study_session': session,
             'groups': note_menu(self.learner, session.subject),
-            'open_code': self._open_code(session),
+            # ダッシュボードで指定している分野。おまかせの範囲になり、その中分類を
+            # 開いて見せる。解説を選ぶのは利用者。
+            'focus': focus_category(session),
             'recent': LearningRound.objects.filter(
                 learner=self.learner, phase=LearningRound.PHASE_DONE
             )[:5],
         })
-
-    @staticmethod
-    def _open_code(session):
-        """最初から開いておく中分類のコード。無ければ None。
-
-        ダッシュボードの出題設定で分野を指定しているなら、その中分類を開いて
-        解説を見せる。選ぶのは利用者なので、どれも選んだ状態にはしない。
-        科目を切り替えた直後など、指定が今の科目のものでなければ開かない。
-        """
-        category = session.category
-        if category is None or category.subject != session.subject:
-            return None
-        return category.code
 
     def post(self, request, *args, **kwargs):
         raw = request.POST.get('minutes')
@@ -636,6 +625,14 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
                 messages.error(
                     request,
                     '「{}」に出題できる問題がありません。'.format(note.title),
+                )
+                return redirect('fe:learn_start')
+            focus = focus_category(session)
+            if focus is not None:
+                messages.error(
+                    request,
+                    '{}には、出題できる問題のある技術解説がまだありません。'
+                    'ダッシュボードの分野の指定を変えてください。'.format(focus.name),
                 )
                 return redirect('fe:learn_start')
             messages.error(request, '学習モードに使う技術解説が、まだ用意されていません。')
