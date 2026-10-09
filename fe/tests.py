@@ -1652,6 +1652,75 @@ class LearningModeTests(TestCase):
         response = self.client.get(reverse('fe:learn_start'))
         self.assertIsNone(response.context['selected_code'])
 
+    def test_a_round_can_be_abandoned_from_the_quiz(self):
+        """解答の途中でやめて学習モードトップへ戻れる。ラウンドは残さない。"""
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.client.post(reverse('fe:learn_read', args=[round_.pk]))
+
+        # 1問だけ解いてからやめる
+        item = round_.items.get(order=0)
+        self.client.post(
+            reverse('fe:learn_quiz', args=[round_.pk]),
+            {'choice': item.question.answer_index},
+        )
+        response = self.client.post(reverse('fe:learn_abandon', args=[round_.pk]))
+        self.assertRedirects(response, reverse('fe:learn_start'))
+        self.assertEqual(LearningRound.objects.count(), 0)
+
+        # 解いたぶんの記録は残る。ラウンドとは別に積んでいるため。
+        self.assertEqual(Attempt.objects.filter(learner=self.learner).count(), 1)
+        self.assertEqual(
+            CategoryProgress.objects.filter(learner=self.learner).aggregate(
+                n=Sum('answered'))['n'], 1,
+        )
+
+    def test_a_finished_round_is_not_deleted(self):
+        """終わったラウンドは結果を見返すためのものなので、中断では消さない。"""
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        round_.phase = LearningRound.PHASE_DONE
+        round_.save(update_fields=['phase'])
+
+        response = self.client.post(reverse('fe:learn_abandon', args=[round_.pk]))
+        self.assertRedirects(response, reverse('fe:learn_result', args=[round_.pk]))
+        self.assertEqual(LearningRound.objects.count(), 1)
+
+    def test_starting_a_new_round_clears_the_left_over_one(self):
+        """画面を離れて置き去りになったラウンドは、次を始めるときに片づける。"""
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        left_over = LearningRound.objects.get(learner=self.learner)
+
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        rounds = LearningRound.objects.filter(learner=self.learner)
+        self.assertEqual(rounds.count(), 1)
+        self.assertNotEqual(rounds.first().pk, left_over.pk)
+
+    def test_a_finished_round_survives_the_next_one(self):
+        """終わったラウンドは、次を始めても残る。結果を見返せなくなるため。"""
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        done = LearningRound.objects.get(learner=self.learner)
+        done.phase = LearningRound.PHASE_DONE
+        done.save(update_fields=['phase'])
+
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        self.assertEqual(LearningRound.objects.filter(learner=self.learner).count(), 2)
+        self.assertTrue(LearningRound.objects.filter(pk=done.pk).exists())
+
+    def test_another_account_cannot_abandon_the_round(self):
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+
+        enter(self.client, make_learner('stranger3'))
+        response = self.client.post(reverse('fe:learn_abandon', args=[round_.pk]))
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(LearningRound.objects.filter(pk=round_.pk).exists())
+
     def test_another_account_cannot_open_the_round(self):
         self._prepare()
         self.client.post(reverse('fe:learn_start'), {'minutes': 5})

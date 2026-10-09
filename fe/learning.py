@@ -42,6 +42,11 @@ def start_round(learner, session, minutes, count=None, note=None, category=None)
     if not questions:
         return None
 
+    # 画面を離れたまま置き去りになったラウンドを片づける。続きから再開する道は
+    # 用意していないので、残してもどこからも開けない記録になる。出題ぶんを取れて
+    # 新しいラウンドを作れると決まってから消す。
+    abandon_unfinished(learner)
+
     round_ = LearningRound.objects.create(
         learner=learner, note=note, subject=session.subject, reading_seconds=minutes * 60,
     )
@@ -52,6 +57,13 @@ def start_round(learner, session, minutes, count=None, note=None, category=None)
         for index, question in enumerate(order)
     ])
     return round_
+
+
+def abandon_unfinished(learner):
+    """終わっていないラウンドを消す。解答履歴と理解度は別に積んであるので残る。"""
+    return LearningRound.objects.filter(learner=learner).exclude(
+        phase=LearningRound.PHASE_DONE
+    ).delete()
 
 
 def pick_note(learner, subject, category=None):

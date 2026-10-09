@@ -784,6 +784,25 @@ class LearnNextView(LearnerRequiredMixin, generic.View):
         return redirect('fe:learn_quiz', pk=round_.pk)
 
 
+class LearnAbandonView(LearnerRequiredMixin, generic.View):
+    """途中のラウンドをやめて学習モードトップへ戻る。
+
+    やめたラウンドは残さずに消す。続きから再開する道を用意しないので、
+    残しても「解答中」のまま溜まるだけで、どこからも開けない記録になる。
+    解いたぶんの解答履歴と分野別の理解度はラウンドとは別に積んであり、
+    消しても失われない。
+    """
+
+    def post(self, request, pk, *args, **kwargs):
+        round_ = get_object_or_404(LearningRound, pk=pk, learner=self.learner)
+        if round_.phase == LearningRound.PHASE_DONE:
+            # 終わったラウンドは結果を見返すためのものなので消さない
+            return redirect('fe:learn_result', pk=round_.pk)
+        round_.delete()
+        messages.info(request, 'ラウンドを中断しました。解いたぶんの記録は残っています。')
+        return redirect('fe:learn_start')
+
+
 class LearnResultView(LearnerRequiredMixin, generic.DetailView):
     """ラウンドの結果。まちがえた問題を読み返せるようにする。"""
 
