@@ -40,14 +40,14 @@
         {% if groups %}
         <div class="border rounded mb-4 fe-pick">
             {% comment %}
-            解説を選ばなかったときの行。ダッシュボードで分野を指定していれば
-            その分野名を出し、範囲もその分野に絞る。選択肢は増やさず、
-            この行の意味のほうを変える。小分類を選ぶのは利用者。
+            解説を選ばなかったときの行。選択肢は増やさず、この行の範囲のほうを
+            ダッシュボードの分野に合わせる。行の名前は「おまかせ」のままにし、
+            いま何が選ばれているかは上の行に分野名で出す。
             {% endcomment %}
             <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom"
                    data-name="{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}">
                 <input class="form-check-input mt-0" type="radio" name="note" value="">
-                <span class="fw-bold">{% if focus %}{{ focus.name }}{% else %}おまかせ{% endif %}</span>
+                <span class="fw-bold">おまかせ</span>
             </label>
 
             {% comment %}
