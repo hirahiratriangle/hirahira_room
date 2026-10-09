@@ -16,38 +16,83 @@ from .models import Learner
 MAX_UPLOAD_BYTES = settings.FE_MAX_UPLOAD_BYTES
 
 
-class QuestionUploadForm(forms.Form):
-    """JSON ファイルのアップロード。"""
-
-    upload = forms.FileField(
-        label='JSONファイル',
-        widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.json,application/json'}),
-        help_text='自分の AI に書き出させた .json ファイルを選ぶ。',
+def _file_field(label, help_text):
+    return forms.FileField(
+        label=label, required=False, help_text=help_text,
+        widget=forms.ClearableFileInput(
+            attrs={'class': 'form-control', 'accept': '.json,application/json'}
+        ),
     )
 
-    def clean_upload(self):
-        """中身まで読んで、取り込める内容かをここで確かめる。
 
-        検証を通ってからでないと 1 問も書き込まないので、
-        壊れたファイルを選んでも、いまの問題集はそのまま残る。
-        """
-        upload = self.cleaned_data['upload']
+class QuestionUploadForm(forms.Form):
+    """JSON ファイルのアップロード。
+
+    問題と解説は更新の頻度が違うので別のファイルで渡せる。欄も分けてあり、
+    片方だけ選んでも、両方選んでも取り込める。選ばなかったほうには触らない。
+    両方に同じ側（問題なら問題）が入っていたら、どちらを使うか決められないので弾く。
+    """
+
+    questions_file = _file_field(
+        '問題のJSON', '問題だけを選んだときは、いまの技術解説はそのまま残ります。',
+    )
+    notes_file = _file_field(
+        '技術解説のJSON', '解説だけを選んだときは、いまの問題はそのまま残ります。',
+    )
+
+    def _read(self, field):
+        """1本ぶんを読んで、取り込める内容かを確かめる。"""
+        upload = self.cleaned_data.get(field)
+        if not upload:
+            return None
         if upload.size > MAX_UPLOAD_BYTES:
             raise forms.ValidationError(
-                'ファイルが大きすぎます（{:.1f} MB。上限 {} MB）。'.format(
-                    upload.size / 1024 / 1024, MAX_UPLOAD_BYTES // 1024 // 1024
+                '{}：ファイルが大きすぎます（{:.1f} MB。上限 {} MB）。'.format(
+                    upload.name, upload.size / 1024 / 1024,
+                    MAX_UPLOAD_BYTES // 1024 // 1024,
                 )
             )
         try:
-            payload = upload.read().decode('utf-8')
+            text = upload.read().decode('utf-8')
         except UnicodeDecodeError:
-            raise forms.ValidationError('UTF-8 のテキストとして読めませんでした。')
+            raise forms.ValidationError(
+                '{}：UTF-8 のテキストとして読めませんでした。'.format(upload.name)
+            )
+        try:
+            return parse(text)
+        except ImportError_ as exc:
+            raise forms.ValidationError('{}：{}'.format(upload.name, exc))
+
+    def clean(self):
+        """2つの欄をまとめて1つの取り込み内容にする。
+
+        検証を通ってからでないと1件も書き込まないので、壊れたファイルを
+        選んでも、いまの問題集と解説はそのまま残る。
+        """
+        cleaned = super().clean()
+        parts = [self._read('questions_file'), self._read('notes_file')]
+        parts = [p for p in parts if p is not None]
+        if not parts:
+            raise forms.ValidationError(
+                '問題と技術解説のどちらか一方は選んでください。'
+            )
+
+        merged = {'questions': None, 'notes': None}
+        for side, label in (('questions', '問題'), ('notes', '技術解説')):
+            found = [p[side] for p in parts if p[side] is not None]
+            if len(found) > 1:
+                raise forms.ValidationError(
+                    '選んだ2つのファイルの両方に{}が入っています。'
+                    'どちらを使うか決められないので、片方にまとめてください。'.format(label)
+                )
+            if found:
+                merged[side] = found[0]
 
         try:
-            self.records = validate(parse(payload))
+            self.records = validate(merged)
         except ImportError_ as exc:
             raise forms.ValidationError(str(exc))
-        return upload
+        return cleaned
 
 
 class PassReportForm(forms.Form):

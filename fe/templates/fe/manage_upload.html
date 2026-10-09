@@ -127,11 +127,26 @@
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
-        <div class="mb-4">
-            <label for="{{ form.upload.id_for_label }}" class="form-label small fw-bold">JSONファイル</label>
-            {{ form.upload }}
-            <div class="form-text">{{ form.upload.help_text }}</div>
-            {% for e in form.upload.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        {% comment %}
+        問題と解説は更新の頻度が違うので、別のファイル・別の欄で渡す。
+        片方だけ選んでも、両方選んでも取り込める。選ばなかったほうには触らない。
+        {% endcomment %}
+        <div class="row g-3 mb-4">
+            {% for field in form %}
+            <div class="col-12 col-md-6">
+                <label for="{{ field.id_for_label }}" class="form-label small fw-bold">
+                    {{ field.label }}
+                    <span class="badge bg-light text-muted fw-normal ms-1">任意</span>
+                </label>
+                {{ field }}
+                <div class="form-text">{{ field.help_text }}</div>
+                {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="form-text mb-4">
+            どちらか一方だけでも、両方同時でも取り込めます。
+            選ばなかったほうは、いまの内容がそのまま残ります。
         </div>
 
         <div class="alert alert-warning">

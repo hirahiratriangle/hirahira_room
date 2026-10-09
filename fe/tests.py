@@ -799,7 +799,7 @@ class ManageTests(TestCase):
 
     def _upload(self, n=3, prefix='問題'):
         """取り込みは JSON ファイル1本だけなので、テストもファイルで投げる。"""
-        return {'upload': SimpleUploadedFile(
+        return {'questions_file': SimpleUploadedFile(
             'q.json', self._payload(n, prefix).encode('utf-8'),
             content_type='application/json',
         )}
@@ -817,7 +817,7 @@ class ManageTests(TestCase):
         return response
 
     def _json_upload(self, records):
-        return {'upload': SimpleUploadedFile(
+        return {'questions_file': SimpleUploadedFile(
             'q.json', json.dumps(records, ensure_ascii=False).encode('utf-8'),
             content_type='application/json',
         )}
@@ -874,7 +874,7 @@ class ManageTests(TestCase):
         self.assertGreater(len(payload), 2 * 1024 * 1024, '2MB を超える前提のテスト')
 
         response = self.client.post(reverse('fe:manage_upload'), {
-            'upload': SimpleUploadedFile('big.json', payload,
+            'questions_file': SimpleUploadedFile('big.json', payload,
                                          content_type='application/json'),
         })
         self.assertRedirects(response, reverse('fe:manage_list'))
@@ -950,7 +950,7 @@ class ManageTests(TestCase):
     def test_broken_json_is_rejected_without_touching_anything(self):
         self.client.post(reverse('fe:manage_upload'), self._upload(2))
         before = list(Question.objects.all().values_list('id', flat=True))
-        response = self.client.post(reverse('fe:manage_upload'), {'upload': SimpleUploadedFile(
+        response = self.client.post(reverse('fe:manage_upload'), {'questions_file': SimpleUploadedFile(
             'q.json', b'{ not json', content_type='application/json')})
         self.assertEqual(response.status_code, 200)
         after = list(Question.objects.all().values_list('id', flat=True))
@@ -1106,6 +1106,61 @@ class ImportNotesTests(TestCase):
         kept.refresh_from_db()
         self.assertEqual(kept.explanation, '書き直した解説')
 
+    def test_both_files_can_be_uploaded_at_once(self):
+        """問題と解説を別々の欄で選んで、1回で取り込める。"""
+        admin = make_learner('twofiles', is_admin=True)
+        enter(self.client, admin)
+        questions = json.dumps({'questions': [
+            {'category': 11, 'stem': 'まとめて取り込む問題',
+             'choices': ['a', 'b', 'c', 'd'], 'answer': 0},
+        ]}, ensure_ascii=False)
+        notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
+
+        response = self.client.post(reverse('fe:manage_upload'), {
+            'questions_file': SimpleUploadedFile('q.json', questions.encode('utf-8')),
+            'notes_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Question.objects.filter(template__isnull=True).count(), 1)
+        self.assertEqual(LearningNote.objects.count(), 2)
+
+    def test_notes_file_alone_is_accepted_from_the_screen(self):
+        """解説の欄だけ選んでも取り込める。問題には触らない。"""
+        build_questions(per_category=1)
+        before = Question.objects.count()
+        admin = make_learner('notesonly', is_admin=True)
+        enter(self.client, admin)
+        notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
+
+        response = self.client.post(reverse('fe:manage_upload'), {
+            'notes_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(LearningNote.objects.count(), 2)
+        self.assertEqual(Question.objects.count(), before, '問題はそのまま')
+
+    def test_upload_needs_at_least_one_file(self):
+        """どちらも選ばずに送ったら、理由を添えて止める。"""
+        admin = make_learner('nofile', is_admin=True)
+        enter(self.client, admin)
+        response = self.client.post(reverse('fe:manage_upload'), {})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'どちらか一方は選んでください')
+
+    def test_same_side_in_both_files_is_rejected(self):
+        """両方の欄に問題を入れたら、どちらを使うか決められないので弾く。"""
+        admin = make_learner('bothq', is_admin=True)
+        enter(self.client, admin)
+        payload = json.dumps({'questions': [
+            {'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0},
+        ]}, ensure_ascii=False).encode('utf-8')
+        response = self.client.post(reverse('fe:manage_upload'), {
+            'questions_file': SimpleUploadedFile('a.json', payload),
+            'notes_file': SimpleUploadedFile('b.json', payload),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '両方に問題が入っています')
+
     def test_preview_counts_without_writing(self):
         """下見は数えるだけで、1件も書き込まない。"""
         build_questions(per_category=1)
@@ -1158,7 +1213,7 @@ class ImportNotesTests(TestCase):
         }]}, ensure_ascii=False)
 
         response = self.client.post(reverse('fe:manage_upload'), {
-            'upload': SimpleUploadedFile('q.json', payload.encode('utf-8')),
+            'questions_file': SimpleUploadedFile('q.json', payload.encode('utf-8')),
         })
         self.assertEqual(response.status_code, 200, '遷移せず確認画面を出す')
         self.assertContains(response, '削除が多いので、一度止めました')
