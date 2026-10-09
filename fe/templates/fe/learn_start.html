@@ -49,8 +49,8 @@
             </label>
 
             {% comment %}
-            ダッシュボードで分野を指定しているなら、その中分類を開いて解説を見せる。
-            選ぶのは利用者なので、どれも選んだ状態にはしない。
+            ダッシュボードで分野を指定しているなら、その中分類を開き、中の最初の
+            解説（シラバス順で、出題できるもの）を選んだ状態にする。
             {% endcomment %}
             {% for group in groups %}
             <details class="fe-group border-bottom"{% if open_code == group.category.code %} open{% endif %}>
@@ -79,6 +79,7 @@
                            data-name="{{ group.category.name }} ／ {{ entry.note.title }}">
                         <input class="form-check-input mt-0" type="radio" name="note"
                                value="{{ entry.note.pk }}"
+                               {% if selected_note == entry.note.pk %}checked{% endif %}
                                {% if not entry.questions %}disabled{% endif %}>
                         {% if entry.note.topic %}
                         <span class="badge bg-secondary">{{ entry.note.topic }}</span>
