@@ -57,6 +57,9 @@
         <div class="ap-stem small mb-0">{{ question.explanation }}</div>
     </div>
     {% endif %}
+    {% if question.source %}
+    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}出典・根拠：{{ question.source }}</p>
+    {% endif %}
 
     <form method="post" action="{% url 'ap:learn_next' round.pk %}">
         {% csrf_token %}

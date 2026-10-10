@@ -1404,6 +1404,42 @@ class LearningModeTests(TestCase):
         round_ = LearningRound.objects.get(learner=self.learner)
         self.assertEqual(round_.total, 3)
 
+    def test_origin_label_tells_ipa_questions_from_original_ones(self):
+        """出典の書き出しから、IPA の出題そのものか自作かを見分ける。"""
+        cases = [
+            ('令和6年度 科目A 問3', 'IPA公開問題（令和6年度）'),
+            ('令和3年度 春期 午前 問2', 'IPA公開問題（令和3年度 春期）'),
+            ('サンプル問題 科目A 問12', 'IPAサンプル問題'),
+            ('シラバス Ver.8.0 中分類1 応用数学（3）数値解析', '自作'),
+            ('試験要綱 科目B', '自作'),
+            ('自作（令和6年度秋 午前 問5 を基に作成）', '自作'),
+            ('', ''),
+        ]
+        for source, label in cases:
+            self.assertEqual(Question(source=source).origin_label, label)
+
+    def test_learning_quiz_shows_the_source_after_answering(self):
+        """学習モードでも、答えた後に出典と出題元の区別を出す。"""
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.client.post(reverse('fe:learn_read', args=[round_.pk]))
+
+        item = round_.items.get(order=0)
+        question = item.question
+        question.source = 'シラバス 中分類1 テスト用の項目'
+        question.save()
+
+        before = self.client.get(reverse('fe:learn_quiz', args=[round_.pk]))
+        self.assertNotContains(before, 'テスト用の項目')
+
+        after = self.client.post(
+            reverse('fe:learn_quiz', args=[round_.pk]),
+            {'choice': question.answer_index},
+        )
+        self.assertContains(after, '出典・根拠：シラバス 中分類1 テスト用の項目')
+        self.assertContains(after, '自作')
+
     def test_answering_records_progress(self):
         """学習モードで解いた分も、分野ごとの理解度に積む。"""
         self._prepare()

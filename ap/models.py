@@ -9,6 +9,7 @@ Attempt が持つ。問題と技術解説は全 ID で共有し、成績は Lear
 同じ導線で扱える。
 """
 
+import re
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Count, Q
@@ -204,6 +205,20 @@ class Question(models.Model):
     @property
     def is_generated(self):
         return self.template_id is not None
+
+    @property
+    def origin_label(self):
+        """IPA の出題そのものか自作かを、出典の書き出しから見分けて返す。"""
+        if self.is_generated:
+            return '自動生成'
+        source = self.source.strip()
+        if source.startswith(('令和', '平成')):
+            # 「令和7年度」「令和3年度 春期」のように、何年の出題かまで添える
+            held = re.match(r'(?:令和|平成)\s*[0-9０-９元]+\s*年度?(?:\s*[春秋]期)?', source)
+            return 'IPA公開問題（{}）'.format(held.group(0)) if held else 'IPA公開問題'
+        if source.startswith('サンプル問題'):
+            return 'IPAサンプル問題'
+        return '自作' if source else ''
 
     @property
     def answer_label(self):
