@@ -31,27 +31,34 @@
         </div>
     </div>
 
-    {% if missed %}
-    <h2 class="h6 fw-bold mb-3" style="color:#2c5aa0;">まちがえた問題</h2>
-    {% for item in missed %}
+    {% if not missed %}
+    <div class="alert alert-success">全問正解です。</div>
+    {% endif %}
+
+    <h2 class="h6 fw-bold mb-3" style="color:#2c5aa0;">解いた問題</h2>
+    {% for item in items %}
     <div class="border rounded p-3 mb-3">
         <div class="mb-2">
-            <span class="badge bg-secondary">{{ item.question.category.name }}</span>
+            <span class="fw-bold small me-2">問{{ forloop.counter }}</span>
+            {% if item.is_correct %}<span class="badge bg-success">正解</span>
+            {% elif item.is_correct is False %}<span class="badge bg-danger">不正解</span>
+            {% else %}<span class="badge bg-light text-dark border">未解答</span>{% endif %}
+            <span class="badge bg-secondary ms-1">{{ item.question.category.name }}</span>
             {% if item.question.topic %}<span class="text-muted small ms-2">{{ item.question.topic }}</span>{% endif %}
         </div>
         <div class="fe-stem small mb-2">{{ item.question.stem }}</div>
         <div class="small mb-2">
-            <span class="text-danger">あなたの解答 {{ item.selected_label }}</span>
-            <span class="text-success ms-3">正解 {{ item.question.answer_label }}　{{ item.question.answer_text }}</span>
+            {% if item.is_correct is False %}<span class="text-danger me-3">あなたの解答 {{ item.selected_label }}</span>{% endif %}
+            <span class="text-success">正解 {{ item.question.answer_label }}　{{ item.question.answer_text }}</span>
         </div>
         {% if item.question.explanation %}
         <div class="fe-stem small text-muted mb-0">{{ item.question.explanation }}</div>
         {% endif %}
+        {% if item.question.source %}
+        <p class="small text-muted mt-2 mb-0">{% if item.question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ item.question.origin_label }}</span>{% endif %}出典・根拠：{{ item.question.source }}</p>
+        {% endif %}
     </div>
     {% endfor %}
-    {% else %}
-    <div class="alert alert-success">全問正解です。</div>
-    {% endif %}
 
     <div class="d-flex gap-2 mt-4">
         <a href="{% url 'fe:learn_start' %}" class="btn btn-primary">もう1ラウンド</a>

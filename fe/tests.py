@@ -1484,6 +1484,35 @@ class LearningModeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['missed'], [])
 
+    def test_the_result_lists_every_question_with_its_source(self):
+        """結果には、正解した問題も含めて全問を出典つきで並べる。"""
+        self._prepare()
+        self.client.post(reverse('fe:learn_start'), {'minutes': 3})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.client.post(reverse('fe:learn_read', args=[round_.pk]))
+
+        for order in range(round_.total):
+            item = round_.items.get(order=order)
+            question = item.question
+            question.source = 'シラバス 中分類1 テスト用の項目{}'.format(order)
+            question.save()
+            # 1問目だけまちがえ、残りは正解する
+            choice = question.answer_index
+            if order == 0:
+                choice = (choice + 1) % len(question.choices)
+            self.client.post(reverse('fe:learn_quiz', args=[round_.pk]), {'choice': choice})
+            self.client.post(reverse('fe:learn_next', args=[round_.pk]))
+
+        response = self.client.get(reverse('fe:learn_result', args=[round_.pk]))
+        self.assertEqual(len(response.context['items']), round_.total)
+        self.assertEqual(len(response.context['missed']), 1)
+        for order in range(round_.total):
+            self.assertContains(
+                response, '出典・根拠：シラバス 中分類1 テスト用の項目{}'.format(order)
+            )
+        self.assertContains(response, '不正解', count=1)
+        self.assertContains(response, 'あなたの解答', count=1)
+
     def test_the_menu_groups_notes_by_category(self):
         """学習対象は、中分類でまとめて小分類（解説）を並べる。"""
         build_questions(per_category=12)

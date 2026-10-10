@@ -778,7 +778,7 @@ class LearnAbandonView(LearnerRequiredMixin, generic.View):
 
 
 class LearnResultView(LearnerRequiredMixin, generic.DetailView):
-    """ラウンドの結果。まちがえた問題を読み返せるようにする。"""
+    """ラウンドの結果。解いた問題を、正解したものも含めて全問読み返せるようにする。"""
 
     template_name = 'fe/learn_result.html'
     context_object_name = 'round'
@@ -788,7 +788,9 @@ class LearnResultView(LearnerRequiredMixin, generic.DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        items = self.object.items.select_related('question', 'question__category')
+        items = self.object.items.select_related(
+            'question', 'question__category', 'question__template'
+        )
         context['items'] = items
         context['missed'] = [i for i in items if i.is_correct is False]
         return context
