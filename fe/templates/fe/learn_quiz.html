@@ -58,7 +58,7 @@
     </div>
     {% endif %}
     {% if question.source %}
-    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}出典・根拠：{{ question.source }}</p>
+    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_heading }}：{{ question.source }}</p>
     {% endif %}
 
     <form method="post" action="{% url 'fe:learn_next' round.pk %}">

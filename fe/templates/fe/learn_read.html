@@ -49,7 +49,7 @@
     <h2 class="h4 fw-bold mb-3">{{ note.title }}</h2>
     <div class="fe-note-body">{{ note.body }}</div>
     {% if note.source %}
-    <div class="text-muted small mt-4 pt-3 border-top">出典：{{ note.source }}</div>
+    <div class="text-muted small mt-4 pt-3 border-top">出題範囲：{{ note.source }}<br>本文は、この範囲の用語をもとに書き起こしたものです。</div>
     {% endif %}
 </div>
 {% endblock %}

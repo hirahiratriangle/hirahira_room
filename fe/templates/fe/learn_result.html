@@ -55,7 +55,7 @@
         <div class="fe-stem small text-muted mb-0">{{ item.question.explanation }}</div>
         {% endif %}
         {% if item.question.source %}
-        <p class="small text-muted mt-2 mb-0">{% if item.question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ item.question.origin_label }}</span>{% endif %}出典・根拠：{{ item.question.source }}</p>
+        <p class="small text-muted mt-2 mb-0">{% if item.question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ item.question.origin_label }}</span>{% endif %}{{ item.question.source_heading }}：{{ item.question.source }}</p>
         {% endif %}
     </div>
     {% endfor %}

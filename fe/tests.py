@@ -1418,6 +1418,17 @@ class LearningModeTests(TestCase):
         for source, label in cases:
             self.assertEqual(Question(source=source).origin_label, label)
 
+    def test_only_ipa_questions_call_their_source_a_citation(self):
+        """「出典」と呼ぶのは IPA の出題を転記した問題だけ。自作は「出題範囲」。"""
+        cases = [
+            ('令和6年度 科目A 問3', '出典'),
+            ('サンプル問題 科目A 問12', '出典'),
+            ('シラバス Ver.8.0 中分類1 応用数学（3）数値解析', '出題範囲'),
+            ('自作（令和6年度秋 午前 問5 を基に作成）', '出題範囲'),
+        ]
+        for source, heading in cases:
+            self.assertEqual(Question(source=source).source_heading, heading)
+
     def test_learning_quiz_shows_the_source_after_answering(self):
         """学習モードでも、答えた後に出典と出題元の区別を出す。"""
         self._prepare()
@@ -1437,7 +1448,7 @@ class LearningModeTests(TestCase):
             reverse('fe:learn_quiz', args=[round_.pk]),
             {'choice': question.answer_index},
         )
-        self.assertContains(after, '出典・根拠：シラバス 中分類1 テスト用の項目')
+        self.assertContains(after, '出題範囲：シラバス 中分類1 テスト用の項目')
         self.assertContains(after, '自作')
 
     def test_answering_records_progress(self):
@@ -1508,7 +1519,7 @@ class LearningModeTests(TestCase):
         self.assertEqual(len(response.context['missed']), 1)
         for order in range(round_.total):
             self.assertContains(
-                response, '出典・根拠：シラバス 中分類1 テスト用の項目{}'.format(order)
+                response, '出題範囲：シラバス 中分類1 テスト用の項目{}'.format(order)
             )
         self.assertContains(response, '不正解', count=1)
         self.assertContains(response, 'あなたの解答', count=1)

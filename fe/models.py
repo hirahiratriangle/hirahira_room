@@ -220,6 +220,15 @@ class Question(models.Model):
         return '自作' if source else ''
 
     @property
+    def source_heading(self):
+        """source の前に付ける見出し。IPA の出題を転記した問題だけが「出典」になる。
+
+        自作と自動生成の source は、問題文を引いてきた元ではなく、出題範囲の
+        根拠になるシラバスや要綱の項目なので「出題範囲」と呼ぶ。
+        """
+        return '出典' if self.origin_label.startswith('IPA') else '出題範囲'
+
+    @property
     def answer_label(self):
         return self.choice_label(self.answer_index)
 
