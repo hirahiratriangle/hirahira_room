@@ -39,9 +39,14 @@ python manage.py createsuperuser --settings=config.settings_dev
 **問題は同梱していない。** 管理用の ID で入り、画面の
 「問題の管理 → JSONを取り込む」から取り込む。
 
-どの画面も hirahira_room へのログインが要る（`LearnerRequiredMixin` は
-`LoginRequiredMixin` を継いでいる）。ログインしたら `/fe/` で本アプリの中の ID
-（`Learner`）を入力するか新しく作る。成績はアカウントではなく、**この ID ごと**に持つ。
+学習の画面は、hirahira_room にログインしなくても使える。サイト全体は
+`LoginRequiredMiddleware` でログイン必須だが、本アプリは `login_not_required` で
+外してある。`/fe/` で本アプリの中の ID（`Learner`）を入力するか新しく作る。
+成績はアカウントではなく、**この ID ごと**に持つ。
+
+問題の管理だけは、管理用の ID に加えて hirahira_room へのログインも要る
+（`AdminRequiredMixin`）。ID には合言葉がないので、ID を知っているだけで
+全員の問題集を差し替えられないようにするため。
 
 管理用の ID は、画面からは作れない。ID を一度作ってから、Django の管理画面の
 「FE 学習者ID」で「管理用」（`is_admin`）に印を付ける。

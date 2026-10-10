@@ -582,12 +582,28 @@ class ViewTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-    def test_login_is_required(self):
+    def test_login_is_not_required_to_study(self):
+        """学習の画面は、hirahira_room にログインしていなくても使える。"""
         self.client.logout()
-        for url in (reverse('fe:quiz'), reverse('fe:manage_list'),
-                    reverse('fe:manage_upload')):
-            with self.subTest(url=url):
-                self.assertEqual(self.client.get(url).status_code, 302)
+        self.assertEqual(self.client.get(reverse('fe:index')).status_code, 200)
+        self.client.post(reverse('fe:index'), {'action': 'temporary'})
+        for name in ('fe:index', 'fe:enter', 'fe:quiz', 'fe:learn_start',
+                     'fe:stats', 'fe:history'):
+            with self.subTest(page=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+
+    def test_login_is_still_required_to_manage(self):
+        """管理用の ID で入っていても、ログインしていなければ管理画面は開けない。"""
+        self.client.logout()
+        session = self.client.session
+        session[SESSION_LEARNER] = make_learner('boss', is_admin=True).pk
+        session.save()
+        for name in ('fe:manage_list', 'fe:manage_upload', 'fe:manage_export'):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 302)
+                self.assertIn(reverse('account_login'), response['Location'])
+        self.assertEqual(self.client.post(reverse('fe:manage_upload'), {}).status_code, 302)
 
 
 class LearnerIdTests(TestCase):

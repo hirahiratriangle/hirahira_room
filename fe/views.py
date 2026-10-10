@@ -7,6 +7,10 @@
 セッションが覚え、以後の画面はその ID の分を出す。ダッシュボードだけは
 /fe/<ID>/ に置き、ほかの ID のものは開けない（404）。問題と技術解説は
 全 ID で共有し、取り込みなどの管理は管理用の ID だけができる。
+
+サイト全体は LoginRequiredMiddleware でログイン必須だが、本アプリの学習の画面は
+login_not_required で外してあり、hirahira_room にログインしなくても使える。
+問題の管理だけは、これまでどおりログインも要る。
 """
 
 import logging
@@ -14,6 +18,7 @@ import logging
 import json
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -22,6 +27,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import generic
 
 from .exam import EXAM, build_prompt
@@ -90,29 +96,33 @@ def touch(learner):
         Learner.objects.filter(pk=learner.pk).update(last_seen_at=timezone.now())
 
 
-class LearnerRequiredMixin(LoginRequiredMixin):
+@method_decorator(login_not_required, name='dispatch')
+class LearnerRequiredMixin:
     """始めている人向けの画面。始めていなければトップへ戻す。
 
-    いまの記録は self.learner に置く。ヘッダーに出すため、
-    request.fe_learner にも載せておく。
+    hirahira_room へのログインは求めない。いまの記録は self.learner に置く。
+    ヘッダーに出すため、request.fe_learner にも載せておく。
     """
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            self.learner = current_learner(request)
-            if self.learner is None:
-                return redirect('fe:index')
-            request.fe_learner = self.learner
-            touch(self.learner)
-            self.check_learner(self.learner)
+        self.learner = current_learner(request)
+        if self.learner is None:
+            return redirect('fe:index')
+        request.fe_learner = self.learner
+        touch(self.learner)
+        self.check_learner(self.learner)
         return super().dispatch(request, *args, **kwargs)
 
     def check_learner(self, learner):
         """入っている ID でこの画面を使えるか。使えなければ例外を投げる。"""
 
 
-class AdminRequiredMixin(LearnerRequiredMixin):
-    """問題集を管理する画面。管理用の ID でなければ 403。"""
+class AdminRequiredMixin(LoginRequiredMixin, LearnerRequiredMixin):
+    """問題集を管理する画面。管理用の ID でなければ 403。
+
+    ID には合言葉がないので、ID だけで全員の問題集を差し替えられないよう、
+    ここだけは hirahira_room へのログインも求める。
+    """
 
     def check_learner(self, learner):
         if not learner.is_admin:
@@ -126,7 +136,8 @@ def dashboard_url(learner):
     return reverse('fe:dashboard', args=[learner.code])
 
 
-class EnterView(LoginRequiredMixin, generic.FormView):
+@method_decorator(login_not_required, name='dispatch')
+class EnterView(generic.FormView):
     """ID で入る、または新しく作る。
 
     すでに入っていても開ける。別の ID を入力すれば、その ID に切り替わる。
