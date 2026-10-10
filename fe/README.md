@@ -44,9 +44,10 @@ python manage.py createsuperuser --settings=config.settings_dev
 外してある。`/fe/` で本アプリの中の ID（`Learner`）を入力するか新しく作る。
 成績はアカウントではなく、**この ID ごと**に持つ。
 
-問題の管理だけは、管理用の ID に加えて hirahira_room へのログインも要る
-（`AdminRequiredMixin`）。ID には合言葉がないので、ID を知っているだけで
-全員の問題集を差し替えられないようにするため。
+問題の管理だけは、管理用の ID に加えて、**スタッフ権限（`is_staff`）のある
+アカウント**での hirahira_room へのログインも要る（`AdminRequiredMixin`）。
+ID には合言葉がなく、アカウントも誰でも作れるので、どちらも「本人である」ことの
+証明にならない。スタッフ権限は Django の管理画面の「ユーザー」でしか付けられない。
 
 管理用の ID は、画面からは作れない。ID を一度作ってから、Django の管理画面の
 「FE 学習者ID」で「管理用」（`is_admin`）に印を付ける。

@@ -44,9 +44,12 @@ def make_learner(code, is_admin=False):
 def enter(client, learner):
     """hirahira_room にログインし、その ID で入った状態にする。
 
-    ID はアカウントと紐づかないので、ログインするアカウントは誰でもよい。
+    ID はアカウントと紐づかないので、学習の画面はどのアカウントでも同じに動く。
     """
-    account, _ = CustomUser.objects.get_or_create(username='hirahira')
+    # 管理画面はスタッフ権限のあるアカウントにしか開けないので、付けておく
+    account, _ = CustomUser.objects.get_or_create(
+        username='hirahira', defaults={'is_staff': True},
+    )
     client.force_login(account)
     session = client.session
     session[SESSION_LEARNER] = learner.pk
@@ -1538,3 +1541,40 @@ class ExamDefinitionTests(TestCase):
         self.assertContains(response, '問題を作るのに必要な資料')
         for material in EXAM['materials']:
             self.assertContains(response, material['name'])
+
+
+class ManageNeedsStaffTests(TestCase):
+    """問題の管理は、管理用の ID に加えて、スタッフ権限のあるアカウントが要る。"""
+
+    PAGES = ('ap:manage_list', 'ap:manage_upload', 'ap:manage_export')
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+        cls.admin_id = make_learner('gatekeeper', is_admin=True)
+
+    def _enter_as(self, username, is_staff):
+        account = CustomUser.objects.create_user(
+            username=username, password='pass12345', is_staff=is_staff,
+        )
+        self.client.force_login(account)
+        session = self.client.session
+        session[SESSION_LEARNER] = self.admin_id.pk
+        session.save()
+
+    def test_an_ordinary_account_cannot_manage_even_with_the_admin_id(self):
+        """誰でも作れるアカウントでは、管理用の ID を知っていても開けない。"""
+        self._enter_as('visitor', is_staff=False)
+        for name in self.PAGES:
+            with self.subTest(page=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 403)
+        self.assertEqual(
+            self.client.post(reverse('ap:manage_upload'), {}).status_code, 403
+        )
+
+    def test_a_staff_account_can_manage_with_the_admin_id(self):
+        self._enter_as('keeper', is_staff=True)
+        for name in ('ap:manage_list', 'ap:manage_upload'):
+            with self.subTest(page=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+

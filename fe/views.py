@@ -118,15 +118,21 @@ class LearnerRequiredMixin:
 
 
 class AdminRequiredMixin(LoginRequiredMixin, LearnerRequiredMixin):
-    """問題集を管理する画面。管理用の ID でなければ 403。
+    """問題集を管理する画面。管理用の ID で、スタッフ権限のあるアカウントでなければ 403。
 
-    ID には合言葉がないので、ID だけで全員の問題集を差し替えられないよう、
-    ここだけは hirahira_room へのログインも求める。
+    ID には合言葉がないので、ID だけでは通さない。hirahira_room にログインして
+    いるだけでも通さない。アカウントは誰でも作れ、お試し用のものも公開している
+    ため、ログインは「本人である」ことの証明にならない。スタッフ権限
+    （is_staff）は Django の管理画面でしか付けられないので、それを条件にする。
     """
 
     def check_learner(self, learner):
         if not learner.is_admin:
             raise PermissionDenied('問題集を管理できるのは管理用の ID だけです。')
+        if not self.request.user.is_staff:
+            raise PermissionDenied(
+                '問題集を管理できるのは、スタッフ権限のあるアカウントだけです。'
+            )
 
 
 def dashboard_url(learner):
