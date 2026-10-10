@@ -1429,8 +1429,8 @@ class LearningModeTests(TestCase):
         for source, heading in cases:
             self.assertEqual(Question(source=source).source_heading, heading)
 
-    def test_learning_quiz_shows_the_source_after_answering(self):
-        """学習モードでも、答えた後に出典と出題元の区別を出す。"""
+    def test_learning_quiz_shows_the_source_with_the_question(self):
+        """学習モードでは、出典と出題元の区別を問題文の下に出す。解説の側には出さない。"""
         self._prepare()
         self.client.post(reverse('fe:learn_start'), {'minutes': 5})
         round_ = LearningRound.objects.get(learner=self.learner)
@@ -1439,17 +1439,38 @@ class LearningModeTests(TestCase):
         item = round_.items.get(order=0)
         question = item.question
         question.source = 'シラバス 中分類1 テスト用の項目'
+        question.explanation = 'テスト用の解説'
         question.save()
 
         before = self.client.get(reverse('fe:learn_quiz', args=[round_.pk]))
-        self.assertNotContains(before, 'テスト用の項目')
+        self.assertContains(before, '出題範囲：シラバス 中分類1 テスト用の項目', count=1)
+        self.assertContains(before, '自作')
 
         after = self.client.post(
             reverse('fe:learn_quiz', args=[round_.pk]),
             {'choice': question.answer_index},
         )
-        self.assertContains(after, '出題範囲：シラバス 中分類1 テスト用の項目')
-        self.assertContains(after, '自作')
+        self.assertContains(after, '出題範囲：シラバス 中分類1 テスト用の項目', count=1)
+        body = after.content.decode()
+        self.assertLess(body.index('テスト用の項目'), body.index('テスト用の解説'))
+
+    def test_quiz_shows_the_source_with_the_question(self):
+        """1問1答でも、出典は答える前から問題文の下に出す。解説の側には出さない。"""
+        self._prepare()
+        # その場で作られる計算問題は出典が別なので、この確認では出さない
+        QuestionTemplate.objects.update(is_active=False)
+        Question.objects.update(source='シラバス 中分類1 テスト用の項目', explanation='テスト用の解説')
+
+        before = self.client.get(reverse('fe:quiz'))
+        question = before.context['question']
+        self.assertContains(before, '出題範囲：シラバス 中分類1 テスト用の項目', count=1)
+
+        after = self.client.post(reverse('fe:quiz'), {
+            'question_id': question.id, 'choice': question.answer_index,
+        })
+        self.assertContains(after, '出題範囲：シラバス 中分類1 テスト用の項目', count=1)
+        body = after.content.decode()
+        self.assertLess(body.index('テスト用の項目'), body.index('テスト用の解説'))
 
     def test_answering_records_progress(self):
         """学習モードで解いた分も、分野ごとの理解度に積む。"""

@@ -47,6 +47,7 @@
     <!-- 問題文 -->
     <div class="border rounded p-4 mb-4 bg-white">
         <div class="fe-stem {% if question.subject == 'B' %}fe-stem-b{% endif %}">{{ question.stem }}</div>
+        {% if question.source %}<p class="small text-muted mt-3 mb-0">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_heading }}：{{ question.source }}</p>{% endif %}
     </div>
 
     {% if answered %}
@@ -78,7 +79,6 @@
     <div class="border-start border-4 ps-3 mb-4" style="border-color:#2c5aa0 !important;">
         <h2 class="h6" style="color:#2c5aa0;">解説</h2>
         <p class="mb-2" style="line-height:1.9;">{{ question.explanation }}</p>
-        {% if question.source %}<p class="small text-muted mb-0">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_heading }}：{{ question.source }}</p>{% endif %}
     </div>
     {% endif %}
 
