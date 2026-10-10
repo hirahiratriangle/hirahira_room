@@ -1410,8 +1410,8 @@ class LearningModeTests(TestCase):
     def test_origin_label_tells_ipa_questions_from_original_ones(self):
         """出典の書き出しから、IPA の出題そのものか自作かを見分ける。"""
         cases = [
-            ('令和6年度 科目A 問3', 'IPA公開問題（令和6年度）'),
-            ('令和3年度 春期 午前 問2', 'IPA公開問題（令和3年度 春期）'),
+            ('令和6年度 科目A 問3', 'IPA公開問題'),
+            ('令和3年度 春期 午前 問2', 'IPA公開問題'),
             ('サンプル問題 科目A 問12', 'IPAサンプル問題'),
             ('シラバス Ver.8.0 中分類1 応用数学（3）数値解析', '自作'),
             ('試験要綱 科目B', '自作'),
@@ -1421,19 +1421,25 @@ class LearningModeTests(TestCase):
         for source, label in cases:
             self.assertEqual(Question(source=source).origin_label, label)
 
-    def test_only_ipa_questions_call_their_source_a_citation(self):
-        """「出典」と呼ぶのは IPA の出題を転記した問題だけ。自作は「出題範囲」。"""
+    def test_source_text_does_not_repeat_the_label(self):
+        """ラベルと同じ言葉で始まる source は、その言葉を落として出す。"""
         cases = [
-            ('令和6年度 科目A 問3', '出典'),
-            ('サンプル問題 科目A 問12', '出典'),
-            ('シラバス Ver.8.0 中分類1 応用数学（3）数値解析', '出題範囲'),
-            ('自作（令和6年度秋 午前 問5 を基に作成）', '出題範囲'),
+            ('サンプル問題 科目A 問12', '科目A 問12'),
+            ('令和6年度 科目A 問3', '令和6年度 科目A 問3'),
+            ('シラバス Ver.8.0 中分類1 応用数学（3）数値解析',
+             'シラバス Ver.8.0 中分類1 応用数学（3）数値解析'),
         ]
-        for source, heading in cases:
-            self.assertEqual(Question(source=source).source_heading, heading)
+        for source, text in cases:
+            self.assertEqual(Question(source=source).source_text, text)
+
+        template = QuestionTemplate.objects.first()
+        generated = Question(
+            template=template, source='テンプレート「{}」による自動生成'.format(template.title),
+        )
+        self.assertEqual(generated.source_text, '計算問題：{}'.format(template.title))
 
     def test_learning_quiz_shows_the_source_with_the_question(self):
-        """学習モードでは、出典と出題元の区別を問題文の下に出す。解説の側には出さない。"""
+        """学習モードでは、出典と出題元の区別を選択肢の下に出す。解説の側には出さない。"""
         self._prepare()
         self.client.post(reverse('fe:learn_start'), {'minutes': 5})
         round_ = LearningRound.objects.get(learner=self.learner)
@@ -1446,19 +1452,24 @@ class LearningModeTests(TestCase):
         question.save()
 
         before = self.client.get(reverse('fe:learn_quiz', args=[round_.pk]))
-        self.assertContains(before, '出題範囲：シラバス 中分類1 テスト用の項目', count=1)
+        self.assertContains(before, '</span>シラバス 中分類1 テスト用の項目', count=1)
+        body = before.content.decode()
+        last_choice = body.rindex(html.escape(question.choices[-1]))
+        self.assertLess(last_choice, body.index('テスト用の項目'))
         self.assertContains(before, '自作')
 
         after = self.client.post(
             reverse('fe:learn_quiz', args=[round_.pk]),
             {'choice': question.answer_index},
         )
-        self.assertContains(after, '出題範囲：シラバス 中分類1 テスト用の項目', count=1)
+        self.assertContains(after, '</span>シラバス 中分類1 テスト用の項目', count=1)
         body = after.content.decode()
+        last_choice = body.rindex(html.escape(question.choices[-1]))
+        self.assertLess(last_choice, body.index('テスト用の項目'))
         self.assertLess(body.index('テスト用の項目'), body.index('テスト用の解説'))
 
     def test_quiz_shows_the_source_with_the_question(self):
-        """1問1答でも、出典は答える前から問題文の下に出す。解説の側には出さない。"""
+        """1問1答でも、出典は答える前から選択肢の下に出す。解説の側には出さない。"""
         self._prepare()
         # その場で作られる計算問題は出典が別なので、この確認では出さない
         QuestionTemplate.objects.update(is_active=False)
@@ -1466,13 +1477,18 @@ class LearningModeTests(TestCase):
 
         before = self.client.get(reverse('fe:quiz'))
         question = before.context['question']
-        self.assertContains(before, '出題範囲：シラバス 中分類1 テスト用の項目', count=1)
+        self.assertContains(before, '</span>シラバス 中分類1 テスト用の項目', count=1)
+        body = before.content.decode()
+        last_choice = body.rindex(html.escape(question.choices[-1]))
+        self.assertLess(last_choice, body.index('テスト用の項目'))
 
         after = self.client.post(reverse('fe:quiz'), {
             'question_id': question.id, 'choice': question.answer_index,
         })
-        self.assertContains(after, '出題範囲：シラバス 中分類1 テスト用の項目', count=1)
+        self.assertContains(after, '</span>シラバス 中分類1 テスト用の項目', count=1)
         body = after.content.decode()
+        last_choice = body.rindex(html.escape(question.choices[-1]))
+        self.assertLess(last_choice, body.index('テスト用の項目'))
         self.assertLess(body.index('テスト用の項目'), body.index('テスト用の解説'))
 
     def test_answering_records_progress(self):
@@ -1543,7 +1559,7 @@ class LearningModeTests(TestCase):
         self.assertEqual(len(response.context['missed']), 1)
         for order in range(round_.total):
             self.assertContains(
-                response, '出題範囲：シラバス 中分類1 テスト用の項目{}'.format(order)
+                response, '</span>シラバス 中分類1 テスト用の項目{}'.format(order)
             )
         self.assertContains(response, '不正解', count=1)
         self.assertContains(response, 'あなたの解答', count=1)

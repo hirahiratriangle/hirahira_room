@@ -31,10 +31,7 @@
         {% if question.topic %}<span class="text-muted small ms-2">{{ question.topic }}</span>{% endif %}
     </div>
 
-    <div class="fe-stem {% if question.source %}mb-2{% else %}mb-4{% endif %}">{{ question.stem }}</div>
-    {% if question.source %}
-    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_heading }}：{{ question.source }}</p>
-    {% endif %}
+    <div class="fe-stem mb-4">{{ question.stem }}</div>
 
     {% if answered %}
     <div class="alert {% if is_correct %}alert-success{% else %}alert-danger{% endif %}">
@@ -44,7 +41,7 @@
         </span>
     </div>
 
-    <ul class="list-group mb-4">
+    <ul class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
         {% for index, label, text in question.labeled_choices %}
         <li class="list-group-item d-flex
             {% if index == question.answer_index %}list-group-item-success{% elif index == selected %}list-group-item-danger{% endif %}">
@@ -53,6 +50,9 @@
         </li>
         {% endfor %}
     </ul>
+    {% if question.source %}
+    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_text }}</p>
+    {% endif %}
 
     {% if question.explanation %}
     <div class="border rounded p-3 mb-4" style="background-color:#eef3fa;">
@@ -71,7 +71,7 @@
     {% else %}
     <form method="post">
         {% csrf_token %}
-        <ul class="list-group mb-4">
+        <ul class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
             {% for index, label, text in question.labeled_choices %}
             <li class="list-group-item fe-choice">
                 <label class="d-flex w-100 mb-0" style="cursor: pointer;">
@@ -82,6 +82,9 @@
             </li>
             {% endfor %}
         </ul>
+        {% if question.source %}
+        <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_text }}</p>
+        {% endif %}
         <button type="submit" class="btn btn-primary">解答する</button>
     </form>
     {% endif %}

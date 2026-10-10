@@ -9,7 +9,6 @@ Attempt が持つ。問題と技術解説は全 ID で共有し、成績は Lear
 同じ導線で扱える。
 """
 
-import re
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Count, Q
@@ -207,26 +206,36 @@ class Question(models.Model):
 
     @property
     def origin_label(self):
-        """IPA の出題そのものか自作かを、出典の書き出しから見分けて返す。"""
+        """IPA の出題そのものか自作かを、出典の書き出しから見分けて返す。
+
+        source の前にラベルとして置く。何年の出題かは source に書いてあるので、
+        ここでは繰り返さない。
+        """
         if self.is_generated:
             return '自動生成'
         source = self.source.strip()
         if source.startswith(('令和', '平成')):
-            # 「令和7年度」「令和3年度 春期」のように、何年の出題かまで添える
-            held = re.match(r'(?:令和|平成)\s*[0-9０-９元]+\s*年度?(?:\s*[春秋]期)?', source)
-            return 'IPA公開問題（{}）'.format(held.group(0)) if held else 'IPA公開問題'
+            return 'IPA公開問題'
         if source.startswith('サンプル問題'):
             return 'IPAサンプル問題'
         return '自作' if source else ''
 
     @property
-    def source_heading(self):
-        """source の前に付ける見出し。IPA の出題を転記した問題だけが「出典」になる。
+    def source_text(self):
+        """ラベルの後ろに置く source。ラベルと同じ言葉は繰り返さない。
 
-        自作と自動生成の source は、問題文を引いてきた元ではなく、出題範囲の
-        根拠になるシラバスや要綱の項目なので「出題範囲」と呼ぶ。
+        サンプル問題の source は「サンプル問題 科目A 問12」と書き出すので、
+        「IPAサンプル問題」のラベルを付けるときは頭の「サンプル問題」を落とす。
+        その場で作った計算問題は、source ではなくひな形の題名から
+        「計算問題：伝送時間と伝送効率」と出す。source の「テンプレート」は
+        アプリの中の言葉で、解いている人には何のことか伝わらない。
         """
-        return '出典' if self.origin_label.startswith('IPA') else '出題範囲'
+        if self.is_generated:
+            return '計算問題：{}'.format(self.template.title)
+        source = self.source.strip()
+        if self.origin_label == 'IPAサンプル問題':
+            return source.removeprefix('サンプル問題').strip()
+        return source
 
     @property
     def answer_label(self):
