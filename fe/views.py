@@ -674,7 +674,8 @@ class LearnReadView(LearnerRequiredMixin, generic.View):
         elapsed = (timezone.now() - round_.started_at).total_seconds()
         return render(request, self.template_name, {
             'round': round_,
-            'note': round_.note,
+            # 同じ小分類の解説は、まとめて続けて読む
+            'notes': round_.notes,
             'finished': round_.phase == LearningRound.PHASE_DONE,
             # 途中で再読み込みしても、残り時間は開始時刻から数え直す
             'remaining': max(0, int(round_.reading_seconds - elapsed)),

@@ -105,15 +105,31 @@ def pick_note(learner, subject, category=None):
         row['category'].id: row['weakness']
         for row in category_stats(learner, subject=subject)
     }
-    read_counts = {}
-    for note in notes:
-        read_counts[note.id] = note.rounds.filter(learner=learner).count()
+    # 読む単位は小分類。同じ小分類の解説はまとめて読むので、小分類ごとに
+    # 先頭の1本を代表にして選ぶ。学習回数も小分類で数える。
+    topics = {}
+    for note in sorted(notes, key=lambda n: n.id):
+        topics.setdefault((note.category_id, note.topic), note)
+    read_counts = topic_round_counts(learner)
 
-    fewest = min(read_counts.values())
-    fresh = [n for n in notes if read_counts[n.id] == fewest]
+    fewest = min(read_counts.get(key, 0) for key in topics)
+    fresh = [n for key, n in topics.items() if read_counts.get(key, 0) == fewest]
 
     weights = [max(0.05, weakness.get(n.category_id, 0.4)) for n in fresh]
     return random.choices(fresh, weights=weights, k=1)[0]
+
+
+def topic_round_counts(learner):
+    """小分類ごとの学習回数。(中分類ID, 小分類) をキーにする。
+
+    同じ小分類の解説はまとめて読むので、どの解説で始めたラウンドも
+    その小分類の1回として数える。
+    """
+    rows = (
+        LearningRound.objects.filter(learner=learner, note__isnull=False)
+        .values('note__category_id', 'note__topic').annotate(n=Count('id'))
+    )
+    return {(row['note__category_id'], row['note__topic']): row['n'] for row in rows}
 
 
 def question_counts(subject):
@@ -129,10 +145,11 @@ def question_counts(subject):
 
 
 def note_menu(learner, subject):
-    """学習対象の一覧。中分類でまとめ、その下に小分類（解説）を並べる。
+    """学習対象の一覧。中分類でまとめ、その下に小分類を1行ずつ並べる。
 
-    どれを選ぶか決められるように、中分類の正答率と、解説ごとの学習回数、
-    そして解説ごとに出題できる問数を添える。問数が 0 の解説は選べない。
+    どれを選ぶか決められるように、中分類の正答率と、小分類ごとの学習回数、
+    そして小分類ごとに出題できる問数を添える。問数が 0 の小分類は選べない。
+    同じ小分類に解説が2本あれば1行にまとめ、見出しを並べて出す。
 
     中分類の中はシラバスの小分類の順に並べる。学ぶ順がそのまま並びになる。
     """
@@ -144,34 +161,33 @@ def note_menu(learner, subject):
         return []
 
     stats = {row['category'].id: row for row in category_stats(learner, subject=subject)}
-    counts = {
-        row['note']: row['n']
-        for row in LearningRound.objects.filter(learner=learner, note__isnull=False)
-        .values('note').annotate(n=Count('id'))
-    }
-
+    counts = topic_round_counts(learner)
     available = question_counts(subject)
 
     groups = {}
-    for note in notes:
+    for note in sorted(notes, key=lambda n: n.id):
         group = groups.setdefault(note.category_id, {
             'category': note.category,
             'stats': stats.get(note.category_id),
-            'notes': [],
-            'questions': 0,
+            'entries': {},
+            'note_count': 0,
         })
-        questions = available.get((note.category_id, note.topic), 0)
-        group['notes'].append({
-            'note': note, 'rounds': counts.get(note.id, 0), 'questions': questions,
+        group['note_count'] += 1
+        key = (note.category_id, note.topic)
+        # 同じ小分類の解説は1行にまとめる。選ぶと全部を続けて読む。
+        # 取り込んだ順（JSON の中の並び）が、小分類の中での読む順になる。
+        entry = group['entries'].setdefault(key, {
+            'note': note, 'notes': [],
+            'rounds': counts.get(key, 0), 'questions': available.get(key, 0),
         })
-        # 同じ小分類に解説が2本あっても問題は同じなので、重ねて数えない
-        group['questions'] = max(group['questions'], questions)
+        entry['notes'].append(note)
 
     for group in groups.values():
         code = group['category'].code
-        # 同じ小分類に解説が2本あるときは取り込んだ順。JSON の中の並びが
-        # 小分類の中での学ぶ順になっている。
-        group['notes'].sort(key=lambda n: (topic_rank(code, n['note'].topic), n['note'].id))
+        group['notes'] = sorted(
+            group.pop('entries').values(),
+            key=lambda e: topic_rank(code, e['note'].topic),
+        )
     return sorted(groups.values(), key=lambda g: g['category'].code)
 
 
