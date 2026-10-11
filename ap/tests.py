@@ -268,6 +268,17 @@ class SelectionTests(TestCase):
         self.assertIn(twice.id, due, '2回落とした問題は短い間隔で戻るべき')
         self.assertNotIn(once.id, due, '1回だけの問題はまだ間隔が足りない')
 
+    def test_a_well_answered_category_is_not_listed_as_weak(self):
+        """よく解けている分野は、何問解いていても苦手分野に並べない。"""
+        good, bad = Category.objects.filter(subject='A')[:2]
+        for category, results in ((good, [True] * 10), (bad, [False] * 4)):
+            question = Question.objects.filter(category=category).first()
+            for correct in results:
+                answer(self.learner, question, correct)
+
+        listed = [r['category'] for r in weak_categories(category_stats(self.learner))]
+        self.assertEqual(listed, [bad])
+
     def test_focus_mode_favours_weak_categories(self):
         database = Category.objects.get(code=9)
         network = Category.objects.get(code=10)
@@ -1655,6 +1666,38 @@ class LearningModeTests(TestCase):
             [n['note'].topic for n in groups[0]['notes']],
             ['データベース方式', 'データベース設計'],
         )
+
+    def test_notes_of_one_topic_are_read_together(self):
+        """同じ小分類に解説が2本あれば、1行にまとめ、続けて読んでから解く。
+
+        出題は小分類ごとなので、1本だけ読ませると読んでいない内容の問題が混ざる。
+        """
+        self._prepare(topic='データベース方式')
+        category = Category.objects.get(code=9)
+        first = LearningNote.objects.get(category=category)
+        second = LearningNote.objects.create(
+            category=category, topic='データベース方式',
+            title='二本目の解説', body='二本目の本文', source='シラバス',
+        )
+        Question.objects.filter(category=category).update(topic='データベース方式')
+
+        menu = self.client.get(reverse('ap:learn_start'))
+        group = menu.context['groups'][0]
+        self.assertEqual(group['note_count'], 2)
+        self.assertEqual(len(group['notes']), 1)
+        self.assertEqual(group['notes'][0]['notes'], [first, second])
+
+        # 2本目を指定して始めても、読むのは2本とも。学習回数は小分類で数える。
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5, 'note': second.pk})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        page = self.client.get(reverse('ap:learn_read', args=[round_.pk]))
+        self.assertEqual(page.context['notes'], [first, second])
+        body = page.content.decode()
+        self.assertLess(body.index(first.title), body.index('二本目の解説'))
+        self.assertContains(page, '二本目の本文')
+
+        menu = self.client.get(reverse('ap:learn_start'))
+        self.assertEqual(menu.context['groups'][0]['notes'][0]['rounds'], 1)
 
     def test_notes_follow_the_syllabus_order(self):
         """中分類の中はシラバスの小分類の順。取り込んだ順でも文字順でもない。

@@ -42,15 +42,20 @@
     </div>
     {% endif %}
 
-    <div class="mb-2">
-        <span class="badge bg-secondary">{{ note.category.code }}. {{ note.category.name }}</span>
-        {% if note.topic %}<span class="text-muted small ms-2">{{ note.topic }}</span>{% endif %}
+    {% for note in notes %}
+    <div class="{% if not forloop.first %}mt-5 pt-4 border-top{% endif %}">
+        <div class="mb-2">
+            <span class="badge bg-secondary">{{ note.category.code }}. {{ note.category.name }}</span>
+            {% if note.topic %}<span class="text-muted small ms-2">{{ note.topic }}</span>{% endif %}
+            {% if notes|length > 1 %}<span class="text-muted small ms-2">{{ forloop.counter }} / {{ notes|length }}</span>{% endif %}
+        </div>
+        <h2 class="h4 fw-bold mb-3">{{ note.title }}</h2>
+        <div class="ap-note-body">{{ note.body }}</div>
+        {% if note.source %}
+        <div class="text-muted small mt-4 pt-3 border-top">出題範囲：{{ note.source }}<br>本文は、この範囲の用語をもとに書き起こしたものです。</div>
+        {% endif %}
     </div>
-    <h2 class="h4 fw-bold mb-3">{{ note.title }}</h2>
-    <div class="ap-note-body">{{ note.body }}</div>
-    {% if note.source %}
-    <div class="text-muted small mt-4 pt-3 border-top">出題範囲：{{ note.source }}<br>本文は、この範囲の用語をもとに書き起こしたものです。</div>
-    {% endif %}
+    {% endfor %}
 </div>
 {% endblock %}
 

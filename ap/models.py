@@ -473,6 +473,26 @@ class LearningRound(models.Model):
         return '{} {:%Y-%m-%d %H:%M}'.format(self.learner, self.started_at)
 
     @property
+    def notes(self):
+        """このラウンドで読む解説。同じ小分類の解説は、まとめて1つの範囲として読む。
+
+        出題は小分類ごとなので、読む単位も小分類に合わせる。小分類に解説が
+        2本あるのに1本だけ読ませると、読んでいない内容の問題が混ざる。
+        並びは取り込んだ順で、JSON の中の並びがそのまま読む順になる。
+        """
+        if self.note is None:
+            return []
+        return list(
+            LearningNote.objects.filter(category=self.note.category, topic=self.note.topic)
+            .select_related('category').order_by('id')
+        )
+
+    @property
+    def title(self):
+        """読んだ解説の見出し。2本あれば並べる。"""
+        return '／'.join(note.title for note in self.notes)
+
+    @property
     def total(self):
         return self.items.count()
 

@@ -57,7 +57,7 @@
                     <span>
                         <span class="text-muted small me-2">{{ group.category.code }}</span>
                         <span class="fw-bold">{{ group.category.name }}</span>
-                        <span class="text-muted small ms-2">解説{{ group.notes|length }}本</span>
+                        <span class="text-muted small ms-2">解説{{ group.note_count }}本</span>
                         <span class="badge bg-primary ms-2 ap-here">選択中</span>
                     </span>
                     <span class="small">
@@ -80,7 +80,7 @@
                         {% if entry.note.topic %}
                         <span class="badge bg-secondary">{{ entry.note.topic }}</span>
                         {% endif %}
-                        <span>{{ entry.note.title }}</span>
+                        <span>{% for note in entry.notes %}{% if not forloop.first %}／{% endif %}{{ note.title }}{% endfor %}</span>
                         <span class="{% if entry.questions %}text-muted{% else %}text-danger{% endif %} small">問題{{ entry.questions }}問</span>
                         {% if entry.rounds %}
                         <span class="text-muted small">学習{{ entry.rounds }}回</span>
@@ -122,7 +122,7 @@
             {% for r in recent %}
             <li class="d-flex justify-content-between border-bottom py-2">
                 <a href="{% url 'ap:learn_result' r.pk %}" class="text-decoration-none">
-                    {% if r.note %}{{ r.note.title }}{% else %}（削除された解説）{% endif %}
+                    {% if r.note %}{{ r.title }}{% else %}（削除された解説）{% endif %}
                 </a>
                 <span class="text-muted">{{ r.correct }}/{{ r.total }}問　{{ r.started_at|date:"n/j H:i" }}</span>
             </li>
