@@ -30,6 +30,10 @@
         </div>
         <div class="d-flex align-items-center gap-3">
             <span class="fw-bold fs-5" id="timer" style="color:#2c5aa0;">--:--</span>
+            <form method="post" action="{% url 'ap:learn_abandon' round.pk %}" class="mb-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-secondary btn-sm">やめる</button>
+            </form>
             <form method="post" class="mb-0">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-primary btn-sm" id="goQuiz">解答に進む</button>
@@ -45,7 +49,7 @@
     <h2 class="h4 fw-bold mb-3">{{ note.title }}</h2>
     <div class="ap-note-body">{{ note.body }}</div>
     {% if note.source %}
-    <div class="text-muted small mt-4 pt-3 border-top">出典：{{ note.source }}</div>
+    <div class="text-muted small mt-4 pt-3 border-top">出題範囲：{{ note.source }}<br>本文は、この範囲の用語をもとに書き起こしたものです。</div>
     {% endif %}
 </div>
 {% endblock %}

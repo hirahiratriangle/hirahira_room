@@ -68,7 +68,7 @@
         </div>
     </div>
 
-    <div class="list-group mb-4">
+    <div class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
         {% for index, label, text in question.labeled_choices %}
         <div class="list-group-item d-flex
                     {% if index == question.answer_index %}list-group-item-success{% elif index == selected %}list-group-item-danger{% endif %}">
@@ -79,12 +79,14 @@
         </div>
         {% endfor %}
     </div>
+    {% if question.source %}
+    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_text }}</p>
+    {% endif %}
 
     {% if question.explanation %}
     <div class="border-start border-4 ps-3 mb-4" style="border-color:#2c5aa0 !important;">
         <h2 class="h6" style="color:#2c5aa0;">解説</h2>
         <p class="mb-2" style="line-height:1.9;">{{ question.explanation }}</p>
-        {% if question.source %}<p class="small text-muted mb-0">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}出典・根拠：{{ question.source }}</p>{% endif %}
     </div>
     {% endif %}
 
@@ -104,7 +106,7 @@
     <form method="post" action="{% url 'ap:quiz' %}">
         {% csrf_token %}
         <input type="hidden" name="question_id" value="{{ question.id }}">
-        <div class="list-group mb-4">
+        <div class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
             {% for index, label, text in question.labeled_choices %}
             <label class="list-group-item d-flex align-items-start ap-choice">
                 <input class="form-check-input me-3 mt-1" type="radio" name="choice" value="{{ index }}" required>
@@ -113,6 +115,9 @@
             </label>
             {% endfor %}
         </div>
+        {% if question.source %}
+        <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_text }}</p>
+        {% endif %}
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div class="small text-muted">
                 {{ progress.category.name }}：これまで {{ progress.correct }}/{{ progress.total }} 問正解

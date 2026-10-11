@@ -44,8 +44,9 @@ python manage.py createsuperuser --settings=config.settings_dev
 **問題は同梱していない。** 管理用の ID で入り、画面の
 「問題の管理 → JSONを取り込む」から取り込む。
 
-どの画面も hirahira_room へのログインが要る（`LearnerRequiredMixin` は
-`LoginRequiredMixin` を継いでいる）。ログインしたら `/ap/` で始め方を選ぶ。
+学習の画面は、hirahira_room にログインしなくても使える。サイト全体は
+`LoginRequiredMiddleware` でログイン必須だが、本アプリは `login_not_required` で
+外してある。`/ap/` で始め方を選ぶ。
 
 | 始め方 | どう持つか |
 |---|---|
@@ -66,6 +67,11 @@ python manage.py purge_temp_learners_ap --dry-run  # 件数だけ見る
 
 コマンド名に `_ap` が付くのは、`fe` の `purge_temp_learners` と名前がぶつかるため
 （管理コマンドの名前はプロジェクト全体で1つで、同名だと `fe` のほうだけが動く）。
+
+問題の管理だけは、管理用の ID に加えて、**スタッフ権限（`is_staff`）のある
+アカウント**での hirahira_room へのログインも要る（`AdminRequiredMixin`）。
+ID には合言葉がなく、アカウントも誰でも作れるので、どちらも「本人である」ことの
+証明にならない。スタッフ権限は Django の管理画面の「ユーザー」でしか付けられない。
 
 管理用の ID は、画面からは作れない。ID を一度作ってから、Django の管理画面の
 「AP 学習者ID」で「管理用」（`is_admin`）に印を付ける。

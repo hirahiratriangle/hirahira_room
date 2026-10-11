@@ -41,7 +41,7 @@
         </span>
     </div>
 
-    <ul class="list-group mb-4">
+    <ul class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
         {% for index, label, text in question.labeled_choices %}
         <li class="list-group-item d-flex
             {% if index == question.answer_index %}list-group-item-success{% elif index == selected %}list-group-item-danger{% endif %}">
@@ -50,15 +50,15 @@
         </li>
         {% endfor %}
     </ul>
+    {% if question.source %}
+    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_text }}</p>
+    {% endif %}
 
     {% if question.explanation %}
     <div class="border rounded p-3 mb-4" style="background-color:#eef3fa;">
         <div class="small fw-bold mb-2" style="color:#2c5aa0;">解説</div>
         <div class="ap-stem small mb-0">{{ question.explanation }}</div>
     </div>
-    {% endif %}
-    {% if question.source %}
-    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}出典・根拠：{{ question.source }}</p>
     {% endif %}
 
     <form method="post" action="{% url 'ap:learn_next' round.pk %}">
@@ -71,7 +71,7 @@
     {% else %}
     <form method="post">
         {% csrf_token %}
-        <ul class="list-group mb-4">
+        <ul class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
             {% for index, label, text in question.labeled_choices %}
             <li class="list-group-item ap-choice">
                 <label class="d-flex w-100 mb-0" style="cursor: pointer;">
@@ -82,8 +82,25 @@
             </li>
             {% endfor %}
         </ul>
+        {% if question.source %}
+        <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_text }}</p>
+        {% endif %}
         <button type="submit" class="btn btn-primary">解答する</button>
     </form>
     {% endif %}
+
+    {% comment %}
+    途中でやめて学習モードトップへ。ヘッダーの「学習モード」はいま居る場所として
+    灰色になるので、ここに置かないと戻る道が無い。
+    {% endcomment %}
+    <div class="border-top mt-5 pt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="small text-muted">このラウンドは破棄されます</span>
+        <form method="post" action="{% url 'ap:learn_abandon' round.pk %}" class="mb-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                中断して学習モードトップへ
+            </button>
+        </form>
+    </div>
 </div>
 {% endblock %}

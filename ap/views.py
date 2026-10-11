@@ -7,6 +7,10 @@
 セッションが覚え、以後の画面はその ID の分を出す。ダッシュボードだけは
 /ap/<ID>/ に置き、ほかの ID のものは開けない（404）。問題と技術解説は
 全 ID で共有し、取り込みなどの管理は管理用の ID だけができる。
+
+サイト全体は LoginRequiredMiddleware でログイン必須だが、本アプリの学習の画面は
+login_not_required で外してあり、hirahira_room にログインしなくても使える。
+問題の管理だけは、これまでどおりログインも要る。
 """
 
 import logging
@@ -14,6 +18,7 @@ import logging
 import json
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -22,12 +27,14 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import generic
 
 from .exam import EXAM, build_prompt
 from .forms import LearnerForm, PassReportForm, QuestionUploadForm
-from .importer import export_records, replace_all
-from .learning import current_item, grade, note_menu, start_round
+from .importer import (ImportError_, export_records, needs_confirmation, parse,
+                       preview, sync, validate)
+from .learning import current_item, focus_category, grade, note_menu, start_round
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
                      LearningRound, PassReport, Question, QuestionTemplate,
                      StudySession)
@@ -89,28 +96,28 @@ def touch(learner):
         Learner.objects.filter(pk=learner.pk).update(last_seen_at=timezone.now())
 
 
-class LearnerRequiredMixin(LoginRequiredMixin):
+@method_decorator(login_not_required, name='dispatch')
+class LearnerRequiredMixin:
     """始めている人向けの画面。始めていなければトップへ戻す。
 
-    いまの記録は self.learner に置く。ヘッダーに出すため、
-    request.ap_learner にも載せておく。
+    hirahira_room へのログインは求めない。いまの記録は self.learner に置く。
+    ヘッダーに出すため、request.ap_learner にも載せておく。
     """
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            self.learner = current_learner(request)
-            if self.learner is None:
-                return redirect('ap:index')
-            request.ap_learner = self.learner
-            touch(self.learner)
-            self.check_learner(self.learner)
+        self.learner = current_learner(request)
+        if self.learner is None:
+            return redirect('ap:index')
+        request.ap_learner = self.learner
+        touch(self.learner)
+        self.check_learner(self.learner)
         return super().dispatch(request, *args, **kwargs)
 
     def check_learner(self, learner):
         """入っている ID でこの画面を使えるか。使えなければ例外を投げる。"""
 
 
-class AdminRequiredMixin(LearnerRequiredMixin):
+class AdminRequiredMixin(LoginRequiredMixin, LearnerRequiredMixin):
     """問題集を管理する画面。管理用の ID で、スタッフ権限のあるアカウントでなければ 403。
 
     ID には合言葉がないので、ID だけでは通さない。hirahira_room にログインして
@@ -135,7 +142,8 @@ def dashboard_url(learner):
     return reverse('ap:dashboard', args=[learner.code])
 
 
-class EnterView(LoginRequiredMixin, generic.FormView):
+@method_decorator(login_not_required, name='dispatch')
+class EnterView(generic.FormView):
     """ID で入る、または新しく作る。
 
     すでに入っていても開ける。別の ID を入力すれば、その ID に切り替わる。
@@ -546,16 +554,49 @@ class QuestionUploadView(AdminRequiredMixin, generic.FormView):
         context['prompt'] = build_prompt()
         return context
 
+    @staticmethod
+    def _count_lines(result):
+        """追加・更新・変更なし・削除の件数を、画面に出す文にする。"""
+        lines = []
+        for label, key in (('問題', 'questions'), ('解説', 'notes')):
+            counts = result[key]
+            if counts is None:
+                lines.append('{}：変更なし（ファイルに{}が含まれていません）'.format(label, label))
+                continue
+            lines.append(
+                '{}：追加 {} / 更新 {} / 変更なし {} / 削除 {}'.format(
+                    label, counts['added'], counts['updated'],
+                    counts['unchanged'], counts['removed'],
+                )
+            )
+        return lines
+
     def form_valid(self, form):
-        created, removed, notes = replace_all(form.records)
-        note = '問題集を {} 問に差し替えました。'.format(created)
-        if notes:
-            note += ' 技術解説 {} 本も取り込みました。'.format(notes)
-        if removed:
-            note += ' これまでの {} 問と、全 ID のその解答履歴は削除しました' \
-                    '（分野ごとの正答率と苦手分野の判定は残ります）。'.format(removed)
-        messages.success(self.request, note)
+        # まず書き込まずに数える。削除が多いときは、確定の前に一度止める。
+        counts = preview(form.records)
+        if needs_confirmation(counts) and self.request.POST.get('confirm') != '1':
+            return self.render_to_response(self.get_context_data(
+                form=form, confirm=self._count_lines(counts),
+                payload=json.dumps(form.records, ensure_ascii=False),
+            ))
+
+        result = sync(form.records)
+        messages.success(self.request, '　'.join(self._count_lines(result)))
         return super().form_valid(form)
+
+    def post(self, request, *args, **kwargs):
+        """確認のあとの実行。ファイルを選び直さずに済むよう、内容を持ち回す。"""
+        if request.POST.get('confirm') == '1' and 'payload' in request.POST:
+            form = self.get_form()
+            try:
+                form.records = validate(parse(request.POST['payload']))
+            except ImportError_ as exc:
+                messages.error(request, str(exc))
+                return redirect('ap:manage_upload')
+            result = sync(form.records)
+            messages.success(request, '　'.join(self._count_lines(result)))
+            return redirect(self.success_url)
+        return super().post(request, *args, **kwargs)
 
 
 class LearnStartView(LearnerRequiredMixin, generic.View):
@@ -571,6 +612,9 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
             'count': LearningRound.QUESTION_COUNT,
             'study_session': session,
             'groups': note_menu(self.learner, session.subject),
+            # ダッシュボードで指定している分野。おまかせの範囲になり、その中分類を
+            # 開いて見せる。解説を選ぶのは利用者。
+            'focus': focus_category(session),
             'recent': LearningRound.objects.filter(
                 learner=self.learner, phase=LearningRound.PHASE_DONE
             )[:5],
@@ -598,6 +642,14 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
                 messages.error(
                     request,
                     '「{}」に出題できる問題がありません。'.format(note.title),
+                )
+                return redirect('ap:learn_start')
+            focus = focus_category(session)
+            if focus is not None:
+                messages.error(
+                    request,
+                    '{}には、出題できる問題のある技術解説がまだありません。'
+                    'ダッシュボードの分野の指定を変えてください。'.format(focus.name),
                 )
                 return redirect('ap:learn_start')
             messages.error(request, '学習モードに使う技術解説が、まだ用意されていません。')
@@ -712,8 +764,27 @@ class LearnNextView(LearnerRequiredMixin, generic.View):
         return redirect('ap:learn_quiz', pk=round_.pk)
 
 
+class LearnAbandonView(LearnerRequiredMixin, generic.View):
+    """途中のラウンドをやめて学習モードトップへ戻る。
+
+    やめたラウンドは残さずに消す。続きから再開する道を用意しないので、
+    残しても「解答中」のまま溜まるだけで、どこからも開けない記録になる。
+    解いたぶんの解答履歴と分野別の理解度はラウンドとは別に積んであり、
+    消しても失われない。
+    """
+
+    def post(self, request, pk, *args, **kwargs):
+        round_ = get_object_or_404(LearningRound, pk=pk, learner=self.learner)
+        if round_.phase == LearningRound.PHASE_DONE:
+            # 終わったラウンドは結果を見返すためのものなので消さない
+            return redirect('ap:learn_result', pk=round_.pk)
+        round_.delete()
+        messages.info(request, 'ラウンドを中断しました。解いたぶんの記録は残っています。')
+        return redirect('ap:learn_start')
+
+
 class LearnResultView(LearnerRequiredMixin, generic.DetailView):
-    """ラウンドの結果。まちがえた問題を読み返せるようにする。"""
+    """ラウンドの結果。解いた問題を、正解したものも含めて全問読み返せるようにする。"""
 
     template_name = 'ap/learn_result.html'
     context_object_name = 'round'
@@ -723,7 +794,9 @@ class LearnResultView(LearnerRequiredMixin, generic.DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        items = self.object.items.select_related('question', 'question__category')
+        items = self.object.items.select_related(
+            'question', 'question__category', 'question__template'
+        )
         context['items'] = items
         context['missed'] = [i for i in items if i.is_correct is False]
         return context

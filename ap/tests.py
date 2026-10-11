@@ -8,6 +8,7 @@
 
 import json
 import random
+import html
 import re
 
 from accounts.models import CustomUser
@@ -19,7 +20,8 @@ from django.urls import reverse
 
 from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
-from .importer import ImportError_, parse, replace_all, validate
+from .importer import (ImportError_, needs_confirmation, parse, preview, sync,
+                       validate)
 from .learning import note_menu, pick_note
 from .models import (Attempt, Category, CategoryProgress, DailyProgress, Learner,
                      LearningNote, LearningRound, PassReport,
@@ -85,7 +87,7 @@ def build_questions(per_category=4):
                 'explanation': '解説',
                 'source': 'テスト用',
             })
-    return replace_all(validate({'questions': records, 'notes': []}))
+    return sync(validate({'questions': records, 'notes': None}))
 
 
 def build_notes(codes=(9, 11), topic=None):
@@ -378,6 +380,23 @@ class ViewTests(TestCase):
                 self.assertIn('図を見ないと解けない問題', html)
                 self.assertIn('本番どおりの模擬試験', html)
 
+    def test_import_screen_states_what_cannot_be_rendered(self):
+        """取り込み画面では、作る側が踏む制約も併せて示す。"""
+        admin = make_learner('noticeadmin', is_admin=True)
+        enter(self.client, admin)
+        html = self.client.get(reverse('ap:manage_upload')).content.decode('utf-8')
+        self.assertIn('このアプリで出せない問題', html)
+        for word in ('図が本質の問題は作れません', '上付き', '組合せを1つの選択肢'):
+            self.assertIn(word, html)
+
+    def test_prompt_states_unsupported_formats(self):
+        """利用者が AI に渡すプロンプトにも、扱えない形式を書いておく。"""
+        from .exam import build_prompt
+        prompt = build_prompt()
+        self.assertIn('【このアプリが扱えないもの】', prompt)
+        for word in ('図が必要な問題は作らない', '2のn乗', 'ルビ', '複数正解や部分点はない'):
+            self.assertIn(word, prompt)
+
     def test_start_page_is_for_this_exam_and_states_the_limits(self):
         """まだ始めていない人の入口にも、この区分の試験構成と注意書きを出す。"""
         session = self.client.session
@@ -627,12 +646,28 @@ class ViewTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-    def test_login_is_required(self):
+    def test_login_is_not_required_to_study(self):
+        """学習の画面は、hirahira_room にログインしていなくても使える。"""
         self.client.logout()
-        for url in (reverse('ap:quiz'), reverse('ap:manage_list'),
-                    reverse('ap:manage_upload')):
-            with self.subTest(url=url):
-                self.assertEqual(self.client.get(url).status_code, 302)
+        self.assertEqual(self.client.get(reverse('ap:index')).status_code, 200)
+        self.client.post(reverse('ap:index'), {'action': 'temporary'})
+        for name in ('ap:index', 'ap:enter', 'ap:quiz', 'ap:learn_start',
+                     'ap:stats', 'ap:history'):
+            with self.subTest(page=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+
+    def test_login_is_still_required_to_manage(self):
+        """管理用の ID で入っていても、ログインしていなければ管理画面は開けない。"""
+        self.client.logout()
+        session = self.client.session
+        session[SESSION_LEARNER] = make_learner('boss', is_admin=True).pk
+        session.save()
+        for name in ('ap:manage_list', 'ap:manage_upload', 'ap:manage_export'):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 302)
+                self.assertIn(reverse('account_login'), response['Location'])
+        self.assertEqual(self.client.post(reverse('ap:manage_upload'), {}).status_code, 302)
 
 
 class LearnerIdTests(TestCase):
@@ -844,13 +879,25 @@ class ManageTests(TestCase):
 
     def _upload(self, n=3, prefix='問題'):
         """取り込みは JSON ファイル1本だけなので、テストもファイルで投げる。"""
-        return {'upload': SimpleUploadedFile(
+        return {'questions_file': SimpleUploadedFile(
             'q.json', self._payload(n, prefix).encode('utf-8'),
             content_type='application/json',
         )}
 
+    def _post_upload(self, data):
+        """取り込みを最後まで通す。削除が多くて確認が出たら、承認して続ける。"""
+        response = self.client.post(reverse('ap:manage_upload'), data)
+        if response.status_code == 200 and '削除が多いので' in response.content.decode('utf-8'):
+            payload = re.search(
+                r'name="payload" value="(.*?)">', response.content.decode('utf-8'), re.S
+            ).group(1)
+            response = self.client.post(reverse('ap:manage_upload'), {
+                'confirm': '1', 'payload': html.unescape(payload),
+            })
+        return response
+
     def _json_upload(self, records):
-        return {'upload': SimpleUploadedFile(
+        return {'questions_file': SimpleUploadedFile(
             'q.json', json.dumps(records, ensure_ascii=False).encode('utf-8'),
             content_type='application/json',
         )}
@@ -907,7 +954,7 @@ class ManageTests(TestCase):
         self.assertGreater(len(payload), 2 * 1024 * 1024, '2MB を超える前提のテスト')
 
         response = self.client.post(reverse('ap:manage_upload'), {
-            'upload': SimpleUploadedFile('big.json', payload,
+            'questions_file': SimpleUploadedFile('big.json', payload,
                                          content_type='application/json'),
         })
         self.assertRedirects(response, reverse('ap:manage_list'))
@@ -920,13 +967,13 @@ class ManageTests(TestCase):
         self.assertTrue(response.context['form'].errors)
 
     def test_upload_deletes_the_old_set_and_its_logs(self):
-        self.client.post(reverse('ap:manage_upload'), self._upload(3, '旧'))
+        self._post_upload(self._upload(3, '旧'))
         old = list(Question.objects.all())
         old_ids = [q.id for q in old]
         answer(self.learner, old[0], correct=True)
         answer(self.other, old[1], correct=False)
 
-        self.client.post(reverse('ap:manage_upload'), self._upload(2, '新'))
+        self._post_upload(self._upload(2, '新'))
 
         self.assertEqual(
             Question.objects.all().count(), 2,
@@ -974,7 +1021,7 @@ class ManageTests(TestCase):
 
     def test_upload_replaces_the_set_for_every_id(self):
         build_questions()
-        self.client.post(reverse('ap:manage_upload'), self._upload(2))
+        self._post_upload(self._upload(2))
         self.assertEqual(
             Question.objects.filter(template__isnull=True).count(), 2,
             '問題集は共有なので、取り込むと全員の問題集が入れ替わる',
@@ -983,7 +1030,7 @@ class ManageTests(TestCase):
     def test_broken_json_is_rejected_without_touching_anything(self):
         self.client.post(reverse('ap:manage_upload'), self._upload(2))
         before = list(Question.objects.all().values_list('id', flat=True))
-        response = self.client.post(reverse('ap:manage_upload'), {'upload': SimpleUploadedFile(
+        response = self.client.post(reverse('ap:manage_upload'), {'questions_file': SimpleUploadedFile(
             'q.json', b'{ not json', content_type='application/json')})
         self.assertEqual(response.status_code, 200)
         after = list(Question.objects.all().values_list('id', flat=True))
@@ -1076,11 +1123,9 @@ class ImportNotesTests(TestCase):
                 'category': 11, 'stem': 'x', 'choices': ['a', 'b', 'c', 'd'], 'answer': 0,
             }],
         }
-        created, _removed, notes = replace_all(validate(parse(
-            json.dumps(payload, ensure_ascii=False)
-        )))
-        self.assertEqual(created, 1)
-        self.assertEqual(notes, 2)
+        result = sync(validate(parse(json.dumps(payload, ensure_ascii=False))))
+        self.assertEqual(result['questions']['added'], 1)
+        self.assertEqual(result['notes']['added'], 2)
         self.assertEqual(LearningNote.objects.all().count(), 2)
 
     def test_plain_array_still_works(self):
@@ -1089,25 +1134,211 @@ class ImportNotesTests(TestCase):
             [{'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0}],
             ensure_ascii=False,
         )
-        created, _removed, notes = replace_all(validate(parse(payload)))
-        self.assertEqual((created, notes), (1, 0))
+        result = sync(validate(parse(payload)))
+        self.assertEqual(result['questions']['added'], 1)
+        self.assertIsNone(result['notes'], '解説を含まないファイルは解説に触れない')
 
-    def test_notes_are_replaced_with_the_questions(self):
-        """問題だけの JSON を入れたら、前の解説も消える。"""
-        replace_all(validate(parse(json.dumps({
+    def test_notes_only_file_is_accepted(self):
+        """解説だけのファイルも取り込める。問題には触らない。"""
+        build_questions(per_category=1)
+        before = Question.objects.count()
+        result = sync(validate(parse(json.dumps(
+            {'notes': build_notes()}, ensure_ascii=False
+        ))))
+        self.assertEqual(result['notes']['added'], 2)
+        self.assertIsNone(result['questions'], '問題を含まないファイルは問題に触れない')
+        self.assertEqual(Question.objects.count(), before)
+
+    def test_sync_keeps_unchanged_rows_and_their_history(self):
+        """変わっていない問題は作り直さない。解答履歴が切れないため。"""
+        build_questions(per_category=1)
+        question = Question.objects.first()
+        learner = make_learner('synced')
+        answer(learner, question, correct=True)
+
+        records = [{
+            'category': q.category.code, 'subject': q.subject, 'topic': q.topic,
+            'stem': q.stem, 'choices': q.choices, 'answer': q.answer_index,
+            'explanation': q.explanation, 'difficulty': q.difficulty,
+            'source': q.source,
+        } for q in Question.objects.filter(template__isnull=True)]
+        result = sync(validate({'questions': records, 'notes': None}))
+
+        self.assertEqual(result['questions']['added'], 0)
+        self.assertEqual(result['questions']['removed'], 0)
+        self.assertEqual(result['questions']['unchanged'], len(records))
+        self.assertTrue(Attempt.objects.filter(learner=learner).exists())
+        self.assertEqual(Question.objects.filter(pk=question.pk).count(), 1)
+
+    def test_sync_updates_in_place_and_removes_missing(self):
+        """解説や正解だけ直したら更新、ファイルから消えたら削除。"""
+        build_questions(per_category=2)
+        total = Question.objects.filter(template__isnull=True).count()
+        kept = Question.objects.filter(template__isnull=True).first()
+        records = [{
+            'category': kept.category.code, 'subject': kept.subject,
+            'stem': kept.stem, 'choices': kept.choices, 'answer': kept.answer_index,
+            'explanation': '書き直した解説',
+        }]
+        result = sync(validate({'questions': records, 'notes': None}))
+        self.assertEqual(result['questions']['updated'], 1)
+        self.assertEqual(result['questions']['removed'], total - 1)
+        kept.refresh_from_db()
+        self.assertEqual(kept.explanation, '書き直した解説')
+
+    def test_both_files_can_be_uploaded_at_once(self):
+        """問題と解説を別々の欄で選んで、1回で取り込める。"""
+        admin = make_learner('twofiles', is_admin=True)
+        enter(self.client, admin)
+        questions = json.dumps({'questions': [
+            {'category': 11, 'stem': 'まとめて取り込む問題',
+             'choices': ['a', 'b', 'c', 'd'], 'answer': 0},
+        ]}, ensure_ascii=False)
+        notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
+
+        response = self.client.post(reverse('ap:manage_upload'), {
+            'questions_file': SimpleUploadedFile('q.json', questions.encode('utf-8')),
+            'notes_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Question.objects.filter(template__isnull=True).count(), 1)
+        self.assertEqual(LearningNote.objects.count(), 2)
+
+    def test_notes_file_alone_is_accepted_from_the_screen(self):
+        """解説の欄だけ選んでも取り込める。問題には触らない。"""
+        build_questions(per_category=1)
+        before = Question.objects.count()
+        admin = make_learner('notesonly', is_admin=True)
+        enter(self.client, admin)
+        notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
+
+        response = self.client.post(reverse('ap:manage_upload'), {
+            'notes_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(LearningNote.objects.count(), 2)
+        self.assertEqual(Question.objects.count(), before, '問題はそのまま')
+
+    def test_upload_needs_at_least_one_file(self):
+        """どちらも選ばずに送ったら、理由を添えて止める。"""
+        admin = make_learner('nofile', is_admin=True)
+        enter(self.client, admin)
+        response = self.client.post(reverse('ap:manage_upload'), {})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'どちらか一方は選んでください')
+
+    def test_same_side_in_both_files_is_rejected(self):
+        """両方の欄に問題を入れたら、どちらを使うか決められないので弾く。"""
+        admin = make_learner('bothq', is_admin=True)
+        enter(self.client, admin)
+        payload = json.dumps({'questions': [
+            {'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0},
+        ]}, ensure_ascii=False).encode('utf-8')
+        response = self.client.post(reverse('ap:manage_upload'), {
+            'questions_file': SimpleUploadedFile('a.json', payload),
+            'notes_file': SimpleUploadedFile('b.json', payload),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '両方に問題が入っています')
+
+    def test_preview_counts_without_writing(self):
+        """下見は数えるだけで、1件も書き込まない。"""
+        build_questions(per_category=1)
+        before = Question.objects.count()
+        counts = preview(validate({
+            'questions': [{
+                'category': 11, 'subject': 'A', 'stem': '新しい問題',
+                'choices': ['a', 'b', 'c', 'd'], 'answer': 0,
+            }],
+            'notes': None,
+        }))
+        self.assertEqual(counts['questions']['added'], 1)
+        self.assertEqual(Question.objects.count(), before, '下見では書き込まない')
+
+    def test_large_removal_needs_confirmation(self):
+        """削除が既存の3割を超えたら、確定の前に止める。"""
+        build_questions(per_category=1)
+        total = Question.objects.filter(template__isnull=True).count()
+        kept = Question.objects.filter(template__isnull=True).first()
+        one = [{
+            'category': kept.category.code, 'subject': kept.subject, 'stem': kept.stem,
+            'choices': kept.choices, 'answer': kept.answer_index,
+            'source': kept.source, 'topic': kept.topic,
+        }]
+        counts = preview(validate({'questions': one, 'notes': None}))
+        self.assertEqual(counts['questions']['removed'], total - 1)
+        self.assertTrue(needs_confirmation(counts))
+
+        # 3割以下なら止めない
+        few = Question.objects.filter(template__isnull=True)[:total - 1]
+        records = [{
+            'category': q.category.code, 'subject': q.subject, 'stem': q.stem,
+            'choices': q.choices, 'answer': q.answer_index,
+            'source': q.source, 'topic': q.topic,
+        } for q in few]
+        self.assertFalse(needs_confirmation(
+            preview(validate({'questions': records, 'notes': None}))
+        ))
+
+    def test_upload_screen_stops_before_a_large_removal(self):
+        """画面でも、削除が多いファイルは一度で取り込まれない。"""
+        build_questions(per_category=1)
+        admin = make_learner('uploader', is_admin=True)
+        enter(self.client, admin)
+        before = Question.objects.count()
+        kept = Question.objects.filter(template__isnull=True).first()
+        payload = json.dumps({'questions': [{
+            'category': kept.category.code, 'subject': kept.subject, 'stem': kept.stem,
+            'choices': kept.choices, 'answer': kept.answer_index,
+        }]}, ensure_ascii=False)
+
+        response = self.client.post(reverse('ap:manage_upload'), {
+            'questions_file': SimpleUploadedFile('q.json', payload.encode('utf-8')),
+        })
+        self.assertEqual(response.status_code, 200, '遷移せず確認画面を出す')
+        self.assertContains(response, '削除が多いので、一度止めました')
+        self.assertEqual(Question.objects.count(), before, 'まだ消えていない')
+
+        # 確認したうえで実行すると、取り込まれる
+        response = self.client.post(reverse('ap:manage_upload'), {
+            'confirm': '1', 'payload': payload,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Question.objects.filter(template__isnull=True).count(), 1)
+
+    def test_duplicate_keys_in_one_file_are_rejected(self):
+        """同じ鍵が1つのファイルに2件あると、どちらが勝つか不定なので止める。"""
+        payload = json.dumps({'questions': [
+            {'category': 11, 'stem': '同じ問題', 'choices': ['a', 'b'], 'answer': 0},
+            {'category': 11, 'stem': '  同じ問題  ', 'choices': ['c', 'd'], 'answer': 1},
+        ]}, ensure_ascii=False)
+        with self.assertRaises(ImportError_):
+            validate(parse(payload))
+
+    def test_empty_side_is_rejected(self):
+        """空の配列は、キーごと外すのと区別して弾く。取り違えの事故を防ぐため。"""
+        for payload in ('{"questions": []}', '{"notes": []}', '{}'):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ImportError_):
+                    parse(payload)
+
+    def test_questions_only_file_leaves_the_notes_alone(self):
+        """問題だけのファイルを入れても、解説は消えない。
+
+        問題と解説は更新の頻度が違うので別のファイルで渡せる。入っていない
+        側に触ると、問題を1問足すだけで解説が全部消えることになる。
+        """
+        sync(validate(parse(json.dumps({
             'notes': build_notes(),
             'questions': [{'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0}],
         }, ensure_ascii=False))))
         self.assertEqual(LearningNote.objects.all().count(), 2)
 
-        replace_all(validate(parse(json.dumps(
+        sync(validate(parse(json.dumps(
             [{'category': 11, 'stem': 'y', 'choices': ['a', 'b'], 'answer': 0}],
             ensure_ascii=False,
         ))))
-        self.assertEqual(
-            LearningNote.objects.all().count(), 0,
-            '問題と噛み合わない解説が残らない',
-        )
+        self.assertEqual(LearningNote.objects.all().count(), 2, '解説はそのまま残る')
 
     def test_a_broken_note_is_rejected(self):
         cases = {
@@ -1138,6 +1369,28 @@ class LearningModeTests(TestCase):
 
     def setUp(self):
         enter(self.client, self.learner)
+
+    @staticmethod
+    def _checked_notes(response):
+        """学習対象のうち、最初から選ばれている行の値。"""
+        html = response.content.decode('utf-8')
+        return [
+            m.group(1) for m in re.finditer(
+                r'name="note"\s+value="([^"]*)"[^>]*\bchecked\b', html
+            )
+        ]
+
+    @staticmethod
+    def _add_questions(category, topic, count):
+        """小分類を指定して問題を足す。build_questions は中分類名を小分類にするため。"""
+        return [
+            Question.objects.create(
+                subject=category.subject, category=category, topic=topic,
+                stem='{}の問題{}'.format(topic, i),
+                choices=['ア', 'イ', 'ウ', 'エ'], answer_index=0,
+            )
+            for i in range(count)
+        ]
 
     def _prepare(self, topic=None):
         build_questions(per_category=12)
@@ -1195,11 +1448,42 @@ class LearningModeTests(TestCase):
                 '読んだ解説と別の分野が出題された',
             )
 
+    def test_only_questions_of_the_note_s_topic_are_asked(self):
+        """出題は解説と同じ小分類だけ。足りなくても中分類からは補わない。"""
+        self._prepare()
+        database = Category.objects.get(code=9)
+        note = LearningNote.objects.get(category=database)
+        # 同じ中分類で、解説とは別の小分類の問題。混ざってはいけない。
+        other = self._add_questions(database, '別の小分類', 5)
+        mine = Question.objects.filter(category=database, topic=note.topic)
+
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5, 'note': note.pk})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        asked = {item.question_id for item in round_.items.all()}
+        self.assertTrue(asked <= set(mine.values_list('id', flat=True)))
+        self.assertFalse(asked & {q.id for q in other})
+
+    def test_a_round_is_short_when_the_topic_has_few_questions(self):
+        """対応する問題が{}問に足りなければ、その数だけ出す。""".format(
+            LearningRound.QUESTION_COUNT
+        )
+        Question.objects.all().delete()
+        LearningNote.objects.all().delete()
+        law = Category.objects.get(code=23)
+        self._add_questions(law, '知的財産権', 3)
+        note = LearningNote.objects.create(
+            category=law, topic='知的財産権', title='著作権と産業財産権', body='本文',
+        )
+
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5, 'note': note.pk})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.assertEqual(round_.total, 3)
+
     def test_origin_label_tells_ipa_questions_from_original_ones(self):
         """出典の書き出しから、IPA の出題そのものか自作かを見分ける。"""
         cases = [
-            ('令和6年度 科目A 問3', 'IPA公開問題（令和6年度）'),
-            ('令和3年度 春期 午前 問2', 'IPA公開問題（令和3年度 春期）'),
+            ('令和6年度 科目A 問3', 'IPA公開問題'),
+            ('令和3年度 春期 午前 問2', 'IPA公開問題'),
             ('サンプル問題 科目A 問12', 'IPAサンプル問題'),
             ('シラバス Ver.8.0 中分類1 応用数学（3）数値解析', '自作'),
             ('試験要綱 科目B', '自作'),
@@ -1209,8 +1493,25 @@ class LearningModeTests(TestCase):
         for source, label in cases:
             self.assertEqual(Question(source=source).origin_label, label)
 
-    def test_learning_quiz_shows_the_source_after_answering(self):
-        """学習モードでも、答えた後に出典と出題元の区別を出す。"""
+    def test_source_text_does_not_repeat_the_label(self):
+        """ラベルと同じ言葉で始まる source は、その言葉を落として出す。"""
+        cases = [
+            ('サンプル問題 科目A 問12', '科目A 問12'),
+            ('令和6年度 科目A 問3', '令和6年度 科目A 問3'),
+            ('シラバス Ver.8.0 中分類1 応用数学（3）数値解析',
+             'シラバス Ver.8.0 中分類1 応用数学（3）数値解析'),
+        ]
+        for source, text in cases:
+            self.assertEqual(Question(source=source).source_text, text)
+
+        template = QuestionTemplate.objects.first()
+        generated = Question(
+            template=template, source='テンプレート「{}」による自動生成'.format(template.title),
+        )
+        self.assertEqual(generated.source_text, '計算問題：{}'.format(template.title))
+
+    def test_learning_quiz_shows_the_source_with_the_question(self):
+        """学習モードでは、出典と出題元の区別を選択肢の下に出す。解説の側には出さない。"""
         self._prepare()
         self.client.post(reverse('ap:learn_start'), {'minutes': 5})
         round_ = LearningRound.objects.get(learner=self.learner)
@@ -1219,17 +1520,48 @@ class LearningModeTests(TestCase):
         item = round_.items.get(order=0)
         question = item.question
         question.source = 'シラバス 中分類1 テスト用の項目'
+        question.explanation = 'テスト用の解説'
         question.save()
 
         before = self.client.get(reverse('ap:learn_quiz', args=[round_.pk]))
-        self.assertNotContains(before, 'テスト用の項目')
+        self.assertContains(before, '</span>シラバス 中分類1 テスト用の項目', count=1)
+        body = before.content.decode()
+        last_choice = body.rindex(html.escape(question.choices[-1]))
+        self.assertLess(last_choice, body.index('テスト用の項目'))
+        self.assertContains(before, '自作')
 
         after = self.client.post(
             reverse('ap:learn_quiz', args=[round_.pk]),
             {'choice': question.answer_index},
         )
-        self.assertContains(after, '出典・根拠：シラバス 中分類1 テスト用の項目')
-        self.assertContains(after, '自作')
+        self.assertContains(after, '</span>シラバス 中分類1 テスト用の項目', count=1)
+        body = after.content.decode()
+        last_choice = body.rindex(html.escape(question.choices[-1]))
+        self.assertLess(last_choice, body.index('テスト用の項目'))
+        self.assertLess(body.index('テスト用の項目'), body.index('テスト用の解説'))
+
+    def test_quiz_shows_the_source_with_the_question(self):
+        """1問1答でも、出典は答える前から選択肢の下に出す。解説の側には出さない。"""
+        self._prepare()
+        # その場で作られる計算問題は出典が別なので、この確認では出さない
+        QuestionTemplate.objects.update(is_active=False)
+        Question.objects.update(source='シラバス 中分類1 テスト用の項目', explanation='テスト用の解説')
+
+        before = self.client.get(reverse('ap:quiz'))
+        question = before.context['question']
+        self.assertContains(before, '</span>シラバス 中分類1 テスト用の項目', count=1)
+        body = before.content.decode()
+        last_choice = body.rindex(html.escape(question.choices[-1]))
+        self.assertLess(last_choice, body.index('テスト用の項目'))
+
+        after = self.client.post(reverse('ap:quiz'), {
+            'question_id': question.id, 'choice': question.answer_index,
+        })
+        self.assertContains(after, '</span>シラバス 中分類1 テスト用の項目', count=1)
+        body = after.content.decode()
+        last_choice = body.rindex(html.escape(question.choices[-1]))
+        self.assertLess(last_choice, body.index('テスト用の項目'))
+        self.assertLess(body.index('テスト用の項目'), body.index('テスト用の解説'))
 
     def test_answering_records_progress(self):
         """学習モードで解いた分も、分野ごとの理解度に積む。"""
@@ -1275,11 +1607,40 @@ class LearningModeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['missed'], [])
 
+    def test_the_result_lists_every_question_with_its_source(self):
+        """結果には、正解した問題も含めて全問を出典つきで並べる。"""
+        self._prepare()
+        self.client.post(reverse('ap:learn_start'), {'minutes': 3})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.client.post(reverse('ap:learn_read', args=[round_.pk]))
+
+        for order in range(round_.total):
+            item = round_.items.get(order=order)
+            question = item.question
+            question.source = 'シラバス 中分類1 テスト用の項目{}'.format(order)
+            question.save()
+            # 1問目だけまちがえ、残りは正解する
+            choice = question.answer_index
+            if order == 0:
+                choice = (choice + 1) % len(question.choices)
+            self.client.post(reverse('ap:learn_quiz', args=[round_.pk]), {'choice': choice})
+            self.client.post(reverse('ap:learn_next', args=[round_.pk]))
+
+        response = self.client.get(reverse('ap:learn_result', args=[round_.pk]))
+        self.assertEqual(len(response.context['items']), round_.total)
+        self.assertEqual(len(response.context['missed']), 1)
+        for order in range(round_.total):
+            self.assertContains(
+                response, '</span>シラバス 中分類1 テスト用の項目{}'.format(order)
+            )
+        self.assertContains(response, '不正解', count=1)
+        self.assertContains(response, 'あなたの解答', count=1)
+
     def test_the_menu_groups_notes_by_category(self):
         """学習対象は、中分類でまとめて小分類（解説）を並べる。"""
         build_questions(per_category=12)
         LearningNote.objects.all().delete()
-        for code, topic in ((9, '正規化'), (9, 'SQL'), (11, '暗号技術')):
+        for code, topic in ((9, 'データベース設計'), (9, 'データベース方式'), (11, '情報セキュリティ')):
             category = Category.objects.get(code=code)
             LearningNote.objects.create(
                 category=category, topic=topic,
@@ -1291,7 +1652,45 @@ class LearningModeTests(TestCase):
         self.assertEqual([g['category'].code for g in groups], [9, 11])
         self.assertEqual(len(groups[0]['notes']), 2)
         self.assertEqual(
-            [n['note'].topic for n in groups[0]['notes']], ['正規化', 'SQL'],
+            [n['note'].topic for n in groups[0]['notes']],
+            ['データベース方式', 'データベース設計'],
+        )
+
+    def test_notes_follow_the_syllabus_order(self):
+        """中分類の中はシラバスの小分類の順。取り込んだ順でも文字順でもない。
+
+        文字順にすると「プロジェクトのコスト」が「プロジェクトマネジメント」より
+        先に来てしまい、シラバスとは逆になる。
+        """
+        build_questions(per_category=12)
+        LearningNote.objects.all().delete()
+        pm = Category.objects.get(code=14)
+        # わざとシラバスと違う順で取り込む
+        for topic in ('プロジェクトのコスト', 'プロジェクトマネジメント', 'プロジェクトの資源'):
+            LearningNote.objects.create(
+                category=pm, topic=topic, title='{}の解説'.format(topic), body='本文',
+            )
+
+        groups = note_menu(self.learner, Question.SUBJECT_A)
+        self.assertEqual(
+            [n['note'].topic for n in groups[0]['notes']],
+            ['プロジェクトマネジメント', 'プロジェクトの資源', 'プロジェクトのコスト'],
+        )
+
+    def test_a_topic_outside_the_syllabus_goes_last(self):
+        """シラバスに無い小分類は末尾に回す。並びの正はシラバスに置く。"""
+        build_questions(per_category=12)
+        LearningNote.objects.all().delete()
+        law = Category.objects.get(code=23)
+        for topic in ('独自の小分類', '標準化関連', '知的財産権'):
+            LearningNote.objects.create(
+                category=law, topic=topic, title='{}の解説'.format(topic), body='本文',
+            )
+
+        groups = note_menu(self.learner, Question.SUBJECT_A)
+        self.assertEqual(
+            [n['note'].topic for n in groups[0]['notes']],
+            ['知的財産権', '標準化関連', '独自の小分類'],
         )
 
     def test_choosing_a_note_uses_that_note(self):
@@ -1302,7 +1701,10 @@ class LearningModeTests(TestCase):
             category=database, topic='正規化',
             title='正規化の解説', body='本文', source='テスト',
         )
-        self.client.post(reverse('ap:learn_start'), {'minutes': 5, 'note': chosen.pk})
+        self._add_questions(database, '正規化', 4)
+        self.client.post(
+            reverse('ap:learn_start'), {'minutes': 5, 'note': chosen.pk}
+        )
         round_ = LearningRound.objects.get(learner=self.learner)
         self.assertEqual(round_.note_id, chosen.pk)
         for item in round_.items.select_related('question'):
@@ -1328,6 +1730,36 @@ class LearningModeTests(TestCase):
         )
         self.assertRedirects(response, reverse('ap:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
+
+    def test_a_note_without_questions_is_never_picked_automatically(self):
+        """おまかせは、出題できる問題を持つ解説だけから選ぶ。
+
+        持たない解説を選ぶと、読ませたあとに出題できず、始められないため。
+        """
+        self._prepare()
+        empty = LearningNote.objects.create(
+            category=Category.objects.get(code=23),
+            topic='出題のない小分類', title='法務の解説', body='本文',
+        )
+        for _ in range(20):
+            self.assertNotEqual(pick_note(self.learner, Question.SUBJECT_A), empty)
+
+    def test_the_menu_tells_how_many_questions_each_note_has(self):
+        """解説ごとに出題できる問数を添える。0問の解説は選べないと分かるように。"""
+        self._prepare()
+        database = Category.objects.get(code=9)
+        LearningNote.objects.create(
+            category=database, topic='出題のない小分類',
+            title='まだ問題のない解説', body='本文',
+        )
+        groups = {
+            g['category'].code: g for g in note_menu(self.learner, Question.SUBJECT_A)
+        }
+        counts = {
+            e['note'].title: e['questions'] for e in groups[9]['notes']
+        }
+        self.assertEqual(counts['まだ問題のない解説'], 0)
+        self.assertEqual(counts['データベースのしくみ'], 12)
 
     def test_notes_are_offered_per_subject(self):
         """解説も科目で絞る。科目Aの回で科目Bの解説が出てはいけない。"""
@@ -1359,6 +1791,154 @@ class LearningModeTests(TestCase):
         )
         self.assertRedirects(response, reverse('ap:learn_start'))
         self.assertEqual(LearningRound.objects.count(), 0)
+
+    def _set_category(self, category):
+        session, _ = StudySession.objects.get_or_create(learner=self.learner)
+        session.mode = StudySession.MODE_CATEGORY
+        session.category = category
+        session.save()
+        return session
+
+    def test_the_dashboard_category_is_opened(self):
+        """ダッシュボードで分野を指定していれば、その中分類を開いて見せる。
+
+        開くだけで、解説はどれも選ばない。選ぶのは利用者。
+        """
+        self._prepare()
+        self._set_category(Category.objects.get(code=9))
+
+        response = self.client.get(reverse('ap:learn_start'))
+        self.assertEqual(response.context['focus'].code, 9)
+        self.assertEqual(self._checked_notes(response), [])
+
+    def test_the_auto_pick_stays_inside_the_dashboard_category(self):
+        """分野を指定していれば、おまかせもその分野の中から選ぶ。"""
+        self._prepare()
+        database = Category.objects.get(code=9)
+        for code in (11, 23):
+            other = Category.objects.get(code=code)
+            LearningNote.objects.create(
+                category=other, topic=other.name,
+                title='{}の解説'.format(other.name), body='本文',
+            )
+        self._set_category(database)
+
+        for _ in range(10):
+            self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+            round_ = LearningRound.objects.get(learner=self.learner)
+            self.assertEqual(round_.note.category_id, database.pk)
+
+    def test_the_auto_pick_covers_every_field_without_a_category(self):
+        """分野を指定していなければ、おまかせは全分野から選ぶ。"""
+        self._prepare()
+        for code in (11, 23):
+            other = Category.objects.get(code=code)
+            LearningNote.objects.create(
+                category=other, topic=other.name,
+                title='{}の解説'.format(other.name), body='本文',
+            )
+        seen = set()
+        for _ in range(30):
+            self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+            seen.add(LearningRound.objects.get(learner=self.learner).note.category.code)
+        self.assertGreater(len(seen), 1)
+
+    def test_a_category_without_notes_is_reported(self):
+        """指定した分野に出題できる解説が無ければ、始めずに知らせる。"""
+        self._prepare()
+        self._set_category(Category.objects.get(code=23))
+
+        response = self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        self.assertRedirects(response, reverse('ap:learn_start'))
+        self.assertEqual(LearningRound.objects.count(), 0)
+
+    def test_nothing_is_opened_without_a_category(self):
+        """分野を指定していなければ、どの中分類も開かず、何も選ばない。"""
+        self._prepare()
+        response = self.client.get(reverse('ap:learn_start'))
+        self.assertIsNone(response.context['focus'])
+        self.assertEqual(self._checked_notes(response), [])
+
+    def test_a_category_of_the_other_subject_is_not_used(self):
+        """科目を切り替えたあとの指定は引き継がない。その科目には無い分類のため。"""
+        self._prepare()
+        self._set_category(Category.objects.filter(subject='B').first())
+        response = self.client.get(reverse('ap:learn_start'))
+        self.assertIsNone(response.context['focus'])
+
+        # おまかせの範囲も絞らない。絞ると科目Aでは1本も選べなくなる。
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.assertEqual(round_.note.category.subject, Question.SUBJECT_A)
+
+    def test_a_round_can_be_abandoned_from_the_quiz(self):
+        """解答の途中でやめて学習モードトップへ戻れる。ラウンドは残さない。"""
+        self._prepare()
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        self.client.post(reverse('ap:learn_read', args=[round_.pk]))
+
+        # 1問だけ解いてからやめる
+        item = round_.items.get(order=0)
+        self.client.post(
+            reverse('ap:learn_quiz', args=[round_.pk]),
+            {'choice': item.question.answer_index},
+        )
+        response = self.client.post(reverse('ap:learn_abandon', args=[round_.pk]))
+        self.assertRedirects(response, reverse('ap:learn_start'))
+        self.assertEqual(LearningRound.objects.count(), 0)
+
+        # 解いたぶんの記録は残る。ラウンドとは別に積んでいるため。
+        self.assertEqual(Attempt.objects.filter(learner=self.learner).count(), 1)
+        self.assertEqual(
+            CategoryProgress.objects.filter(learner=self.learner).aggregate(
+                n=Sum('answered'))['n'], 1,
+        )
+
+    def test_a_finished_round_is_not_deleted(self):
+        """終わったラウンドは結果を見返すためのものなので、中断では消さない。"""
+        self._prepare()
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+        round_.phase = LearningRound.PHASE_DONE
+        round_.save(update_fields=['phase'])
+
+        response = self.client.post(reverse('ap:learn_abandon', args=[round_.pk]))
+        self.assertRedirects(response, reverse('ap:learn_result', args=[round_.pk]))
+        self.assertEqual(LearningRound.objects.count(), 1)
+
+    def test_starting_a_new_round_clears_the_left_over_one(self):
+        """画面を離れて置き去りになったラウンドは、次を始めるときに片づける。"""
+        self._prepare()
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        left_over = LearningRound.objects.get(learner=self.learner)
+
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        rounds = LearningRound.objects.filter(learner=self.learner)
+        self.assertEqual(rounds.count(), 1)
+        self.assertNotEqual(rounds.first().pk, left_over.pk)
+
+    def test_a_finished_round_survives_the_next_one(self):
+        """終わったラウンドは、次を始めても残る。結果を見返せなくなるため。"""
+        self._prepare()
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        done = LearningRound.objects.get(learner=self.learner)
+        done.phase = LearningRound.PHASE_DONE
+        done.save(update_fields=['phase'])
+
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        self.assertEqual(LearningRound.objects.filter(learner=self.learner).count(), 2)
+        self.assertTrue(LearningRound.objects.filter(pk=done.pk).exists())
+
+    def test_another_account_cannot_abandon_the_round(self):
+        self._prepare()
+        self.client.post(reverse('ap:learn_start'), {'minutes': 5})
+        round_ = LearningRound.objects.get(learner=self.learner)
+
+        enter(self.client, make_learner('stranger3'))
+        response = self.client.post(reverse('ap:learn_abandon', args=[round_.pk]))
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(LearningRound.objects.filter(pk=round_.pk).exists())
 
     def test_another_account_cannot_open_the_round(self):
         self._prepare()
@@ -1411,10 +1991,18 @@ class SiteSummaryTests(TestCase):
         self.assertEqual(subject_b['fields'], [])
 
     def test_total_survives_reimport(self):
-        """のべ解答数は、問題を取り込み直しても減らない。"""
+        """のべ解答数は、問題を取り込み直しても減らない。
+
+        取り込みは同期なので、変わっていない問題はそのまま残り、解答履歴も
+        切れない。仮に問題が入れ替わっても、のべ数は消えない CategoryProgress
+        から数えているので減らない。
+        """
         answer(self.alice, self._question(self.alice, 11), True)
         build_questions()
-        self.assertFalse(Attempt.objects.filter(learner=self.alice).exists())
+        self.assertTrue(
+            Attempt.objects.filter(learner=self.alice).exists(),
+            '同じ内容を取り込み直しただけなら、解答履歴は残る',
+        )
         self.assertEqual(site_summary()['total'], 1)
 
     def test_dashboard_shows_summary(self):

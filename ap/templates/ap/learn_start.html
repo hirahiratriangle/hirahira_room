@@ -27,27 +27,31 @@
 <div class="container px-5 py-5" style="max-width: 760px;">
 
     <p class="text-muted">
-        技術解説を<strong>時間を決めて読み</strong>、そのあと同じ範囲から<strong>{{ count }}問</strong>解きます。
-        読むものは中分類から選べます。おまかせにすると、苦手な分野の未読から選ばれます。
+        解説を読んでから、その小分類の問題を最大{{ count }}問解きます。
     </p>
 
     <form method="post" class="border rounded p-4 mb-4">
         {% csrf_token %}
 
-        <div class="fw-bold" style="color:#2c5aa0;">学習対象</div>
-        <div class="small text-muted mb-2">
-            いま選んでいるもの：<span class="fw-bold text-body" id="picked">おまかせ</span>
-        </div>
+        <div class="fw-bold mb-2" style="color:#2c5aa0;">学習対象</div>
         {% if groups %}
         <div class="border rounded mb-4 ap-pick">
+            {% comment %}
+            解説を選ばなかったときの行。選択肢は増やさず、この行の範囲のほうを
+            ダッシュボードの分野に合わせる。行の名前は「おまかせ」のままにし、
+            いま何が選ばれているかは上の行に分野名で出す。
+            {% endcomment %}
             <label class="ap-row ap-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
-                <input class="form-check-input mt-0" type="radio" name="note" value="" checked>
+                <input class="form-check-input mt-0" type="radio" name="note" value="">
                 <span class="fw-bold">おまかせ</span>
-                <span class="text-muted small">苦手な分野の、まだ読んでいない解説から選びます</span>
             </label>
 
+            {% comment %}
+            指定している分野は開いて解説を見せる。選ぶのは利用者なので、
+            どれも選んだ状態にはしない。
+            {% endcomment %}
             {% for group in groups %}
-            <details class="ap-group border-bottom">
+            <details class="ap-group border-bottom"{% if focus.code == group.category.code %} open{% endif %}>
                 <summary class="d-flex justify-content-between align-items-center p-2 px-3"
                          style="cursor:pointer;">
                     <span>
@@ -69,14 +73,15 @@
                 </summary>
                 <div style="background-color:#f6f8fb;">
                     {% for entry in group.notes %}
-                    <label class="ap-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0"
-                           data-name="{{ group.category.name }} ／ {{ entry.note.title }}">
+                    <label class="ap-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0{% if not entry.questions %} text-muted{% endif %}">
                         <input class="form-check-input mt-0" type="radio" name="note"
-                               value="{{ entry.note.pk }}">
+                               value="{{ entry.note.pk }}"
+                               {% if not entry.questions %}disabled{% endif %}>
                         {% if entry.note.topic %}
                         <span class="badge bg-secondary">{{ entry.note.topic }}</span>
                         {% endif %}
                         <span>{{ entry.note.title }}</span>
+                        <span class="{% if entry.questions %}text-muted{% else %}text-danger{% endif %} small">問題{{ entry.questions }}問</span>
                         {% if entry.rounds %}
                         <span class="text-muted small">学習{{ entry.rounds }}回</span>
                         {% else %}
@@ -105,9 +110,6 @@
             </div>
             {% endfor %}
         </div>
-        <div class="form-text mb-3">
-            時間が来ると解答に進みます。読み終われば途中でも進めます。
-        </div>
         <button type="submit" class="btn btn-primary"{% if not groups %} disabled{% endif %}>
             はじめる
         </button>
@@ -133,24 +135,11 @@
 
 {% block extra_js %}
 <script>
-// 「いま選んでいるもの」を出す。畳んだ中分類の中を選んでも分かるように。
-// :has() が効かないブラウザでも、この行だけは正しく出る。
+// 前の選択が残って再表示されたときは、その中分類を開いておく。
+// 畳んだままだと、どこを選んだのか見えない。
 (function () {
-    var label = document.getElementById('picked');
-    var form = label && label.closest('form');
-    if (!form) { return; }
-
-    var update = function () {
-        var checked = form.querySelector('input[name="note"]:checked');
-        var row = checked && checked.closest('.ap-row');
-        label.textContent = (row && row.dataset.name) ? row.dataset.name : 'おまかせ';
-    };
-    form.addEventListener('change', update);
-
-    // 前の選択が残って再表示されたときは、その中分類を開いておく
-    var checked = form.querySelector('.ap-group input[name="note"]:checked');
+    var checked = document.querySelector('.ap-group input[name="note"]:checked');
     if (checked) { checked.closest('details').open = true; }
-    update();
 })();
 </script>
 {% endblock %}

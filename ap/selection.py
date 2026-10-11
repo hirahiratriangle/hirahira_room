@@ -168,7 +168,7 @@ def _pick_from_category(learner, category, subject, exclude_ids):
     if generators and (not unseen or random.random() < TEMPLATE_RATIO):
         question = generate_question(random.choice(generators))
         if question and question.id not in exclude_ids:
-            return question, 'テンプレートから新しい数値で生成'
+            return question, '計算問題を新しい数値で作成'
 
     if unseen:
         return random.choice(unseen), '未出題'
