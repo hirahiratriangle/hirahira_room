@@ -103,7 +103,7 @@
                     <div>
                         <span class="badge bg-secondary me-2">{{ row.category.get_field_display }}</span>
                         <strong>{{ row.category.label }}</strong>
-                        <span class="small text-muted ms-2">本番の想定出題数 {{ row.category.exam_weight }} 問／60問</span>
+                        <span class="small text-muted ms-2">本番の想定出題数 {{ row.category.exam_weight }} 問／{% if row.category.subject == 'B' %}20{% else %}60{% endif %}問</span>
                     </div>
                     <div class="text-end">
                         <span class="h6 mb-0 {% if row.rate_percent < 50 %}text-danger{% else %}text-warning{% endif %}">
@@ -120,7 +120,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-muted">まだ判定できるだけの解答がありません。各分野を3問以上解くと，ここに苦手な順で表示されます。</p>
+        <p class="text-muted">いま苦手と判定している分野はありません。3問以上解いた分野のうち，60％ に寄せて平滑化した正答率が 60％ を下回るものが，ここに苦手な順で並びます。</p>
         {% endif %}
     </section>
 

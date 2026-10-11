@@ -268,6 +268,17 @@ class SelectionTests(TestCase):
         self.assertIn(twice.id, due, '2回落とした問題は短い間隔で戻るべき')
         self.assertNotIn(once.id, due, '1回だけの問題はまだ間隔が足りない')
 
+    def test_a_well_answered_category_is_not_listed_as_weak(self):
+        """よく解けている分野は、何問解いていても苦手分野に並べない。"""
+        good, bad = Category.objects.filter(subject='A')[:2]
+        for category, results in ((good, [True] * 10), (bad, [False] * 4)):
+            question = Question.objects.filter(category=category).first()
+            for correct in results:
+                answer(self.learner, question, correct)
+
+        listed = [r['category'] for r in weak_categories(category_stats(self.learner))]
+        self.assertEqual(listed, [bad])
+
     def test_focus_mode_favours_weak_categories(self):
         database = Category.objects.get(code=9)
         network = Category.objects.get(code=10)

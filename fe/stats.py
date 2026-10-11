@@ -142,10 +142,14 @@ def category_options(learner):
 
 
 def weak_categories(rows, limit=5):
-    """苦手な順に中分類を返す。解答実績のあるものだけが対象。"""
-    answered = [r for r in rows if r['total'] >= WEAK_MIN_ATTEMPTS]
-    answered.sort(key=lambda r: (r['smoothed'], -r['total']))
-    return answered[:limit]
+    """苦手と判定した中分類を、苦手な順に返す。
+
+    判定は is_weak（3問以上解いて、平滑化した正答率が 60％ 未満）に従う。
+    解答数だけで選ぶと、全問正解の分野まで「苦手分野」に並んでしまう。
+    """
+    weak = [r for r in rows if r['is_weak']]
+    weak.sort(key=lambda r: (r['smoothed'], -r['total']))
+    return weak[:limit]
 
 
 def field_stats(rows):
