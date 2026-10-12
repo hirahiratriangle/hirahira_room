@@ -47,11 +47,11 @@
             </label>
 
             {% comment %}
-            指定している分野は開いて解説を見せる。選ぶのは利用者なので、
-            どれも選んだ状態にはしない。
+            直前に学習した中分類だけを開いて、学習回数を見せる。ダッシュボードで
+            指定している分野は開かない。選ぶのは利用者なので、どれも選んだ状態にはしない。
             {% endcomment %}
             {% for group in groups %}
-            <details class="ap-group border-bottom"{% if focus.code == group.category.code %} open{% endif %}>
+            <details class="ap-group border-bottom"{% if opened.code == group.category.code %} open{% endif %}>
                 <summary class="d-flex justify-content-between align-items-center p-2 px-3"
                          style="cursor:pointer;">
                     <span>
