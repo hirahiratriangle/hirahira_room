@@ -25,13 +25,13 @@ stay を渡すと、保存したあとその場に留まる。ダッシュボー
     </div>
     <div class="col-6 col-md-3">
         <label for="category" class="form-label small text-muted mb-1">分野</label>
-        {% comment %}分野が効くのは「分野を指定」のときだけ。ほかのモードでも
-        保存値を映すと、効いていない分野が選ばれたままに見える。{% endcomment %}
-        <select class="form-select form-select-sm" id="category" name="category"
-                {% if study_session.mode != 'category' %}disabled{% endif %}>
+        {% comment %}分野はどのモードでも選べる。選ぶと、そのモードの出し方のまま
+        その分野の中だけから出す。件数は、そのモードで出せる問題の数にする。
+        出せる問題が無い分野は選べなくする。{% endcomment %}
+        <select class="form-select form-select-sm" id="category" name="category">
             <option value="">指定なし</option>
             {% for option in categories %}{% if option.subject == study_session.subject %}
-            <option value="{{ option.code }}"{% if study_session.mode == 'category' and study_session.category.code == option.code %} selected{% endif %}>{{ option.label }}{% if option.question_count %}（{{ option.question_count }}問）{% endif %}</option>
+            <option value="{{ option.code }}"{% if study_session.category.code == option.code %} selected{% endif %}{% if not option.selectable %} disabled{% endif %}>{{ option.label }}{% if option.count %}（{{ option.count }}問）{% endif %}</option>
             {% endif %}{% endfor %}
         </select>
     </div>
@@ -44,10 +44,11 @@ stay を渡すと、保存したあとその場に留まる。ダッシュボー
 
 {{ categories|json_script:"categoryOptions" }}
 <script>
-// 分野の欄は、出題モードと科目で決まる。
+// 分野の欄は、科目で中身が、出題モードで件数が決まる。
 //
-// ・分野が効くのは「分野を指定」のときだけ。ほかのモードでは選べても
-//   保存時に捨てられるので、選べること自体が誤解のもとになる。伏せておく。
+// ・分野はどのモードでも選べる。選ぶと、そのモードの出し方のまま
+//   その分野の中だけから出す。
+// ・件数は、そのモードで出せる問題の数にする。出せる問題が無い分野は選べなくする。
 // ・分類は科目ごとに別で、科目Aは中分類（1〜23）、科目Bは11分野（101〜111）。
 //   重なりが無いので、混ぜて並べると解きようのない組み合わせができる。
 //
@@ -75,26 +76,25 @@ stay を渡すと、保存したあとその場に留まる。ダッシュボー
             if (o.subject !== subject.value) { return; }
             var el = document.createElement('option');
             el.value = o.code;
-            el.textContent = o.label + (o.question_count ? '（' + o.question_count + '問）' : '');
+            // 件数と選べるかどうかは、そのモードで出せる問題で決まる
+            var now = o.by_mode[mode.value] || [o.question_count, o.question_count > 0];
+            el.textContent = o.label + (now[0] ? '（' + now[0] + '問）' : '');
+            el.disabled = !now[1];
             category.add(el);
         });
 
         // 前の選択が別の科目のものだと value が一致せず selectedIndex が -1 になり、
         // 何も選ばれていない空欄になる。先頭の「指定なし」へ明示的に戻す。
+        // 選んでいた分野が、変えたモードでは出せない分野になったときも戻す。
         category.value = keep;
-        if (category.selectedIndex < 0) { category.selectedIndex = 0; }
+        if (category.selectedIndex < 0 || category.options[category.selectedIndex].disabled) {
+            category.selectedIndex = 0;
+        }
     };
 
-    var toggle = function () {
-        var usable = mode.value === 'category';
-        category.disabled = !usable;
-        // 使わないモードに移ったら、選んだままにしない。
-        // 保存時にどのみち捨てられるので、画面と保存結果を一致させる。
-        if (!usable) { category.selectedIndex = 0; }
-    };
-
-    mode.addEventListener('change', toggle);
+    // モードによって件数が変わるので、モードを変えたら選択肢を作り直す。
+    // 選んでいた分野はそのまま残す。
+    mode.addEventListener('change', rebuild);
     subject.addEventListener('change', rebuild);
-    toggle();
 })();
 </script>

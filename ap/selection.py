@@ -64,7 +64,9 @@ def _category_weights(learner, subject, mode):
             if row['is_untouched']:
                 weight *= UNTOUCHED_BONUS
 
-        if mode == StudySession.MODE_WEAK and not (row['is_weak'] or row['is_untouched']):
+        # 「苦手分野だけ」は、苦手と判定した分野に限る。まだ解いていない分野は
+        # 苦手とは判定していないので出さない。
+        if mode == StudySession.MODE_WEAK and not row['is_weak']:
             continue
 
         if weight > 0:
@@ -137,16 +139,29 @@ def _due_for_review(wrong, history, recent_times):
     return due
 
 
-def _pick_from_category(learner, category, subject, exclude_ids):
-    """中分類の中から1問を選ぶ。未出題 → 前回不正解 → 久しく解いていない順。"""
-    questions = list(
+def _pick_from_category(learner, category, subject, exclude_ids, mode=None):
+    """中分類の中から1問を選ぶ。未出題 → 前回不正解 → 久しく解いていない順。
+
+    mode が「IPA公開問題から」「計算問題を」のときは、選ぶ前に対象を絞る。
+    絞ったあとの選び方は、ほかのモードと同じにする。
+    """
+    from .models import StudySession
+
+    pool = (
         Question.objects.active().for_subject(subject)
         .filter(category=category).exclude(id__in=exclude_ids)
     )
-    # 計算問題のテンプレートは科目A用なので，科目Bのときは使わない
+    if mode == StudySession.MODE_IPA:
+        pool = pool.from_ipa()
+    questions = list(pool)
+    if mode == StudySession.MODE_CALC:
+        questions = [q for q in questions if q.is_calculation]
+
+    # 計算問題のテンプレートは科目A用なので，科目Bのときは使わない。
+    # IPA の問題だけを出すモードでは、作った問題を混ぜない。
     generators = (
         generators_for_category(category)
-        if subject != Question.SUBJECT_B else []
+        if subject != Question.SUBJECT_B and mode != StudySession.MODE_IPA else []
     )
 
     history = _last_result_map(learner, [q.id for q in questions]) if questions else {}
@@ -182,8 +197,11 @@ def _pick_from_category(learner, category, subject, exclude_ids):
     return None, None
 
 
-def _pick_review(learner, subject, exclude_ids):
-    """直近の解答が不正解だった問題だけを対象にする復習モード。"""
+def _pick_review(learner, subject, exclude_ids, category=None):
+    """直近の解答が不正解だった問題だけを対象にする復習モード。
+
+    category を渡すと、その中分類でまちがえた問題だけを対象にする。
+    """
     answered_ids = list(
         Attempt.objects.filter(learner=learner)
         .values_list('question_id', flat=True).distinct()
@@ -199,10 +217,10 @@ def _pick_review(learner, subject, exclude_ids):
     if not wrong_ids:
         return None, None
 
-    questions = list(
-        Question.objects.active().for_subject(subject)
-        .filter(id__in=wrong_ids)
-    )
+    pool = Question.objects.active().for_subject(subject).filter(id__in=wrong_ids)
+    if category is not None:
+        pool = pool.filter(category=category)
+    questions = list(pool)
     if not questions:
         return None, None
     # 苦手な中分類の問題を優先する
@@ -218,27 +236,46 @@ def pick_question(learner, session, exclude_ids=()):
     exclude_ids = list(exclude_ids)
     subject = session.subject
     mode = session.mode
+    # 対象を絞るモード。中分類の選び方は「おまかせ」と同じで、選ぶ問題だけが違う。
+    restricted = mode if mode in (StudySession.MODE_IPA, StudySession.MODE_CALC) else None
 
-    if mode == StudySession.MODE_CATEGORY and session.category_id:
+    # 分野はどのモードでも選べる。選んでいれば、その分野の中だけから出す。
+    # 尽きても、ほかの分野や、対象外の種類の問題へは広げない。
+    # 分野が1つに決まっているので、中分類の抽選（比率や苦手の重み）は使わない。
+    if session.category_id and session.category.subject == subject:
+        category = session.category
+        # そのモードに当たらない問題は出さない。当たるものが無ければ「出せる問題なし」にする。
+        if mode == StudySession.MODE_REVIEW:
+            question, reason = _pick_review(learner, subject, exclude_ids, category=category)
+            if question is None and exclude_ids:
+                # 直前に出したものしか残っていなければ、除外を解いてもう一度
+                question, reason = _pick_review(learner, subject, [], category=category)
+            return question, reason
+        if mode == StudySession.MODE_WEAK:
+            row = next(
+                r for r in category_stats(learner, subject=subject)
+                if r['category'].id == category.id
+            )
+            if not row['is_weak']:
+                return None, None
         question, reason = _pick_from_category(
-            learner, session.category, subject, exclude_ids
+            learner, category, subject, exclude_ids, mode=restricted
         )
-        if question:
+        if question or not exclude_ids:
             return question, reason
         # 指定分野を解き切ったら、除外を解いてもう一度
-        return _pick_from_category(learner, session.category, subject, [])
+        return _pick_from_category(learner, category, subject, [], mode=restricted)
 
+    # そのモードに当たる問題が無ければ、ほかの出し方には切り替えず「出せる問題なし」にする。
     if mode == StudySession.MODE_REVIEW:
         question, reason = _pick_review(learner, subject, exclude_ids)
-        if question:
-            return question, reason
-        # 復習対象が無ければ通常の重点出題にフォールバックする
-        mode = StudySession.MODE_FOCUS
+        if question is None and exclude_ids:
+            # 直前に出したものしか残っていなければ、除外を解いてもう一度
+            question, reason = _pick_review(learner, subject, [])
+        return question, reason
 
+    # 「苦手分野だけ」で苦手と判定した分野がまだ無ければ、weights が空になり何も出ない
     weights, rows = _category_weights(learner, subject, mode)
-    if not weights and mode == StudySession.MODE_WEAK:
-        # まだ苦手が定まっていない場合は重点出題に切り替える
-        weights, rows = _category_weights(learner, subject, StudySession.MODE_FOCUS)
 
     tried = set()
     while weights:
@@ -247,9 +284,11 @@ def pick_question(learner, session, exclude_ids=()):
             break
         tried.add(category_id)
         category = rows[category_id]['category']
-        question, reason = _pick_from_category(learner, category, subject, exclude_ids)
+        question, reason = _pick_from_category(
+            learner, category, subject, exclude_ids, mode=restricted
+        )
         if question:
-            if mode in (StudySession.MODE_FOCUS, StudySession.MODE_WEAK) and rows[category_id]['is_weak']:
+            if mode != StudySession.MODE_RANDOM and rows[category_id]['is_weak']:
                 reason = '苦手分野のため重点出題'
             return question, reason
         weights.pop(category_id, None)

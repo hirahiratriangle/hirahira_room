@@ -15,7 +15,8 @@ from datetime import timedelta
 from django.db.models import Count, F, Sum
 from django.utils import timezone
 
-from .models import Category, CategoryProgress, DailyProgress, PassReport, Question
+from .models import (Attempt, Category, CategoryProgress, DailyProgress,
+                     PassReport, Question)
 
 # ベイズ平滑化のパラメータ。SMOOTHING_PRIOR は科目基準点（60/100）に
 # 対応させ、SMOOTHING_STRENGTH 問ぶんの「仮の解答」を上乗せして扱う。
@@ -113,32 +114,98 @@ def category_stats(learner, subject=None):
     return rows
 
 
-def category_options(learner):
+def _review_counts(learner):
+    """中分類ごとの「直近の解答がまちがいだった問題」の数。復習モードで出せる数になる。"""
+    last = {}
+    for question_id, is_correct in (
+        Attempt.objects.filter(learner=learner)
+        .order_by('answered_at', 'id').values_list('question_id', 'is_correct')
+    ):
+        last[question_id] = is_correct
+    missed = [question_id for question_id, is_correct in last.items() if not is_correct]
+    if not missed:
+        return {}
+    counts = {}
+    for row in (
+        Question.objects.active().filter(id__in=missed)
+        .values('category', 'subject').annotate(n=Count('id'))
+    ):
+        counts.setdefault(row['category'], {})[row['subject']] = row['n']
+    return counts
+
+
+def category_options(learner, mode=None):
     """出題設定の「分野」に並べる選択肢。
 
     分類は科目ごとに別なので、画面では科目に合わせて出し分ける。
     テンプレートに model を渡さず素の値にしてあるのは、そのまま
     json_script で JavaScript へ渡し、科目の切替に使うため。
-    選ぶ前に薄い分野が分かるよう、持っている問題数も添える。
-    """
-    counts = {}
-    for row in (
-        Question.objects.active()
-        .values('category', 'subject').annotate(n=Count('id'))
-    ):
-        counts.setdefault(row['category'], {})[row['subject']] = row['n']
 
-    return [
-        {
+    分野はどの出題モードでも選べるが、そのモードで出せる問題が無い分野は選べなくする。
+    件数と選べるかどうかはモードごとに違うので、全モードぶんを by_mode に持ち、
+    いまのモード（mode）の値を count と selectable に入れておく。
+    """
+    from .generators import REGISTRY
+    from .models import QuestionTemplate, StudySession
+
+    def by_category(queryset):
+        counts = {}
+        for row in queryset.values('category', 'subject').annotate(n=Count('id')):
+            counts.setdefault(row['category'], {})[row['subject']] = row['n']
+        return counts
+
+    everything = by_category(Question.objects.active())
+    ipa = by_category(Question.objects.active().from_ipa())
+    review = _review_counts(learner)
+
+    # 計算問題かどうかは形から見分けるので、データベースでは数えられない
+    calc = {}
+    for question in Question.objects.active().only(
+        'category_id', 'subject', 'stem', 'choices', 'template_id'
+    ):
+        if question.is_calculation:
+            by_subject = calc.setdefault(question.category_id, {})
+            by_subject[question.subject] = by_subject.get(question.subject, 0) + 1
+
+    # 計算問題のテンプレートがある中分類は、固定の問題が無くても新しい数値で出せる
+    generated = {
+        template.category_id
+        for template in QuestionTemplate.objects.filter(is_active=True)
+        if template.key in REGISTRY
+    }
+    weak = {row['category'].id for row in category_stats(learner) if row['is_weak']}
+
+    options = []
+    for category in Category.objects.all():
+        def count(source):
+            # その分類の科目ぶんだけ数える。取り込み前の古いデータが
+            # 別の科目で残っていても、件数に混ざらないようにする。
+            return source.get(category.id, {}).get(category.subject, 0)
+
+        total = count(everything)
+        makes = category.id in generated and category.subject == Question.SUBJECT_A
+        general = [total, total > 0 or makes]
+        by_mode = {
+            StudySession.MODE_FOCUS: general,
+            StudySession.MODE_RANDOM: general,
+            StudySession.MODE_CATEGORY: general,
+            StudySession.MODE_IPA: [count(ipa), count(ipa) > 0],
+            StudySession.MODE_CALC: [count(calc), count(calc) > 0 or makes],
+            # 苦手と判定した分野だけ。判定していない分野は、問題があっても選べない
+            StudySession.MODE_WEAK: [total, category.id in weak and general[1]],
+            StudySession.MODE_REVIEW: [count(review), count(review) > 0],
+        }
+        current = by_mode.get(mode, general)
+        options.append({
             'code': category.code,
             'label': category.label,
             'subject': category.subject,
-            # その分類の科目ぶんだけ数える。取り込み前の古いデータが
-            # 別の科目で残っていても、件数に混ざらないようにする。
-            'question_count': counts.get(category.id, {}).get(category.subject, 0),
-        }
-        for category in Category.objects.all()
-    ]
+            'question_count': total,
+            'by_mode': by_mode,
+            'count': current[0],
+            'selectable': current[1],
+        })
+    return options
 
 
 def weak_categories(rows, limit=5):
