@@ -240,7 +240,9 @@ class DashboardView(LearnerRequiredMixin, generic.TemplateView):
         context['untouched'] = [r for r in rows if r['is_untouched'] and r['question_count']]
         context['study_session'] = _get_study_session(learner)
         # 出題設定のフォームを他の画面と共有しているので、分野の選択肢も渡す
-        context['categories'] = category_options(learner)
+        context['categories'] = category_options(
+            learner, context['study_session'].mode
+        )
         context['daily'] = daily_counts(learner, days=14)
         context['exam'] = EXAM
         context['question_total'] = Question.objects.active().filter(
@@ -270,16 +272,18 @@ class QuizSettingsView(LearnerRequiredMixin, generic.View):
         if subject in {Question.SUBJECT_A, Question.SUBJECT_B}:
             session.subject = subject
 
-        # 分野が効くのは「分野を指定」のときだけ。ほかのモードに変えたら、
-        # 残しておいても誤解のもとなので消す。
+        # 分野はどのモードでも選べる。選んだら、そのモードの出し方のまま
+        # その分野の中だけから出す。選ばなければ全分野から出す。
         session.category = None
-        if session.mode == StudySession.MODE_CATEGORY and category_code:
+        if category_code:
             session.category = Category.objects.filter(
                 code=category_code, subject=session.subject
             ).first()
             if session.category is None:
                 messages.error(request, 'その分野は選んだ科目にありません。')
-                session.mode = StudySession.MODE_FOCUS
+                # 「分野を指定」は分野が無いと成り立たない。あとの2つは分野なしで続ける。
+                if session.mode == StudySession.MODE_CATEGORY:
+                    session.mode = StudySession.MODE_FOCUS
 
         session.save()
         # 設定を変えたら履歴の除外はいったんリセットする
@@ -304,7 +308,7 @@ class QuizView(LearnerRequiredMixin, generic.View):
         if question is None:
             return render(request, self.template_name, {
                 'study_session': study_session,
-                'categories': category_options(self.learner),
+                'categories': category_options(self.learner, study_session.mode),
                 'no_question': True,
             })
 
@@ -315,7 +319,7 @@ class QuizView(LearnerRequiredMixin, generic.View):
             'question': question,
             'reason': reason,
             'study_session': study_session,
-            'categories': category_options(self.learner),
+            'categories': category_options(self.learner, study_session.mode),
             'progress': self._progress(self.learner, question.category),
         })
 
@@ -342,7 +346,7 @@ class QuizView(LearnerRequiredMixin, generic.View):
             return render(request, self.template_name, {
                 'question': question,
                 'study_session': study_session,
-                'categories': category_options(self.learner),
+                'categories': category_options(self.learner, study_session.mode),
                 'progress': self._progress(self.learner, question.category),
             })
 
@@ -380,7 +384,7 @@ class QuizView(LearnerRequiredMixin, generic.View):
         return render(request, self.template_name, {
             'question': question,
             'study_session': study_session,
-            'categories': category_options(self.learner),
+            'categories': category_options(self.learner, study_session.mode),
             'answered': True,
             'selected': selected,
             'selected_label': Question.choice_label(selected),

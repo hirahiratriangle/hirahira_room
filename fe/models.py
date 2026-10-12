@@ -9,6 +9,8 @@ Attempt が持つ。問題と技術解説は全 ID で共有し、成績は Lear
 同じ導線で扱える。
 """
 
+import re
+
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Count, Q
@@ -143,9 +145,28 @@ class QuestionTemplate(models.Model):
         return self.title
 
 
+# source がこの書き出しなら、IPA が公開した問題（過去の公開問題・サンプル問題）の転記
+IPA_PUBLISHED_PREFIXES = ('令和', '平成')
+IPA_SAMPLE_PREFIX = 'サンプル問題'
+
+# 計算問題の見分けに使う。選択肢から数字と記号を除いて残る文字（単位など）の上限と、
+# 最初の数字より前に置ける文字（「約」「毎秒」など）の上限
+CALCULATION_REMAINDER_MAX = 6
+CALCULATION_PREFIX_MAX = 2
+_DIGIT = re.compile(r'[0-9０-９]')
+_NUMERIC_PART = re.compile(r'[0-9０-９\s.,，、\-−+×÷/^()（）%％:：=＝<>≦≧~～]')
+
+
 class QuestionQuerySet(models.QuerySet):
     def active(self):
         return self.filter(is_active=True)
+
+    def from_ipa(self):
+        """IPA が公開した問題の転記だけ。自作と自動生成は含めない。"""
+        published = Q()
+        for prefix in IPA_PUBLISHED_PREFIXES + (IPA_SAMPLE_PREFIX,):
+            published |= Q(source__startswith=prefix)
+        return self.filter(published, template__isnull=True)
 
     def for_subject(self, subject):
         if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
@@ -214,11 +235,39 @@ class Question(models.Model):
         if self.is_generated:
             return '自動生成'
         source = self.source.strip()
-        if source.startswith(('令和', '平成')):
+        if source.startswith(IPA_PUBLISHED_PREFIXES):
             return 'IPA公開問題'
-        if source.startswith('サンプル問題'):
+        if source.startswith(IPA_SAMPLE_PREFIX):
             return 'IPAサンプル問題'
         return '自作' if source else ''
+
+    @property
+    def is_calculation(self):
+        """数値を求めて答える問題か。
+
+        計算問題の印はデータに無いので、形から見分ける。問題文に数字があり、
+        どの選択肢も数量の形をしているもの。「0.81」「約 2.3」「4G バイト」
+        「n(n−1)/2」は当たる。文で答える選択肢は当たらない。「RAID5」「レベル3」
+        「第2正規形」のように名前に番号が付いただけのものも、数字の前の語が長いか
+        「第」で始まるので当たらない。テンプレートから作った問題は、すべて計算問題である。
+        科目Bでは、プログラムを追って数値や配列を答える問題がこれに当たる。
+        """
+        if self.is_generated:
+            return True
+        if not self.choices or not _DIGIT.search(self.stem):
+            return False
+        return all(self._is_quantity(text) for text in self.choices)
+
+    @staticmethod
+    def _is_quantity(text):
+        """選択肢1つが、数値に単位が付いた程度の形か。"""
+        first = _DIGIT.search(text)
+        if not first:
+            return False
+        prefix = _NUMERIC_PART.sub('', text[:first.start()])
+        if len(prefix) > CALCULATION_PREFIX_MAX or prefix.startswith('第'):
+            return False
+        return len(_NUMERIC_PART.sub('', text)) <= CALCULATION_REMAINDER_MAX
 
     @property
     def source_text(self):
@@ -367,8 +416,12 @@ class StudySession(models.Model):
     MODE_WEAK = 'weak'
     MODE_REVIEW = 'review'
     MODE_CATEGORY = 'category'
+    MODE_IPA = 'ipa'
+    MODE_CALC = 'calc'
     MODE_CHOICES = [
         (MODE_FOCUS, 'おまかせ（苦手を重点出題）'),
+        (MODE_IPA, 'IPA公開問題（過去問・サンプル）からおまかせ'),
+        (MODE_CALC, '計算問題をおまかせ'),
         (MODE_RANDOM, '本番の出題比率どおり'),
         (MODE_WEAK, '苦手分野だけ'),
         (MODE_REVIEW, '間違えた問題の復習'),

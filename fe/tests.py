@@ -204,6 +204,201 @@ class SelectionTests(TestCase):
         for index in range(count):
             answer(self.learner, questions[index % len(questions)], correct)
 
+    def _session(self, mode, subject=Question.SUBJECT_A):
+        session, _ = StudySession.objects.get_or_create(learner=self.learner)
+        session.mode, session.subject, session.category = mode, subject, None
+        session.save()
+        return session
+
+    def test_ipa_mode_serves_only_questions_published_by_ipa(self):
+        """IPA公開問題のモードでは、自作も自動生成も出さない。"""
+        category = Category.objects.get(code=4)
+        sources = ['令和7年度 科目A 問2', 'サンプル問題 科目A 問8']
+        for i, source in enumerate(sources):
+            Question.objects.create(
+                subject=Question.SUBJECT_A, category=category, topic=category.name,
+                stem='IPA の問題{}'.format(i), choices=['あ', 'い', 'う', 'え'],
+                answer_index=0, source=source,
+            )
+        session = self._session(StudySession.MODE_IPA)
+
+        seen, exclude = set(), []
+        for _ in range(12):
+            question, _reason = pick_question(self.learner, session, exclude_ids=exclude)
+            self.assertIsNotNone(question)
+            self.assertIn(question.source, sources)
+            self.assertFalse(question.is_generated)
+            seen.add(question.source)
+            exclude = [question.id]
+        self.assertEqual(seen, set(sources))
+
+    def test_restricting_mode_stays_inside_the_chosen_category(self):
+        """IPA のモードで分野を選んだら、その分野の IPA の問題だけを出す。"""
+        inside = Category.objects.get(code=4)
+        outside = Category.objects.get(code=5)
+        wanted = Question.objects.create(
+            subject=Question.SUBJECT_A, category=inside, topic=inside.name,
+            stem='分野の中の IPA の問題', choices=['あ', 'い', 'う', 'え'],
+            answer_index=0, source='令和7年度 科目A 問2',
+        )
+        Question.objects.create(
+            subject=Question.SUBJECT_A, category=outside, topic=outside.name,
+            stem='別の分野の IPA の問題', choices=['あ', 'い', 'う', 'え'],
+            answer_index=0, source='令和7年度 科目A 問3',
+        )
+        session = self._session(StudySession.MODE_IPA)
+        session.category = inside
+        session.save()
+
+        for _ in range(6):
+            question, _reason = pick_question(self.learner, session, exclude_ids=[wanted.id])
+            self.assertEqual(question, wanted)
+
+        # その分野に IPA の問題が無ければ、ほかへ広げずに「出せる問題なし」にする
+        session.category = Category.objects.get(code=6)
+        session.save()
+        self.assertEqual(pick_question(self.learner, session), (None, None))
+
+    def test_every_mode_stays_inside_the_chosen_category(self):
+        """どのモードでも、分野を選んだらその分野の問題だけを出す。"""
+        inside = Category.objects.get(code=4)
+        for mode in (StudySession.MODE_FOCUS, StudySession.MODE_RANDOM,
+                     StudySession.MODE_CATEGORY):
+            with self.subTest(mode=mode):
+                session = self._session(mode)
+                session.category = inside
+                session.save()
+                exclude = []
+                for _ in range(8):
+                    question, _reason = pick_question(self.learner, session, exclude_ids=exclude)
+                    self.assertIsNotNone(question)
+                    self.assertEqual(question.category, inside)
+                    exclude = [question.id]
+
+    def test_weak_mode_without_weak_categories_serves_nothing(self):
+        """苦手と判定した分野がまだ無ければ、おまかせに切り替えずに何も出さない。"""
+        session = self._session(StudySession.MODE_WEAK)
+        self.assertEqual(pick_question(self.learner, session), (None, None))
+
+        # 苦手と判定された分野ができたら、その分野だけから出す。未着手の分野は出さない
+        weak = Category.objects.get(code=4)
+        self._answer(weak, False, WEAK_MIN_ATTEMPTS)
+        for _ in range(8):
+            question, _reason = pick_question(self.learner, session)
+            self.assertEqual(question.category, weak)
+
+    def test_review_without_misses_serves_nothing(self):
+        """まちがえた問題が無ければ、おまかせに切り替えずに何も出さない。"""
+        session = self._session(StudySession.MODE_REVIEW)
+        self.assertEqual(pick_question(self.learner, session), (None, None))
+
+        answer(self.learner, Question.objects.filter(category__code=4).first(), True)
+        self.assertEqual(pick_question(self.learner, session), (None, None))
+
+        missed = Question.objects.filter(category__code=5).first()
+        answer(self.learner, missed, False)
+        question, _reason = pick_question(self.learner, session, exclude_ids=[missed.id])
+        self.assertEqual(question, missed)
+
+    def test_weak_mode_serves_nothing_from_a_category_not_judged_weak(self):
+        """苦手分野だけで分野を選んでも、苦手と判定していない分野からは出さない。"""
+        inside = Category.objects.get(code=4)
+        session = self._session(StudySession.MODE_WEAK)
+        session.category = inside
+        session.save()
+        self.assertEqual(pick_question(self.learner, session), (None, None))
+
+        # 苦手と判定されたら、その分野から出す
+        self._answer(inside, False, WEAK_MIN_ATTEMPTS)
+        for _ in range(6):
+            question, _reason = pick_question(self.learner, session)
+            self.assertEqual(question.category, inside)
+
+    def test_review_serves_nothing_from_a_category_without_misses(self):
+        """復習で分野を選び、その分野にまちがえた問題が無ければ、何も出さない。"""
+        inside = Category.objects.get(code=4)
+        answer(self.learner, Question.objects.filter(category=inside).first(), True)
+        answer(self.learner, Question.objects.filter(category__code=5).first(), False)
+        session = self._session(StudySession.MODE_REVIEW)
+        session.category = inside
+        session.save()
+        self.assertEqual(pick_question(self.learner, session), (None, None))
+
+    def test_review_in_a_category_serves_only_misses_from_it(self):
+        """復習で分野を選んだら、その分野でまちがえた問題だけを復習する。"""
+        inside = Category.objects.get(code=4)
+        outside = Category.objects.get(code=5)
+        missed_in = Question.objects.filter(category=inside).first()
+        missed_out = Question.objects.filter(category=outside).first()
+        answer(self.learner, missed_in, False)
+        answer(self.learner, missed_out, False)
+
+        session = self._session(StudySession.MODE_REVIEW)
+        session.category = inside
+        session.save()
+        for _ in range(6):
+            # 直前に出した問題として除外されていても、ほかへ広げずに同じ問題を出す
+            question, reason = pick_question(self.learner, session, exclude_ids=[missed_in.id])
+            self.assertEqual(question, missed_in)
+            self.assertEqual(reason, '前回まちがえた問題')
+
+    def test_ipa_mode_has_nothing_to_serve_without_ipa_questions(self):
+        session = self._session(StudySession.MODE_IPA)
+        self.assertEqual(pick_question(self.learner, session), (None, None))
+
+    def test_calculation_is_told_from_the_shape_of_the_choices(self):
+        """数量の形をした選択肢だけを計算問題とみなす。番号の付いた名前は当てない。"""
+        stem = '稼働率 0.9 の装置 2 台を並列に接続したときの稼働率はどれか。'
+        cases = [
+            (['0.81', '0.90', '0.95', '0.99'], True),
+            (['約 0.8', '約 2.3', '約 6.3', '約 18.9'], True),
+            (['毎秒 25M バイト', '毎秒 100M バイト', '毎秒 400M バイト', '毎秒 4G バイト'], True),
+            (['n(n−1)', 'n−1', 'n(n−1)/2', 'n の 2 乗'], True),
+            (['RAID0', 'RAID1', 'RAID5', 'RAID6'], False),
+            (['レベル1', 'レベル2', 'レベル3', 'レベル4'], False),
+            (['第1正規形', '第2正規形', '第3正規形', '第4正規形'], False),
+            (['2 台の装置に同じ内容を書き込む', '0.81', '0.90', '0.99'], False),
+        ]
+        for choices, expected in cases:
+            self.assertEqual(
+                Question(stem=stem, choices=choices).is_calculation, expected, choices
+            )
+        # 問題文に数字が無ければ、選択肢が数字でも計算問題とはみなさない
+        self.assertFalse(
+            Question(stem='適切なものはどれか。', choices=['1', '2', '3', '4']).is_calculation
+        )
+
+    def test_calc_mode_serves_only_calculation_questions(self):
+        """計算問題のモードでは、数値で答える問題と自動生成だけを出す。"""
+        category = Category.objects.get(code=4)
+        Question.objects.create(
+            subject=Question.SUBJECT_A, category=category, topic=category.name,
+            stem='稼働率 0.9 の装置 2 台を直列に接続したときの稼働率はどれか。',
+            choices=['0.81', '0.90', '0.95', '0.99'], answer_index=0, source='テスト用',
+        )
+        session = self._session(StudySession.MODE_CALC)
+
+        exclude = []
+        for _ in range(12):
+            question, _reason = pick_question(self.learner, session, exclude_ids=exclude)
+            self.assertIsNotNone(question)
+            self.assertEqual(question.subject, Question.SUBJECT_A)
+            self.assertTrue(question.is_calculation, question.stem)
+            exclude = [question.id]
+
+    def test_calc_mode_follows_the_chosen_subject(self):
+        """科目Bを選んでいれば、科目Bの数値で答える問題だけを出す。自動生成は混ぜない。"""
+        category = Category.objects.filter(subject=Question.SUBJECT_B).first()
+        made = Question.objects.create(
+            subject=Question.SUBJECT_B, category=category, topic=category.name,
+            stem='関数 f(3) を呼び出したときの戻り値はどれか。',
+            choices=['6', '7', '8', '9', '10', '11'], answer_index=0, source='テスト用',
+        )
+        session = self._session(StudySession.MODE_CALC, subject=Question.SUBJECT_B)
+        for _ in range(6):
+            question, _reason = pick_question(self.learner, session)
+            self.assertEqual(question, made)
+
     def test_a_missed_question_is_not_repeated_immediately(self):
         """まちがえた直後に同じ問題を出さない。答えを覚えているだけになる。"""
         category = Category.objects.get(code=9)
@@ -458,29 +653,21 @@ class ViewTests(TestCase):
                         Category.objects.get(code=code).subject, subject,
                     )
 
-    def test_the_category_field_is_locked_unless_the_mode_uses_it(self):
-        """分野が効くのは「分野を指定」のときだけ。ほかのモードでは操作させない。
-
-        選べるのに保存時に捨てられる状態だと、選んだつもりが効いていない。
-        """
+    def test_the_category_field_is_usable_in_every_mode(self):
+        """分野はどの出題モードでも選べる。伏せるモードは無い。"""
         session, _ = StudySession.objects.get_or_create(learner=self.learner)
-        for mode, locked in (
-            (StudySession.MODE_CATEGORY, False),
-            (StudySession.MODE_FOCUS, True),
-            (StudySession.MODE_REVIEW, True),
-        ):
+        for mode, _label in StudySession.MODE_CHOICES:
             with self.subTest(mode=mode):
                 session.mode = mode
                 session.save()
                 html = self.client.get(dashboard(self.learner)).content.decode('utf-8')
                 block = re.search(r'<select[^>]*id="category".*?>', html, re.S).group(0)
-                self.assertEqual('disabled' in block, locked)
+                self.assertNotIn('disabled', block)
 
-    def test_the_category_shows_only_when_the_mode_uses_it(self):
-        """分野が効くのは「分野を指定」のときだけ。
+    def test_the_saved_category_shows_in_every_mode(self):
+        """保存してある分野は、どのモードでも選ばれて見える。
 
-        ほかのモードでも保存値を映していると、効いていない分野が選ばれた
-        ままに見える。設定を送らない限り変わらないので、固定されたように映る。
+        どのモードでも分野が効くので、効いている分野をそのまま映す。
         """
         session, _ = StudySession.objects.get_or_create(learner=self.learner)
         session.subject = Question.SUBJECT_A
@@ -492,13 +679,15 @@ class ViewTests(TestCase):
             found = re.findall(r'<option value="(\d*)"[^>]*selected', block)
             return found[0] if found else ''
 
-        session.mode = StudySession.MODE_CATEGORY
-        session.save()
-        self.assertEqual(selected(), '2', '分野指定のときは選ばれて見える')
+        for mode, _label in StudySession.MODE_CHOICES:
+            with self.subTest(mode=mode):
+                session.mode = mode
+                session.save()
+                self.assertEqual(selected(), '2')
 
-        session.mode = StudySession.MODE_FOCUS
+        session.category = None
         session.save()
-        self.assertEqual(selected(), '', 'ほかのモードでは指定なしに見える')
+        self.assertEqual(selected(), '')
 
     def test_saving_from_the_dashboard_comes_back_to_it(self):
         """ダッシュボードで設定を変えたら、その場に戻す。
@@ -618,6 +807,126 @@ class ViewTests(TestCase):
                 self.assertEqual(response.status_code, 302)
                 self.assertIn(reverse('account_login'), response['Location'])
         self.assertEqual(self.client.post(reverse('fe:manage_upload'), {}).status_code, 302)
+
+
+class NewModeSettingsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+        cls.learner = make_learner('modes')
+        build_questions()
+
+    def setUp(self):
+        enter(self.client, self.learner)
+
+    def test_calc_mode_keeps_the_chosen_subject(self):
+        """計算問題のモードでも、科目はAとBのどちらも選べる。"""
+        for subject in ('B', 'A'):
+            self.client.post(reverse('fe:quiz_settings'), {
+                'mode': StudySession.MODE_CALC, 'subject': subject, 'next': 'index',
+            })
+            session = StudySession.objects.get(learner=self.learner)
+            self.assertEqual(session.mode, StudySession.MODE_CALC)
+            self.assertEqual(session.subject, subject)
+
+    def test_ipa_mode_keeps_the_chosen_subject(self):
+        self.client.post(reverse('fe:quiz_settings'), {
+            'mode': StudySession.MODE_IPA, 'subject': 'B', 'next': 'index',
+        })
+        session = StudySession.objects.get(learner=self.learner)
+        self.assertEqual(session.mode, StudySession.MODE_IPA)
+        self.assertEqual(session.subject, Question.SUBJECT_B)
+
+    def test_restricting_modes_keep_the_chosen_category(self):
+        """対象を絞る2つのモードでは、分野も選べる。選ばなくてもよい。"""
+        for mode in (StudySession.MODE_IPA, StudySession.MODE_CALC):
+            self.client.post(reverse('fe:quiz_settings'), {
+                'mode': mode, 'subject': 'A', 'category': '4', 'next': 'index',
+            })
+            session = StudySession.objects.get(learner=self.learner)
+            self.assertEqual((session.mode, session.category.code), (mode, 4))
+
+            self.client.post(reverse('fe:quiz_settings'), {
+                'mode': mode, 'subject': 'A', 'category': '', 'next': 'index',
+            })
+            session = StudySession.objects.get(learner=self.learner)
+            self.assertEqual((session.mode, session.category), (mode, None))
+
+    def test_every_mode_keeps_the_chosen_category(self):
+        """分野はどのモードでも保存される。選ばなければ保存されない。"""
+        for mode, _label in StudySession.MODE_CHOICES:
+            with self.subTest(mode=mode):
+                self.client.post(reverse('fe:quiz_settings'), {
+                    'mode': mode, 'subject': 'A', 'category': '4', 'next': 'index',
+                })
+                session = StudySession.objects.get(learner=self.learner)
+                self.assertEqual((session.mode, session.category.code), (mode, 4))
+
+        self.client.post(reverse('fe:quiz_settings'), {
+            'mode': StudySession.MODE_FOCUS, 'subject': 'A', 'category': '', 'next': 'index',
+        })
+        self.assertIsNone(StudySession.objects.get(learner=self.learner).category)
+
+    def test_category_counts_follow_the_mode(self):
+        """分野の件数は、そのモードで出せる問題の数にする。"""
+        category = Category.objects.get(code=4)
+        Question.objects.create(
+            subject=Question.SUBJECT_A, category=category, topic=category.name,
+            stem='稼働率 0.9 の装置 2 台を直列に接続したときの稼働率はどれか。',
+            choices=['0.81', '0.90', '0.95', '0.99'], answer_index=0,
+            source='令和7年度 科目A 問9',
+        )
+        option = next(
+            o for o in category_options(self.learner, StudySession.MODE_IPA) if o['code'] == 4
+        )
+        self.assertEqual((option['count'], option['selectable']), (1, True))
+        self.assertEqual(option['by_mode'][StudySession.MODE_CALC][0], 1)
+        self.assertGreater(option['question_count'], 1)
+
+        self.client.post(reverse('fe:quiz_settings'), {
+            'mode': StudySession.MODE_IPA, 'subject': 'A', 'category': '4', 'next': 'index',
+        })
+        response = self.client.get(dashboard(self.learner))
+        self.assertContains(response, '{}（1問）'.format(category.label))
+
+    def test_categories_with_nothing_to_serve_cannot_be_chosen(self):
+        """そのモードで出せる問題が無い分野は、分野の欄で選べなくする。"""
+        ipa_category = Category.objects.get(code=4)
+        Question.objects.create(
+            subject=Question.SUBJECT_A, category=ipa_category, topic=ipa_category.name,
+            stem='IPA の問題', choices=['あ', 'い', 'う', 'え'], answer_index=0,
+            source='令和7年度 科目A 問9',
+        )
+        missed = Question.objects.filter(category__code=5).first()
+        answer(self.learner, missed, False)
+        weak = Category.objects.get(code=6)
+        for question in list(Question.objects.filter(category=weak)[:WEAK_MIN_ATTEMPTS]):
+            answer(self.learner, question, False)
+
+        def selectable(mode):
+            return {
+                o['code'] for o in category_options(self.learner, mode)
+                if o['selectable'] and o['subject'] == Question.SUBJECT_A
+            }
+
+        self.assertEqual(selectable(StudySession.MODE_IPA), {4})
+        self.assertEqual(selectable(StudySession.MODE_REVIEW), {5, 6})
+        self.assertEqual(selectable(StudySession.MODE_WEAK), {6})
+        self.assertEqual(len(selectable(StudySession.MODE_FOCUS)), 23)
+
+        # 画面でも、選べない分野には disabled が付く
+        session, _ = StudySession.objects.get_or_create(learner=self.learner)
+        session.mode = StudySession.MODE_IPA
+        session.save()
+        html_text = self.client.get(dashboard(self.learner)).content.decode('utf-8')
+        block = re.search(r'id="category".*?</select>', html_text, re.S).group(0)
+        open_codes = re.findall(r'<option value="(\d+)"(?![^>]*disabled)', block)
+        self.assertEqual(open_codes, ['4'])
+
+    def test_both_modes_are_offered_on_the_dashboard(self):
+        response = self.client.get(dashboard(self.learner))
+        self.assertContains(response, 'IPA公開問題（過去問・サンプル）からおまかせ')
+        self.assertContains(response, '計算問題をおまかせ')
 
 
 class LearnerIdTests(TestCase):
