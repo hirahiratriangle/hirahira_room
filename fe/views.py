@@ -610,18 +610,24 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
 
     def get(self, request, *args, **kwargs):
         session = _get_study_session(self.learner)
+        finished = LearningRound.objects.filter(
+            learner=self.learner, phase=LearningRound.PHASE_DONE
+        )
+        # 直前に学習した中分類を開いて見せる。学習した結果（学習回数）は小分類の行に
+        # 出るので、閉じたままだと、学習したことが一覧に反映されていないように見える。
+        # ダッシュボードで指定している分野は、おまかせの範囲になるだけで、開かない。
+        last = (
+            finished.filter(subject=session.subject, note__isnull=False)
+            .select_related('note__category').first()
+        )
         return render(request, self.template_name, {
             'minute_choices': LearningRound.MINUTE_CHOICES,
             'default_minutes': LearningRound.DEFAULT_MINUTES,
             'count': LearningRound.QUESTION_COUNT,
             'study_session': session,
             'groups': note_menu(self.learner, session.subject),
-            # ダッシュボードで指定している分野。おまかせの範囲になり、その中分類を
-            # 開いて見せる。解説を選ぶのは利用者。
-            'focus': focus_category(session),
-            'recent': LearningRound.objects.filter(
-                learner=self.learner, phase=LearningRound.PHASE_DONE
-            )[:5],
+            'opened': last.note.category if last else None,
+            'recent': finished[:5],
         })
 
     def post(self, request, *args, **kwargs):
