@@ -1,3 +1,10 @@
+# 通常の更新（アプリはもうある。コードを直してコミットしたあと）
+./deploy.sh
+# コミット済みのファイルだけを zip にして送る（git archive → az webapp deploy --type zip）。
+# リポジトリのフォルダで az webapp up はしない。フォルダをまるごと zip にするので、
+# db.sqlite3・.env.local・.git まで本番に上がる（.gitignore は読まない）。
+# マイグレーションが要る変更なら、このあと下の「マイグレーション」を行う。
+
 # 前準備
 az webapp stop --name hirahira-room --resource-group hirahira
 
@@ -5,6 +12,7 @@ az webapp stop --name hirahira-room --resource-group hirahira
 ＃az group delete --name hirahira --yes　（全リソース削除のため実行しないこと）
 az webapp delete --name hirahira-room --resource-group hirahira
 az webapp up --name hirahira-room --runtime "PYTHON|3.11" --resource-group hirahira --location japanwest
+# ↑ アプリを作り直すときだけ。手元のフォルダがまるごと上がるので、作ったらすぐ ./deploy.sh で入れ直す。
 
 # ポータル画面でVNETを追加する。
 
