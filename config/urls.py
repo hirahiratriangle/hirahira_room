@@ -28,6 +28,8 @@ urlpatterns = [
     path('fe/', include('fe.urls', namespace='fe')),
     # 応用情報技術者試験（AP）対策アプリ
     path('ap/', include('ap.urls', namespace='ap')),
+    # 銀行業務検定 法務3級 対策アプリ
+    path('bk_houmu3/', include('bk_houmu3.urls', namespace='bk_houmu3')),
 ]
 
 # メディアファイルの配信設定

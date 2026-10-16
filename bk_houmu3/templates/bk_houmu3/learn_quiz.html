@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}学習モードの解答 - 法務3級対策 | HirahiraRoom{% endblock %}
+
+{% block head %}
+<style>
+    .fe-stem { white-space: pre-wrap; line-height: 1.9; }
+    .fe-choice { cursor: pointer; }
+    .fe-choice:hover { background-color: #f4f7fb; }
+    .fe-choice-label { min-width: 1.8rem; font-weight: 700; color: #2c5aa0; }
+</style>
+{% endblock %}
+
+{% block header %}
+{% include 'bk_houmu3/_header.html' with page_title='学習モードの解答' current='learn' sub=round.title %}
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 900px;">
+
+    <div class="d-flex justify-content-between align-items-baseline mb-1">
+        <span class="fw-bold" style="color:#2c5aa0;">{{ round.position|add:1 }} / {{ round.total }}問目</span>
+        <span class="small text-muted">正解 {{ round.correct }}問</span>
+    </div>
+    <div class="progress mb-4" style="height: 6px;">
+        <div class="progress-bar" style="width: {% widthratio round.position round.total 100 %}%; background-color:#2c5aa0;"></div>
+    </div>
+
+    <div class="mb-3">
+        <span class="badge bg-secondary">{{ question.category.code }}. {{ question.category.name }}</span>
+        {% if question.topic %}<span class="text-muted small ms-2">{{ question.topic }}</span>{% endif %}
+    </div>
+
+    <div class="fe-stem mb-4">{{ question.stem }}</div>
+
+    {% if answered %}
+    <div class="alert {% if is_correct %}alert-success{% else %}alert-danger{% endif %}">
+        <strong>{% if is_correct %}正解{% else %}不正解{% endif %}</strong>
+        <span class="ms-2 small">
+            あなたの解答 {{ selected_label }}　／　正解 {{ question.answer_label }}
+        </span>
+    </div>
+
+    <ul class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
+        {% for index, label, text in question.labeled_choices %}
+        <li class="list-group-item d-flex
+            {% if index == question.answer_index %}list-group-item-success{% elif index == selected %}list-group-item-danger{% endif %}">
+            <span class="fe-choice-label">{{ label }}</span>
+            <span>{{ text }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% if question.source %}
+    <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_text }}</p>
+    {% endif %}
+
+    {% if question.explanation %}
+    <div class="border rounded p-3 mb-4" style="background-color:#eef3fa;">
+        <div class="small fw-bold mb-2" style="color:#2c5aa0;">解説</div>
+        <div class="fe-stem small mb-0">{{ question.explanation }}</div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'bk_houmu3:learn_next' round.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">
+            {% if round.position|add:1 >= round.total %}結果を見る{% else %}次の問題{% endif %}
+        </button>
+    </form>
+
+    {% else %}
+    <form method="post">
+        {% csrf_token %}
+        <ul class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
+            {% for index, label, text in question.labeled_choices %}
+            <li class="list-group-item fe-choice">
+                <label class="d-flex w-100 mb-0" style="cursor: pointer;">
+                    <input class="form-check-input me-3" type="radio" name="choice" value="{{ index }}">
+                    <span class="fe-choice-label">{{ label }}</span>
+                    <span>{{ text }}</span>
+                </label>
+            </li>
+            {% endfor %}
+        </ul>
+        {% if question.source %}
+        <p class="small text-muted mb-4">{% if question.origin_label %}<span class="badge bg-light text-dark border me-1">{{ question.origin_label }}</span>{% endif %}{{ question.source_text }}</p>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">解答する</button>
+    </form>
+    {% endif %}
+
+    {% comment %}
+    途中でやめて学習モードトップへ。ヘッダーの「学習モード」はいま居る場所として
+    灰色になるので、ここに置かないと戻る道が無い。
+    {% endcomment %}
+    <div class="border-top mt-5 pt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span class="small text-muted">このラウンドは破棄されます</span>
+        <form method="post" action="{% url 'bk_houmu3:learn_abandon' round.pk %}" class="mb-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                中断して学習モードトップへ
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

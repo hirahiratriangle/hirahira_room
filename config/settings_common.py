@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'countdown',
     'fe',
     'ap',
+    'bk_houmu3',
 ]
 
 MIDDLEWARE = [
@@ -178,10 +179,13 @@ FE_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 # 応用情報（AP）対策アプリの上限。ap.forms がここを見る。考え方は FE と同じ。
 AP_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
+# 銀行業務検定 法務3級 対策アプリの上限。bk_houmu3.forms がここを見る。考え方は FE と同じ。
+BK_HOUMU3_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+
 # ファイル本体は multipart で送られ、この値の対象外になる（Django の仕様）。
 # ここで効くのは、本文に JSON をそのまま載せて POST したときだけ。
 # 画面からのアップロードには関係しないが、上の上限と食い違わないよう合わせておく。
-DATA_UPLOAD_MAX_MEMORY_SIZE = max(FE_MAX_UPLOAD_BYTES, AP_MAX_UPLOAD_BYTES) + 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = max(FE_MAX_UPLOAD_BYTES, AP_MAX_UPLOAD_BYTES, BK_HOUMU3_MAX_UPLOAD_BYTES) + 1024 * 1024
 
 # FILE_UPLOAD_MAX_MEMORY_SIZE は拒否の上限ではなく、メモリに載せるか
 # 一時ファイルに流すかの分かれ目。既定（2.5MB）のままにしておく。

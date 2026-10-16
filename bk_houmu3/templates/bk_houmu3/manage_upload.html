@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+
+{% block title %}JSONを取り込む - 法務3級対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+{% include 'bk_houmu3/_header.html' with page_title='JSONを取り込む' current='manage' %}
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 960px;">
+
+    <p class="text-muted">
+        取り込んだ問題は<strong>全 ID で共有する問題集</strong>になります。
+        取り込みは<strong>ファイルの内容に合わせた同期</strong>です。
+        追加・更新・削除を突き合わせて行うので、<strong>変わっていない問題はそのまま残り、
+        その解答履歴も切れません</strong>。問題を1問足すだけで全問が未出題に戻る、
+        といったことは起きません。
+        問題と技術解説（学習モードで読む教材）は<strong>別のファイルで渡せます</strong>。
+        ファイルに入っていないほうには触れないので、問題だけを取り込んでも解説は消えません。
+    </p>
+
+    <div class="border rounded p-3 mb-4" style="background-color:#eef3fa;">
+        <div class="fw-bold mb-1" style="color:#2c5aa0;">問題を作るのに必要な資料</div>
+        <p class="small text-muted mb-2">
+            このアプリは{{ exam.name }}の資料も問題も同梱していません。{{ exam.note }}
+            資料を見ずに作らせると、範囲外の問題や誤った正解が混ざります。
+        </p>
+        <ul class="small mb-2">
+            {% for m in exam.materials %}
+            <li>
+                <strong>{{ m.name }}</strong>
+                {% if m.required %}<span class="badge bg-secondary ms-1">必須</span>{% endif %}
+                <span class="text-muted">— {{ m.purpose }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="{{ exam.url }}" target="_blank" rel="noopener" class="small">
+            {{ exam.authority }}の配布ページを開く <i class="fas fa-external-link-alt"></i>
+        </a>
+    </div>
+
+    <div class="border rounded p-3 mb-4" style="background-color:#fdf5ee; border-color:#e5a26c !important;">
+        <div class="fw-bold mb-1" style="color:#8f5a30;">
+            <i class="fas fa-triangle-exclamation me-1"></i>このアプリで出せない問題
+        </div>
+        <p class="small mb-2" style="color:#8f5a30;">
+            問題文も解説も<strong>文字だけ</strong>を表示します。画像を持つ仕組みがありません。
+            下のプロンプトにも同じ注意を書いてありますが、自分で問題を直すときもここに気をつけてください。
+        </p>
+        <ul class="small mb-0" style="color:#8f5a30;">
+            <li>
+                <strong>図が本質の問題は作れません。</strong>
+                流れ図、アローダイアグラム、回路図とタイミングチャート、木構造の図、
+                UML の多重度を示す図、盤面、ネットワーク構成図、散布図。
+                本番にはこれらが毎回出ますが、文字に落とすと設問として成立しないので外します。
+                <span class="text-muted">表は、改行と全角スペースで桁をそろえれば入ります。</span>
+            </li>
+            <li>
+                <strong>文字の装飾は出ません。</strong>
+                Markdown（#、-、**）や HTML タグは記号がそのまま画面に出ます。
+                上付き・下付き文字も使えないので「2のn乗」「xの2乗」と書きます。
+                保たれるのは改行と全角スペースの字下げだけです。
+            </li>
+            <li>
+                <strong>選択肢を選ぶ形だけです。</strong>
+                記述、入力、並べ替えには対応しません。正解は1つだけで、部分点もありません。
+                空欄が複数ある問題は「a は○、b は△」のように組合せを1つの選択肢にまとめます。
+            </li>
+        </ul>
+    </div>
+
+    <div class="border rounded p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div>
+                <span class="fw-bold" style="color:#2c5aa0;">問題を作ってもらうプロンプト</span>
+                <span class="small text-muted ms-2">
+                    自分の Claude Code に貼り付けると、この画面に取り込める形式で返ってきます
+                </span>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="copyPrompt">
+                <i class="far fa-copy me-1"></i>コピー
+            </button>
+        </div>
+        <details>
+            <summary class="small text-muted" style="cursor:pointer;">プロンプトを表示する</summary>
+<pre id="promptText" class="small mt-2 mb-0 p-3 rounded" style="white-space: pre-wrap; background-color:#f6f8fb; max-height: 22rem; overflow-y: auto;">{{ prompt }}</pre>
+        </details>
+        <div class="form-text mt-2">
+            最後の【依頼】に、作ってほしい分野と問数を書き足してから渡してください。
+            問題は JSON ファイルに書き出させ、そのファイルを下で選びます。
+        </div>
+    </div>
+
+    {% comment %}
+    削除が既存の3割を超えたときの確認。ファイルを取り違えて大量に消すのを防ぐ。
+    内容は payload で持ち回すので、ファイルを選び直さずに実行できる。
+    {% endcomment %}
+    {% if confirm %}
+    <div class="alert alert-danger">
+        <div class="fw-bold mb-2">
+            <i class="fas fa-triangle-exclamation me-1"></i>削除が多いので、一度止めました
+        </div>
+        <p class="small mb-2">
+            このファイルを取り込むと、次のようになります。
+            <strong>削除がいまの件数の3割を超えています。</strong>
+            取り込むファイルを取り違えていないか確かめてください。
+        </p>
+        <ul class="small mb-3">
+            {% for line in confirm %}<li>{{ line }}</li>{% endfor %}
+        </ul>
+        <form method="post" class="d-flex gap-2">
+            {% csrf_token %}
+            <input type="hidden" name="confirm" value="1">
+            <input type="hidden" name="payload" value="{{ payload }}">
+            <button type="submit" class="btn btn-danger btn-sm">このまま取り込む</button>
+            <a href="{% url 'bk_houmu3:manage_upload' %}" class="btn btn-outline-secondary btn-sm">やめる</a>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+        {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {% comment %}
+        問題と解説は更新の頻度が違うので、別のファイル・別の欄で渡す。
+        片方だけ選んでも、両方選んでも取り込める。選ばなかったほうには触らない。
+        {% endcomment %}
+        <div class="row g-3 mb-4">
+            {% for field in form %}
+            <div class="col-12 col-md-6">
+                <label for="{{ field.id_for_label }}" class="form-label small fw-bold">
+                    {{ field.label }}
+                    <span class="badge bg-light text-muted fw-normal ms-1">任意</span>
+                </label>
+                {{ field }}
+                <div class="form-text">{{ field.help_text }}</div>
+                {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="form-text mb-4">
+            どちらか一方だけでも、両方同時でも取り込めます。
+            選ばなかったほうは、いまの内容がそのまま残ります。
+        </div>
+
+        <div class="alert alert-warning">
+            <strong>ファイルに無い問題は削除されます。</strong>
+            削除された問題に紐づく解答履歴も一緒に消えます。
+            取り込んだあとに<strong>追加・更新・変更なし・削除の件数</strong>を出すので、
+            削除が多すぎないかを確かめてください。ファイルを取り違えたときの手がかりになります。
+            なお<strong>分野ごとの理解度は問題とは別に積み上げている</strong>ので、
+            正答率と苦手分野の判定は取り込み後もそのまま続きます。
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'bk_houmu3:manage_list' %}" class="btn btn-outline-secondary btn-sm">キャンセル</a>
+            <button type="submit" class="btn btn-primary">取り込む</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// プロンプトをクリップボードへ。各自の Claude Code に貼って使う。
+(function () {
+    var button = document.getElementById('copyPrompt');
+    var source = document.getElementById('promptText');
+    if (!button || !source) { return; }
+    button.addEventListener('click', function () {
+        var text = source.textContent;
+        var done = function () {
+            var original = button.innerHTML;
+            button.innerHTML = 'コピーしました';
+            setTimeout(function () { button.innerHTML = original; }, 1600);
+        };
+        // 選択してコピーする方法。http のときや、クリップボードの許可が
+        // 下りなかったときはこちらに落とす。
+        var fallback = function () {
+            var area = document.createElement('textarea');
+            area.value = text;
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            try { document.execCommand('copy'); done(); } finally { document.body.removeChild(area); }
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done).catch(fallback);
+            return;
+        }
+        fallback();
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,618 @@
+"""銀行業務検定 法務3級対策アプリのモデル。
+
+分析の単位は試験要綱の出題範囲の分類。科目Aは中分類（1〜23）、科目Bは
+要綱が別に定める5項目（101〜105）で、両者は重ならない。苦手分野の把握・
+重点出題はすべてこの粒度で行う。分類は Category、出題は Question、解答履歴は
+Attempt が持つ。問題と技術解説は全 ID で共有し、成績は Learner（本アプリの
+中の ID）ごとに持つ。ID は hirahira_room のアカウントとは紐づけない。計算問題は QuestionTemplate から
+数値を振り直して Question を生成するため、固定問題とテンプレート問題を
+同じ導線で扱える。
+"""
+
+import re
+
+from django.core.validators import RegexValidator
+from django.db import models
+from django.db.models import Count, Q
+from django.utils import timezone
+
+# 科目。要綱が科目ごとに別の出題範囲を定めているので、分類も科目を持つ。
+SUBJECT_A = 'A'
+SUBJECT_B = 'B'
+SUBJECT_CHOICES = [(SUBJECT_A, '科目A'), (SUBJECT_B, '科目B')]
+
+
+class Learner(models.Model):
+    """成績を持つ単位。ID を登録した人と、登録せずに使う人の両方を表す。
+
+    ID を登録すると code が入り、成績が残る。ダッシュボードは /bk_houmu3/<ID>/ で開く。
+    hirahira_room のアカウントとは紐づけない。ID は本人が決め、入力した人を
+    本人として扱う（合言葉などの確認はしない）。大文字小文字は区別せず、
+    小文字にそろえて持つ。
+
+    code が空のものは「履歴を残さない」で使っている間の一時的な記録。
+    ブラウザのセッションだけが参照を持ち、URL からはたどれない。苦手重点の
+    出題と学習モードは成績の積み上げが要るので、使っている間は同じ仕組みで
+    記録し、使われなくなったら purge_temp_learners_bk_houmu3 で消す。
+
+    問題集は全 ID で共有で、取り込み（差し替え）ができるのは管理用の ID だけ。
+    管理用にするのは Django の管理画面から行う。
+    """
+
+    # 一時的な記録を消すまでの日数。触られなくなってからの日数で数える。
+    TEMP_RETENTION_DAYS = 30
+
+    code = models.CharField(
+        verbose_name='ID', max_length=30, unique=True, null=True, blank=True,
+        help_text='空のときは、履歴を残さずに使っている一時的な記録。',
+        validators=[RegexValidator(
+            r'^[a-z0-9_-]{3,30}$',
+            'ID は半角の英小文字・数字・「_」「-」で、3〜30文字にしてください。',
+        )],
+    )
+    is_admin = models.BooleanField(
+        verbose_name='管理用', default=False,
+        help_text='問題集の取り込み・書き出しと、問題の一覧ができる。',
+    )
+    created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+    # 一時的な記録をいつ消してよいかの判断に使う。画面を開くたびに更新する。
+    last_seen_at = models.DateTimeField(verbose_name='最終利用日時', default=timezone.now)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 学習者ID'
+        ordering = ['code']
+
+    def __str__(self):
+        return self.code or '（履歴を残さない利用）'
+
+    @property
+    def is_temporary(self):
+        """ID を登録していない、使っている間だけの記録か。"""
+        return not self.code
+
+    @property
+    def label(self):
+        """画面に出す呼び名。"""
+        return self.code or '履歴なし'
+
+
+class Category(models.Model):
+    """試験要綱が定める出題範囲の分類。
+
+    科目Aは中分類（1〜23）。科目Bは要綱が別に定める5項目（101〜105）で、
+    科目Aの中分類とは別の軸になっている。番号が重ならないようにしてあるので、
+    取り込みの JSON は番号だけで分類が一意に定まる。
+    """
+
+    SUBJECT_A = SUBJECT_A
+    SUBJECT_B = SUBJECT_B
+    SUBJECT_CHOICES = SUBJECT_CHOICES
+
+    # 分野は出題範囲の4つ（預金・融資・内国為替・銀行取引関連法）
+    FIELD_DEPOSIT = 'D'
+    FIELD_LOAN = 'L'
+    FIELD_EXCHANGE = 'K'
+    FIELD_LAW = 'H'
+    FIELD_CHOICES = [
+        (FIELD_DEPOSIT, '預金'),
+        (FIELD_LOAN, '融資'),
+        (FIELD_EXCHANGE, '内国為替'),
+        (FIELD_LAW, '銀行取引関連法'),
+    ]
+
+    code = models.PositiveSmallIntegerField(verbose_name='分類番号', unique=True)
+    name = models.CharField(verbose_name='分類', max_length=40)
+    subject = models.CharField(
+        verbose_name='科目', max_length=1, choices=SUBJECT_CHOICES, default=SUBJECT_A
+    )
+    field = models.CharField(verbose_name='分野', max_length=1, choices=FIELD_CHOICES)
+    major_code = models.PositiveSmallIntegerField(verbose_name='大分類番号')
+    major_name = models.CharField(verbose_name='大分類', max_length=40)
+    # 本番で何問出るかの想定値。50問のうちの件数。協会は内訳を公表していないため、
+    # 過去5回分（250問）を区分ごとに数えて割り当てている（data/categories.py）。
+    # 0 は出題範囲から外れた区分（おまかせ・本番比率では出さない）。
+    exam_weight = models.PositiveSmallIntegerField(verbose_name='想定出題数')
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 中分類'
+        ordering = ['code']
+
+    def __str__(self):
+        return '{}. {}'.format(self.code, self.name)
+
+    @property
+    def label(self):
+        return '{}. {}'.format(self.code, self.name)
+
+
+class QuestionTemplate(models.Model):
+    """数値を振り直して何問でも作れる計算問題のひな形。
+
+    実体の生成は bk_houmu3.generators が担当し、生成結果は Question として
+    永続化する（同じパラメータなら同じ Question を使い回す）。
+    """
+
+    key = models.CharField(verbose_name='テンプレートキー', max_length=50, unique=True)
+    title = models.CharField(verbose_name='題材', max_length=100)
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='templates'
+    )
+    topic = models.CharField(verbose_name='小分類', max_length=60, blank=True)
+    is_active = models.BooleanField(verbose_name='有効', default=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 問題テンプレート'
+        ordering = ['category__code', 'key']
+
+    def __str__(self):
+        return self.title
+
+
+# source がこの形なら本試験の過去問の転記（「2025年10月 第162回 問2（正解率 71.10%）」）。
+# 「2026年度 練習問題 問1」は問題解説集の練習問題で、本試験の出題ではない。
+EXAM_SOURCE_REGEX = r'^[0-9]{4}年[0-9]{1,2}月 第[0-9]+回'
+PRACTICE_PREFIX = '2026年度 練習問題'
+
+# 計算問題の見分けに使う。選択肢から数字と記号を除いて残る文字（単位など）の上限と、
+# 最初の数字より前に置ける文字（「約」「毎秒」など）の上限
+CALCULATION_REMAINDER_MAX = 6
+CALCULATION_PREFIX_MAX = 2
+_DIGIT = re.compile(r'[0-9０-９]')
+_NUMERIC_PART = re.compile(r'[0-9０-９\s.,，、\-−+×÷/^()（）%％:：=＝<>≦≧~～]')
+
+
+class QuestionQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+    def from_ipa(self):
+        """本試験の過去問の転記だけ。練習問題は含めない。
+
+        名前は基本情報版（IPA の公開問題）のまま残してある。出題モードの内部の名前も同じ。
+        """
+        return self.filter(source__regex=EXAM_SOURCE_REGEX, template__isnull=True)
+
+    def for_subject(self, subject):
+        if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
+            return self.filter(subject=subject)
+        return self
+
+
+class Question(models.Model):
+    """1問1答で出題する問題。全 ID で共有する。"""
+
+    SUBJECT_A = SUBJECT_A
+    SUBJECT_B = SUBJECT_B
+    SUBJECT_CHOICES = SUBJECT_CHOICES
+
+    DIFFICULTY_CHOICES = [(1, '基本'), (2, '標準'), (3, '応用')]
+
+    subject = models.CharField(
+        verbose_name='科目', max_length=1, choices=SUBJECT_CHOICES, default=SUBJECT_A
+    )
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='questions'
+    )
+    topic = models.CharField(verbose_name='小分類', max_length=60, blank=True)
+    stem = models.TextField(verbose_name='問題文')
+    # 選択肢のリスト。(1)〜(5) の記号は表示側で付けるので本文には含めない。
+    choices = models.JSONField(verbose_name='選択肢')
+    answer_index = models.PositiveSmallIntegerField(verbose_name='正解の選択肢番号（0始まり）')
+    explanation = models.TextField(verbose_name='解説', blank=True)
+    difficulty = models.PositiveSmallIntegerField(
+        verbose_name='難易度', choices=DIFFICULTY_CHOICES, default=2
+    )
+    source = models.CharField(verbose_name='出典・根拠', max_length=120, blank=True)
+
+
+    template = models.ForeignKey(
+        QuestionTemplate, verbose_name='生成元テンプレート', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='questions',
+    )
+    params = models.JSONField(verbose_name='生成パラメータ', null=True, blank=True)
+
+    is_active = models.BooleanField(verbose_name='有効', default=True)
+    created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+    updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
+
+    objects = QuestionQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 問題'
+        ordering = ['category__code', 'id']
+        indexes = [models.Index(fields=['subject', 'category'], name='bh3_question_subj_cat_idx')]
+
+    def __str__(self):
+        return self.stem[:40]
+
+    @property
+    def is_generated(self):
+        return self.template_id is not None
+
+    @property
+    def origin_label(self):
+        """IPA の出題そのものか自作かを、出典の書き出しから見分けて返す。
+
+        source の前にラベルとして置く。何年の出題かは source に書いてあるので、
+        ここでは繰り返さない。
+        """
+        if self.is_generated:
+            return '自動生成'
+        source = self.source.strip()
+        if re.match(EXAM_SOURCE_REGEX, source):
+            return '過去問'
+        if source.startswith(PRACTICE_PREFIX):
+            return '練習問題'
+        return '自作' if source else ''
+
+    @property
+    def is_calculation(self):
+        """数値を求めて答える問題か。
+
+        計算問題の印はデータに無いので、形から見分ける。問題文に数字があり、
+        どの選択肢も数量の形をしているもの。「0.81」「約 2.3」「4G バイト」
+        「n(n−1)/2」は当たる。文で答える選択肢は当たらない。「RAID5」「レベル3」
+        「第2正規形」のように名前に番号が付いただけのものも、数字の前の語が長いか
+        「第」で始まるので当たらない。テンプレートから作った問題は、すべて計算問題である。
+        科目Bでは、プログラムを追って数値や配列を答える問題がこれに当たる。
+        """
+        if self.is_generated:
+            return True
+        if not self.choices or not _DIGIT.search(self.stem):
+            return False
+        return all(self._is_quantity(text) for text in self.choices)
+
+    @staticmethod
+    def _is_quantity(text):
+        """選択肢1つが、数値に単位が付いた程度の形か。"""
+        first = _DIGIT.search(text)
+        if not first:
+            return False
+        prefix = _NUMERIC_PART.sub('', text[:first.start()])
+        if len(prefix) > CALCULATION_PREFIX_MAX or prefix.startswith('第'):
+            return False
+        return len(_NUMERIC_PART.sub('', text)) <= CALCULATION_REMAINDER_MAX
+
+    @property
+    def source_text(self):
+        """ラベルの後ろに置く source。ラベルと同じ言葉は繰り返さない。
+
+        サンプル問題の source は「サンプル問題 科目A 問12」と書き出すので、
+        「IPAサンプル問題」のラベルを付けるときは頭の「サンプル問題」を落とす。
+        その場で作った計算問題は、source ではなくひな形の題名から
+        「計算問題：伝送時間と伝送効率」と出す。source の「テンプレート」は
+        アプリの中の言葉で、解いている人には何のことか伝わらない。
+        """
+        if self.is_generated:
+            return '計算問題：{}'.format(self.template.title)
+        source = self.source.strip()
+        if self.origin_label == '練習問題':
+            return source.replace('練習問題', '').replace('  ', ' ').strip()
+        return source
+
+    @property
+    def answer_label(self):
+        return self.choice_label(self.answer_index)
+
+    @property
+    def answer_text(self):
+        if 0 <= self.answer_index < len(self.choices):
+            return self.choices[self.answer_index]
+        return ''
+
+    @staticmethod
+    def choice_label(index):
+        # 本書・本試験と同じ (1)〜(5)
+        return '({})'.format(index + 1) if 0 <= index < 10 else '?'
+
+    def labeled_choices(self):
+        """テンプレートで回しやすい (番号, 記号, 本文) のリスト。"""
+        return [
+            (i, self.choice_label(i), text) for i, text in enumerate(self.choices)
+        ]
+
+
+class Attempt(models.Model):
+    """1問1答の詳細な解答ログ。
+
+    出題の組み立て（未出題か、前回まちがえたか）に使う短期的な記録で、
+    問題が取り込みで入れ替わると一緒に消える。
+    分野ごとの理解度は CategoryProgress に別途積み上げているので、
+    ここが消えても正答率や苦手分野の判定は失われない。
+    """
+
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='attempts',
+    )
+    question = models.ForeignKey(
+        Question, verbose_name='問題', on_delete=models.CASCADE, related_name='attempts'
+    )
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='attempts'
+    )
+    selected_index = models.PositiveSmallIntegerField(verbose_name='選んだ選択肢')
+    is_correct = models.BooleanField(verbose_name='正誤')
+    elapsed_ms = models.PositiveIntegerField(verbose_name='所要時間(ms)', null=True, blank=True)
+    answered_at = models.DateTimeField(verbose_name='解答日時', auto_now_add=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 解答ログ'
+        ordering = ['-answered_at']
+        indexes = [
+            models.Index(fields=['learner', '-answered_at'], name='bh3_attempt_learner_at_idx'),
+            models.Index(fields=['learner', 'category'], name='bh3_attempt_learner_cat_idx'),
+        ]
+
+    def __str__(self):
+        return '{} {}'.format(self.learner, '○' if self.is_correct else '×')
+
+    @property
+    def selected_label(self):
+        """選んだ選択肢の記号（(1)／(2)／…）。"""
+        return Question.choice_label(self.selected_index)
+
+
+class CategoryProgress(models.Model):
+    """分野ごとの理解度。問題を入れ替えても残る、この人の到達点。
+
+    問題そのものは取り込みのたびに消えるが、「セキュリティを何問解いて
+    何問正解したか」は残す。苦手分野の判定と重点出題はここを見る。
+    """
+
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='progress',
+    )
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='progress'
+    )
+    subject = models.CharField(
+        verbose_name='科目', max_length=1, choices=Question.SUBJECT_CHOICES,
+        default=Question.SUBJECT_A,
+    )
+    answered = models.PositiveIntegerField(verbose_name='解答数', default=0)
+    correct = models.PositiveIntegerField(verbose_name='正解数', default=0)
+    last_answered_at = models.DateTimeField(verbose_name='最終解答日時', null=True, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 分野別の理解度'
+        ordering = ['category__code']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['learner', 'category', 'subject'], name='bh3_unique_progress'
+            ),
+        ]
+
+    def __str__(self):
+        return '{} {} {}/{}'.format(
+            self.learner, self.category.name, self.correct, self.answered
+        )
+
+
+class DailyProgress(models.Model):
+    """日ごとの解答数。学習の継続を見るための記録で、問題とは独立している。"""
+
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='daily_progress',
+    )
+    date = models.DateField(verbose_name='日付')
+    answered = models.PositiveIntegerField(verbose_name='解答数', default=0)
+    correct = models.PositiveIntegerField(verbose_name='正解数', default=0)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 日別の学習記録'
+        ordering = ['-date']
+        constraints = [
+            models.UniqueConstraint(fields=['learner', 'date'], name='bh3_unique_daily_progress'),
+        ]
+
+    def __str__(self):
+        return '{} {} {}問'.format(self.learner, self.date, self.answered)
+
+
+class StudySession(models.Model):
+    """出題モードの選択を覚えておくための軽い状態。"""
+
+    MODE_FOCUS = 'focus'
+    MODE_RANDOM = 'random'
+    MODE_WEAK = 'weak'
+    MODE_REVIEW = 'review'
+    MODE_CATEGORY = 'category'
+    MODE_IPA = 'ipa'
+    MODE_CALC = 'calc'
+    MODE_CHOICES = [
+        (MODE_FOCUS, 'おまかせ（苦手を重点出題）'),
+        (MODE_IPA, '本試験の過去問からおまかせ'),
+        (MODE_RANDOM, '本番の出題比率どおり'),
+        (MODE_WEAK, '苦手分野だけ'),
+        (MODE_REVIEW, '間違えた問題の復習'),
+        (MODE_CATEGORY, '分野を指定'),
+    ]
+
+    learner = models.OneToOneField(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='study_session',
+    )
+    mode = models.CharField(
+        verbose_name='出題モード', max_length=10, choices=MODE_CHOICES, default=MODE_FOCUS
+    )
+    subject = models.CharField(
+        verbose_name='科目', max_length=1, choices=Question.SUBJECT_CHOICES,
+        default=Question.SUBJECT_A,
+    )
+    category = models.ForeignKey(
+        Category, verbose_name='指定中分類', on_delete=models.SET_NULL, null=True, blank=True
+    )
+    updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 出題設定'
+
+    def __str__(self):
+        return '{} / {}'.format(self.learner, self.get_mode_display())
+
+
+class LearningNote(models.Model):
+    """技術解説。問題の解説文とは別に書かれた、概念をひとまとまりで説明する文章。
+
+    問題は「解けるか」を測るものなので、断片的にしか説明できない。
+    先にこちらを読んでから解くために、独立した教材として持つ。
+    問題と同じく全 ID で共有し、JSON の一括差し替えで入れ替える。
+    """
+
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='notes'
+    )
+    topic = models.CharField(verbose_name='小分類', max_length=60, blank=True)
+    title = models.CharField(verbose_name='見出し', max_length=120)
+    body = models.TextField(verbose_name='本文')
+    source = models.CharField(verbose_name='出典', max_length=120, blank=True)
+    created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 技術解説'
+        ordering = ['category__code', 'id']
+
+    def __str__(self):
+        return self.title
+
+
+class LearningRound(models.Model):
+    """学習モードの1ラウンド。「読む → 解く」を1セットにした記録。
+
+    先に技術解説をまとめて読み、そのあと同じ範囲を出題して定着を測る。
+    1問1答の演習と違い、読む時間と解く問題の並びを最初に決め打ちにする。
+    """
+
+    PHASE_READING = 'reading'
+    PHASE_QUIZ = 'quiz'
+    PHASE_DONE = 'done'
+    PHASE_CHOICES = [
+        (PHASE_READING, '解説を読む'),
+        (PHASE_QUIZ, '解答する'),
+        (PHASE_DONE, '終了'),
+    ]
+
+    # 提示時間の選択肢（分）。10問ぶんの解説を読み切れる幅で用意する。
+    MINUTE_CHOICES = [3, 5, 10, 15]
+    DEFAULT_MINUTES = 5
+    QUESTION_COUNT = 10
+
+    learner = models.ForeignKey(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='rounds',
+    )
+    note = models.ForeignKey(
+        LearningNote, verbose_name='読んだ解説', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='rounds',
+    )
+    subject = models.CharField(
+        verbose_name='科目', max_length=1, choices=Question.SUBJECT_CHOICES,
+        default=Question.SUBJECT_A,
+    )
+    reading_seconds = models.PositiveIntegerField(verbose_name='提示時間(秒)')
+    phase = models.CharField(
+        verbose_name='段階', max_length=10, choices=PHASE_CHOICES, default=PHASE_READING
+    )
+    position = models.PositiveSmallIntegerField(verbose_name='解答中の位置', default=0)
+    started_at = models.DateTimeField(verbose_name='開始日時', auto_now_add=True)
+    finished_at = models.DateTimeField(verbose_name='終了日時', null=True, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 学習ラウンド'
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return '{} {:%Y-%m-%d %H:%M}'.format(self.learner, self.started_at)
+
+    @property
+    def notes(self):
+        """このラウンドで読む解説。同じ小分類の解説は、まとめて1つの範囲として読む。
+
+        出題は小分類ごとなので、読む単位も小分類に合わせる。小分類に解説が
+        2本あるのに1本だけ読ませると、読んでいない内容の問題が混ざる。
+        並びは取り込んだ順で、JSON の中の並びがそのまま読む順になる。
+        """
+        if self.note is None:
+            return []
+        return list(
+            LearningNote.objects.filter(category=self.note.category, topic=self.note.topic)
+            .select_related('category').order_by('id')
+        )
+
+    @property
+    def title(self):
+        """読んだ解説の見出し。2本あれば並べる。"""
+        return '／'.join(note.title for note in self.notes)
+
+    @property
+    def total(self):
+        return self.items.count()
+
+    @property
+    def correct(self):
+        return self.items.filter(is_correct=True).count()
+
+    @property
+    def rate_percent(self):
+        total = self.items.filter(is_correct__isnull=False).count()
+        if not total:
+            return None
+        return round(self.correct / total * 100)
+
+
+class LearningItem(models.Model):
+    """学習ラウンドで扱う1問。読む段階では教材、解く段階では設問になる。"""
+
+    round = models.ForeignKey(
+        LearningRound, verbose_name='ラウンド', on_delete=models.CASCADE,
+        related_name='items',
+    )
+    question = models.ForeignKey(
+        Question, verbose_name='問題', on_delete=models.CASCADE, related_name='learning_items'
+    )
+    order = models.PositiveSmallIntegerField(verbose_name='出題順')
+    selected_index = models.PositiveSmallIntegerField(
+        verbose_name='選んだ選択肢', null=True, blank=True
+    )
+    is_correct = models.BooleanField(verbose_name='正誤', null=True, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 学習ラウンドの問題'
+        ordering = ['order']
+        constraints = [
+            models.UniqueConstraint(fields=['round', 'order'], name='bh3_unique_round_order'),
+        ]
+
+    def __str__(self):
+        return '{} {}問目'.format(self.round_id, self.order + 1)
+
+    @property
+    def selected_label(self):
+        if self.selected_index is None:
+            return ''
+        return Question.choice_label(self.selected_index)
+
+
+class PassReport(models.Model):
+    """本番に合格したという本人の申告。集計ページの「合格者数」はこれを数える。
+
+    アプリには本番の結果を確かめる手段がないので、自己申告をそのまま信じる。
+    1人1件。取り消せば行ごと消し、数えなくなる。
+    """
+
+    learner = models.OneToOneField(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='pass_report',
+    )
+    passed_on = models.DateField(verbose_name='合格した試験の受験日')
+    reported_at = models.DateTimeField(verbose_name='申告日時', auto_now_add=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '法務3級 合格の申告'
+        ordering = ['-passed_on']
+
+    def __str__(self):
+        return '{} {}'.format(self.learner, self.passed_on)

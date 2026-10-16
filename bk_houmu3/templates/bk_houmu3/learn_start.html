@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block title %}学習モード - 法務3級対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+{% include 'bk_houmu3/_header.html' with page_title='学習モード' current='learn' %}
+{% endblock %}
+
+{% block head %}
+<style>
+    /* いま選んでいる行と、それを含む中分類を目立たせる。
+       畳んだままでも「どこを選んだか」が分かるようにする。 */
+    .fe-pick .fe-row { cursor: pointer; }
+    .fe-pick .fe-row:hover { background-color: #eef3fa; }
+    .fe-pick .fe-row:has(input:checked) {
+        background-color: #e3ecf9;
+        box-shadow: inset 3px 0 0 #2c5aa0;
+        font-weight: 700;
+    }
+    .fe-pick .fe-here { display: none; }
+    .fe-pick .fe-group:has(input:checked) > summary { background-color: #eef3fa; }
+    .fe-pick .fe-group:has(input:checked) .fe-here { display: inline; }
+</style>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 760px;">
+
+    <p class="text-muted">
+        解説を読んでから、その小分類の問題を最大{{ count }}問解きます。
+    </p>
+
+    <form method="post" class="border rounded p-4 mb-4">
+        {% csrf_token %}
+
+        <div class="fw-bold mb-2" style="color:#2c5aa0;">学習対象</div>
+        {% if groups %}
+        <div class="border rounded mb-4 fe-pick">
+            {% comment %}
+            解説を選ばなかったときの行。選択肢は増やさず、この行の範囲のほうを
+            ダッシュボードの分野に合わせる。行の名前は「おまかせ」のままにし、
+            いま何が選ばれているかは上の行に分野名で出す。
+            {% endcomment %}
+            <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
+                <input class="form-check-input mt-0" type="radio" name="note" value="">
+                <span class="fw-bold">おまかせ</span>
+            </label>
+
+            {% comment %}
+            直前に学習した中分類だけを開いて、学習回数を見せる。ダッシュボードで
+            指定している分野は開かない。選ぶのは利用者なので、どれも選んだ状態にはしない。
+            {% endcomment %}
+            {% for group in groups %}
+            <details class="fe-group border-bottom"{% if opened.code == group.category.code %} open{% endif %}>
+                <summary class="d-flex justify-content-between align-items-center p-2 px-3"
+                         style="cursor:pointer;">
+                    <span>
+                        <span class="text-muted small me-2">{{ group.category.code }}</span>
+                        <span class="fw-bold">{{ group.category.name }}</span>
+                        <span class="text-muted small ms-2">解説{{ group.note_count }}本</span>
+                        <span class="badge bg-primary ms-2 fe-here">選択中</span>
+                    </span>
+                    <span class="small">
+                        {% if group.stats.rate_percent is not None %}
+                        <span class="{% if group.stats.is_weak %}text-danger fw-bold{% else %}text-muted{% endif %}">
+                            正答率 {{ group.stats.rate_percent }}％
+                        </span>
+                        {% else %}
+                        <span class="text-muted">未着手</span>
+                        {% endif %}
+                        <span class="text-muted ms-2">問題{{ group.stats.question_count }}問</span>
+                    </span>
+                </summary>
+                <div style="background-color:#f6f8fb;">
+                    {% for entry in group.notes %}
+                    <label class="fe-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0{% if not entry.questions %} text-muted{% endif %}">
+                        <input class="form-check-input mt-0" type="radio" name="note"
+                               value="{{ entry.note.pk }}"
+                               {% if not entry.questions %}disabled{% endif %}>
+                        {% if entry.note.topic %}
+                        <span class="badge bg-secondary">{{ entry.note.topic }}</span>
+                        {% endif %}
+                        <span>{% for note in entry.notes %}{% if not forloop.first %}／{% endif %}{{ note.title }}{% endfor %}</span>
+                        <span class="{% if entry.questions %}text-muted{% else %}text-danger{% endif %} small">問題{{ entry.questions }}問</span>
+                        {% if entry.rounds %}
+                        <span class="text-muted small">学習{{ entry.rounds }}回</span>
+                        {% else %}
+                        <span class="text-primary small">未読</span>
+                        {% endif %}
+                    </label>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-warning">
+            技術解説はまだ用意されていません。
+            {% if request.bk_houmu3_learner.is_admin %}<a href="{% url 'bk_houmu3:manage_upload' %}">解説を含む JSON を取り込んで</a>ください。{% endif %}
+        </div>
+        {% endif %}
+
+        <div class="fw-bold mb-3" style="color:#2c5aa0;">読む時間</div>
+        <div class="d-flex flex-wrap gap-3 mb-4">
+            {% for m in minute_choices %}
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="minutes" id="m{{ m }}"
+                       value="{{ m }}"{% if m == default_minutes %} checked{% endif %}>
+                <label class="form-check-label" for="m{{ m }}">{{ m }}分</label>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary"{% if not groups %} disabled{% endif %}>
+            はじめる
+        </button>
+    </form>
+
+    {% if recent %}
+    <div class="border rounded p-3">
+        <div class="small fw-bold mb-2" style="color:#2c5aa0;">これまでのラウンド</div>
+        <ul class="list-unstyled small mb-0">
+            {% for r in recent %}
+            <li class="d-flex justify-content-between border-bottom py-2">
+                <a href="{% url 'bk_houmu3:learn_result' r.pk %}" class="text-decoration-none">
+                    {% if r.note %}{{ r.title }}{% else %}（削除された解説）{% endif %}
+                </a>
+                <span class="text-muted">{{ r.correct }}/{{ r.total }}問　{{ r.started_at|date:"n/j H:i" }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 前の選択が残って再表示されたときは、その中分類を開いておく。
+// 畳んだままだと、どこを選んだのか見えない。
+(function () {
+    var checked = document.querySelector('.fe-group input[name="note"]:checked');
+    if (checked) { checked.closest('details').open = true; }
+})();
+</script>
+{% endblock %}
