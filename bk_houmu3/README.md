@@ -40,9 +40,10 @@ python manage.py createsuperuser --settings=config.settings_dev
 **問題は同梱していない。** 管理用の ID で入り、画面の
 「問題の管理 → JSONを取り込む」から取り込む。
 
-学習の画面は、hirahira_room にログインしなくても使える。サイト全体は
-`LoginRequiredMiddleware` でログイン必須だが、本アプリは `login_not_required` で
-外してある。`/bk_houmu3/` で本アプリの中の ID（`Learner`）を入力するか新しく作る。
+**すべての画面で hirahira_room へのログインが要る。** サイト全体は
+`LoginRequiredMiddleware` でログイン必須で、基本情報版は学習の画面を `login_not_required` で
+外しているが、法務3級版は外さない。問題が市販の問題解説集からの転記なので、
+ログインせずに読めてはいけないため。ログインしたうえで、`/bk_houmu3/` で本アプリの中の ID（`Learner`）を入力するか新しく作る。
 成績はアカウントではなく、**この ID ごと**に持つ。
 
 入った ID は、**ブラウザを閉じたら抜ける**。セッションに加えて、期限の無い Cookie

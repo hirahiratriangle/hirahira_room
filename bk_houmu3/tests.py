@@ -751,15 +751,25 @@ class ViewTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-    def test_login_is_not_required_to_study(self):
-        """学習の画面は、hirahira_room にログインしていなくても使える。"""
+    def test_login_is_required_to_study(self):
+        """法務3級版は、どの画面も hirahira_room へのログインが要る。
+
+        問題が市販の問題解説集からの転記なので、ログインせずに読めてはいけない。
+        基本情報版は学習の画面をログイン不要にしているが、ここは引き継がない。
+        """
         self.client.logout()
-        self.assertEqual(self.client.get(reverse('bk_houmu3:index')).status_code, 200)
-        self.client.post(reverse('bk_houmu3:index'), {'action': 'temporary'})
+        put_learner(self.client, self.learner.pk)   # ID で入っていても、ログインが無ければ通さない
         for name in ('bk_houmu3:index', 'bk_houmu3:enter', 'bk_houmu3:quiz', 'bk_houmu3:learn_start',
                      'bk_houmu3:stats', 'bk_houmu3:history'):
             with self.subTest(page=name):
-                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 302)
+                self.assertIn(reverse('account_login'), response['Location'])
+        response = self.client.get(dashboard(self.learner))
+        self.assertIn(reverse('account_login'), response['Location'])
+        self.client.post(reverse('bk_houmu3:index'), {'action': 'temporary'})
+        self.assertFalse(Learner.objects.filter(code__isnull=True).exists(),
+                         'ログインしていなければ、履歴なしの利用も始められない')
 
     def test_login_is_still_required_to_manage(self):
         """管理用の ID で入っていても、ログインしていなければ管理画面は開けない。"""

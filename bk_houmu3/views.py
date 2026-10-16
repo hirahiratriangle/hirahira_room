@@ -8,9 +8,10 @@
 /bk_houmu3/<ID>/ に置き、ほかの ID のものは開けない（404）。問題と技術解説は
 全 ID で共有し、取り込みなどの管理は管理用の ID だけができる。
 
-サイト全体は LoginRequiredMiddleware でログイン必須だが、本アプリの学習の画面は
-login_not_required で外してあり、hirahira_room にログインしなくても使える。
-問題の管理だけは、これまでどおりログインも要る。
+サイト全体は LoginRequiredMiddleware でログイン必須で、本アプリもすべての画面で
+hirahira_room へのログインが要る。基本情報版は学習の画面を login_not_required で
+外しているが、法務3級版は外さない。問題が市販の問題解説集からの転記で、
+誰でも読める状態にしてはいけないため。問題の管理は、さらにスタッフ権限が要る。
 """
 
 import logging
@@ -18,7 +19,6 @@ import logging
 import json
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -126,11 +126,10 @@ def touch(learner):
         Learner.objects.filter(pk=learner.pk).update(last_seen_at=timezone.now())
 
 
-@method_decorator(login_not_required, name='dispatch')
 class LearnerRequiredMixin:
     """始めている人向けの画面。始めていなければトップへ戻す。
 
-    hirahira_room へのログインは求めない。いまの記録は self.learner に置く。
+    hirahira_room へのログインはサイト全体のミドルウェアが求める。いまの記録は self.learner に置く。
     ヘッダーに出すため、request.bk_houmu3_learner にも載せておく。
     """
 
@@ -172,7 +171,6 @@ def dashboard_url(learner):
     return reverse('bk_houmu3:dashboard', args=[learner.code])
 
 
-@method_decorator(login_not_required, name='dispatch')
 class EnterView(generic.FormView):
     """ID で入る、または新しく作る。
 
