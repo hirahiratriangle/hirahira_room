@@ -52,6 +52,11 @@ SESSION_PENDING = 'fe_pending_question_id'
 SESSION_SHOWN_AT = 'fe_question_shown_at'
 # 入っている ID。hirahira_room のアカウントとは別に、ブラウザのセッションで持つ。
 SESSION_LEARNER = 'fe_learner_id'
+# 入っている ID を、ブラウザを閉じたら消える Cookie にも持たせる。セッションは
+# 閉じても2週間残る（ログインの「ログインしたままにする」と同じ入れ物）ので、
+# それだけだと共用の端末で次の人が前の人の ID のまま入ってしまう。
+LEARNER_COOKIE = 'fe_learner'
+LEARNER_COOKIE_SALT = 'fe.learner'
 
 
 def _get_study_session(learner):
@@ -64,15 +69,40 @@ def _enter(request, learner):
     for key in (SESSION_RECENT, SESSION_PENDING, SESSION_SHOWN_AT):
         request.session.pop(key, None)
     request.session[SESSION_LEARNER] = learner.pk
+    # 応答を返すときに、ブラウザを閉じたら消える Cookie を置く（remember_entry）
+    request.fe_entered = learner.pk
+
+
+def remember_entry(request, response):
+    """入ったばかりなら、ブラウザを閉じたら消える Cookie に ID を置く。
+
+    期限を付けないので、ブラウザを閉じると消える。消えたら current_learner が
+    セッションの ID も捨てるので、次に開いたときは入口からになる。
+    """
+    pk = getattr(request, 'fe_entered', None)
+    if pk is not None:
+        response.set_signed_cookie(
+            LEARNER_COOKIE, str(pk), salt=LEARNER_COOKIE_SALT,
+            httponly=True, samesite='Lax', secure=request.is_secure(),
+        )
+    return response
 
 
 def current_learner(request):
     """セッションが覚えている記録。始めていなければ None。
 
     ID を登録した人も、履歴を残さずに使っている人も、同じようにここから取る。
+    ブラウザを閉じて Cookie が消えていれば、セッションに残っていても入っていない
+    扱いにする。
     """
     pk = request.session.get(SESSION_LEARNER)
     if pk is None:
+        return None
+    entered = getattr(request, 'fe_entered', None) == pk or request.get_signed_cookie(
+        LEARNER_COOKIE, default=None, salt=LEARNER_COOKIE_SALT,
+    ) == str(pk)
+    if not entered:
+        request.session.pop(SESSION_LEARNER, None)
         return None
     learner = Learner.objects.filter(pk=pk).first()
     if learner is None:
@@ -151,6 +181,10 @@ class EnterView(generic.FormView):
 
     template_name = 'fe/enter.html'
     form_class = LearnerForm
+
+    def dispatch(self, request, *args, **kwargs):
+        # 入ったら、ブラウザを閉じたら消える Cookie を置く。入口（IndexView）も同じ
+        return remember_entry(request, super().dispatch(request, *args, **kwargs))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

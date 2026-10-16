@@ -31,8 +31,20 @@ from .selection import (REVIEW_DUE_GAP, _due_for_review,
 from .stats import (WEAK_MIN_ATTEMPTS, category_options, category_stats,
                     overall_stats,
                     record_progress, site_summary, smoothed_rate, weak_categories)
-from .views import SESSION_LEARNER
+from django.core.signing import get_cookie_signer
 
+from .views import LEARNER_COOKIE, LEARNER_COOKIE_SALT, SESSION_LEARNER
+
+
+
+def put_learner(client, pk):
+    """その ID で入った状態にする。セッションと、ブラウザを閉じたら消える Cookie の両方。"""
+    session = client.session
+    session[SESSION_LEARNER] = pk
+    session.save()
+    client.cookies[LEARNER_COOKIE] = get_cookie_signer(
+        salt=LEARNER_COOKIE + LEARNER_COOKIE_SALT
+    ).sign(str(pk))
 
 def seed_masters():
     """中分類と問題テンプレートだけを投入する（問題は入らない）。"""
@@ -53,9 +65,7 @@ def enter(client, learner):
         username='hirahira', defaults={'is_staff': True},
     )
     client.force_login(account)
-    session = client.session
-    session[SESSION_LEARNER] = learner.pk
-    session.save()
+    put_learner(client, learner.pk)
 
 
 def dashboard(learner):
@@ -798,9 +808,7 @@ class ViewTests(TestCase):
     def test_login_is_still_required_to_manage(self):
         """管理用の ID で入っていても、ログインしていなければ管理画面は開けない。"""
         self.client.logout()
-        session = self.client.session
-        session[SESSION_LEARNER] = make_learner('boss', is_admin=True).pk
-        session.save()
+        put_learner(self.client, make_learner('boss', is_admin=True).pk)
         for name in ('fe:manage_list', 'fe:manage_upload', 'fe:manage_export'):
             with self.subTest(page=name):
                 response = self.client.get(reverse(name))
@@ -942,6 +950,34 @@ class LearnerIdTests(TestCase):
 
     def _post(self, code, action):
         return self.client.post(reverse('fe:index'), {'code': code, 'action': action})
+
+    def test_the_id_is_forgotten_when_the_browser_is_closed(self):
+        """入った ID は、ブラウザを閉じたら消える Cookie にも置く。消えたら入口に戻る。
+
+        セッションはブラウザを閉じても残るので、それだけだと共用の端末で
+        次の人が前の人の ID のまま入ってしまう。
+        """
+        Learner.objects.create(code='closer')
+        response = self._post('closer', 'enter')
+        cookie = response.cookies[LEARNER_COOKIE]
+        self.assertEqual(cookie['max-age'], '')
+        self.assertEqual(cookie['expires'], '')
+        self.assertTrue(cookie['httponly'])
+        self.assertRedirects(response, reverse('fe:dashboard', args=['closer']))
+
+        # ブラウザを閉じると、期限の無い Cookie だけが消え、セッションは残る
+        del self.client.cookies[LEARNER_COOKIE]
+        response = self.client.get(reverse('fe:quiz'))
+        self.assertRedirects(response, reverse('fe:index'))
+        self.assertNotIn(SESSION_LEARNER, self.client.session)
+
+    def test_starting_without_an_id_is_also_forgotten(self):
+        """履歴を残さずに始めた場合も同じ。閉じたら入口からになる。"""
+        response = self.client.post(reverse('fe:index'), {'action': 'temporary'})
+        self.assertIn(LEARNER_COOKIE, response.cookies)
+        self.assertEqual(self.client.get(reverse('fe:quiz')).status_code, 200)
+        del self.client.cookies[LEARNER_COOKIE]
+        self.assertRedirects(self.client.get(reverse('fe:quiz')), reverse('fe:index'))
 
     def test_without_an_id_the_entrance_is_shown(self):
         response = self.client.get(reverse('fe:index'))
@@ -2468,9 +2504,7 @@ class ManageNeedsStaffTests(TestCase):
             username=username, password='pass12345', is_staff=is_staff,
         )
         self.client.force_login(account)
-        session = self.client.session
-        session[SESSION_LEARNER] = self.admin_id.pk
-        session.save()
+        put_learner(self.client, self.admin_id.pk)
 
     def test_an_ordinary_account_cannot_manage_even_with_the_admin_id(self):
         """誰でも作れるアカウントでは、管理用の ID を知っていても開けない。"""
