@@ -71,11 +71,11 @@ summary（stats.site_summary）、my_report、pass_form を受け取る。
         {% endif %}
     </div>
 
-    <!-- 科目・分類別 -->
+    <!-- 分類別。法務3級は1科目だけなので、科目の名前は出さない -->
     {% for subject in summary.subjects %}
     <div class="mb-3">
         <div class="d-flex justify-content-between align-items-baseline mb-2">
-            <h3 class="h6 fw-bold mb-0">{{ subject.label }}</h3>
+            <h3 class="h6 fw-bold mb-0">分類別</h3>
             <span class="small text-muted">
                 のべ {{ subject.total }} 問
                 {% if subject.rate_percent is not None %}・正答率 {{ subject.rate_percent }}％{% endif %}

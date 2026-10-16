@@ -29,18 +29,6 @@
                 <div class="h4 mb-0" style="color:#2c5aa0;">{{ summary.total }}</div>
             </div>
         </div>
-        <div class="col-6 col-lg-3">
-            <div class="border rounded p-3">
-                <div class="small text-muted">科目A</div>
-                <div class="h4 mb-0" style="color:#2c5aa0;">{{ summary.subject_a }}</div>
-            </div>
-        </div>
-        <div class="col-6 col-lg-3">
-            <div class="border rounded p-3">
-                <div class="small text-muted">テンプレートが生成</div>
-                <div class="h4 mb-0 text-muted">{{ summary.generated }}</div>
-            </div>
-        </div>
     </div>
 
     <div class="d-flex flex-wrap gap-2 mb-4">
@@ -56,13 +44,7 @@
     </p>
 
     <form method="get" class="row g-2 align-items-end mb-4">
-        <div class="col-6 col-md-2">
-            <label for="subject" class="form-label small text-muted mb-1">科目</label>
-            <select class="form-select form-select-sm" id="subject" name="subject">
-                <option value="">すべて</option>
-                <option value="A" {% if filters.subject == 'A' %}selected{% endif %}>科目A</option>
-            </select>
-        </div>
+        {% comment %}法務3級は1科目だけなので、科目の絞り込みは置かない{% endcomment %}
         <div class="col-6 col-md-3">
             <label for="category" class="form-label small text-muted mb-1">分野</label>
             <select class="form-select form-select-sm" id="category" name="category">

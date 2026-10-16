@@ -583,6 +583,18 @@ class ViewTests(TestCase):
                 self.assertNotContains(response, 'href="{}"'.format(learn))
                 self.assertNotContains(response, '学習モード')
 
+    def test_no_subject_is_shown(self):
+        """法務3級は1科目だけなので、どの画面にも「科目A」を出さない。"""
+        admin = make_learner('nosubject', is_admin=True)
+        enter(self.client, admin)
+        answer(admin, Question.objects.first(), True)   # みんなの集計にも行が出る状態にする
+        for url in (dashboard(admin), reverse('bk_houmu3:quiz'), reverse('bk_houmu3:stats'),
+                    reverse('bk_houmu3:history'), reverse('bk_houmu3:manage_list')):
+            with self.subTest(url=url):
+                body = re.sub(r'<script.*?</script>', '', self.client.get(url).content.decode(), flags=re.S)
+                self.assertNotIn('科目A', body)
+                self.assertNotIn('科目B', body)
+
     def test_index_renders(self):
         response = self.client.get(dashboard(self.learner))
         self.assertEqual(response.status_code, 200)
