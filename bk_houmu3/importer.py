@@ -354,33 +354,21 @@ def sync(payload, apply=True):
 
 
 def export_records(subject=None):
-    """共有の問題と技術解説を、取り込みと同じ形式で書き出す。
+    """共有の問題を、取り込みと同じ形式で書き出す。
 
-    控えを取る用途なので、問題と解説の両方を1つにまとめて出す。
-    取り込みは同期なので、これをそのまま戻せば書き出した時点の状態に戻る。
+    控えを取る用途。取り込みは同期なので、これをそのまま戻せば書き出した時点の状態に戻る。
+    法務3級は技術解説（notes）を使わないので、書き出しにも入れない。入れると、
+    取り込みの画面が「notes 入りのファイル」として弾くため、そのまま戻せなくなる。
 
     subject を指定すると、その科目のぶんだけを出す。ただし取り込みは
     ファイルに無い行を消すため、片方の科目だけを戻すともう一方は消える。
     控えを取るなら指定しない。
     """
     questions = Question.objects.filter(template__isnull=True, is_active=True)
-    notes = LearningNote.objects.all()
     if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
         questions = questions.filter(subject=subject)
-        # 分類が科目ごとに別なので、解説もその科目のものだけになる
-        notes = notes.filter(category__subject=subject)
 
     return {
-        'notes': [
-            {
-                'category': n.category.code,
-                'topic': n.topic,
-                'title': n.title,
-                'body': n.body,
-                'source': n.source,
-            }
-            for n in notes.select_related('category').order_by('category__code', 'id')
-        ],
         'questions': [
             {
                 'category': q.category.code,

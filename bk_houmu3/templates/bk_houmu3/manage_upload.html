@@ -15,8 +15,7 @@
         追加・更新・削除を突き合わせて行うので、<strong>変わっていない問題はそのまま残り、
         その解答履歴も切れません</strong>。問題を1問足すだけで全問が未出題に戻る、
         といったことは起きません。
-        問題と技術解説（学習モードで読む教材）は<strong>別のファイルで渡せます</strong>。
-        ファイルに入っていないほうには触れないので、問題だけを取り込んでも解説は消えません。
+        取り込むのは問題だけです（このアプリは学習モードの技術解説を使いません）。
     </p>
 
     <div class="border rounded p-3 mb-4" style="background-color:#eef3fa;">
@@ -50,10 +49,8 @@
         <ul class="small mb-0" style="color:#8f5a30;">
             <li>
                 <strong>図が本質の問題は作れません。</strong>
-                流れ図、アローダイアグラム、回路図とタイミングチャート、木構造の図、
-                UML の多重度を示す図、盤面、ネットワーク構成図、散布図。
-                本番にはこれらが毎回出ますが、文字に落とすと設問として成立しないので外します。
-                <span class="text-muted">表は、改行と全角スペースで桁をそろえれば入ります。</span>
+                文字に落とすと設問として成立しないものは外します。
+                <span class="text-muted">表やカレンダーは、改行と空白で並べれば入ります。</span>
             </li>
             <li>
                 <strong>文字の装飾は出ません。</strong>
@@ -127,26 +124,13 @@
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
-        {% comment %}
-        問題と解説は更新の頻度が違うので、別のファイル・別の欄で渡す。
-        片方だけ選んでも、両方選んでも取り込める。選ばなかったほうには触らない。
-        {% endcomment %}
-        <div class="row g-3 mb-4">
+        {% comment %}法務3級は技術解説を使わないので、欄は問題の1つだけ{% endcomment %}
+        <div class="mb-4">
             {% for field in form %}
-            <div class="col-12 col-md-6">
-                <label for="{{ field.id_for_label }}" class="form-label small fw-bold">
-                    {{ field.label }}
-                    <span class="badge bg-light text-muted fw-normal ms-1">任意</span>
-                </label>
-                {{ field }}
-                <div class="form-text">{{ field.help_text }}</div>
-                {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-            </div>
+            <label for="{{ field.id_for_label }}" class="form-label small fw-bold">{{ field.label }}</label>
+            {{ field }}
+            {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
             {% endfor %}
-        </div>
-        <div class="form-text mb-4">
-            どちらか一方だけでも、両方同時でも取り込めます。
-            選ばなかったほうは、いまの内容がそのまま残ります。
         </div>
 
         <div class="alert alert-warning">

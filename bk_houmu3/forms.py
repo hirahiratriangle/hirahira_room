@@ -26,19 +26,14 @@ def _file_field(label, help_text):
 
 
 class QuestionUploadForm(forms.Form):
-    """JSON ファイルのアップロード。
+    """問題 JSON ファイルのアップロード。
 
-    問題と解説は更新の頻度が違うので別のファイルで渡せる。欄も分けてあり、
-    片方だけ選んでも、両方選んでも取り込める。選ばなかったほうには触らない。
-    両方に同じ側（問題なら問題）が入っていたら、どちらを使うか決められないので弾く。
+    法務3級は学習モードを使わず、技術解説（notes）を持たないので、取り込むのは問題だけ。
+    基本情報版にある解説の欄は置かない。ファイルに "notes" が入っていたら、
+    取り違えとみなして弾く（黙って解説を入れると、使わない解説が溜まる）。
     """
 
-    questions_file = _file_field(
-        '問題のJSON', '問題だけを選んだときは、いまの技術解説はそのまま残ります。',
-    )
-    notes_file = _file_field(
-        '技術解説のJSON', '解説だけを選んだときは、いまの問題はそのまま残ります。',
-    )
+    questions_file = _file_field('問題のJSON', '')
 
     def _read(self, field):
         """1本ぶんを読んで、取り込める内容かを確かめる。"""
@@ -64,32 +59,27 @@ class QuestionUploadForm(forms.Form):
             raise forms.ValidationError('{}：{}'.format(upload.name, exc))
 
     def clean(self):
-        """2つの欄をまとめて1つの取り込み内容にする。
+        """取り込む内容を確かめる。
 
         検証を通ってからでないと1件も書き込まないので、壊れたファイルを
-        選んでも、いまの問題集と解説はそのまま残る。
+        選んでも、いまの問題集はそのまま残る。
         """
         cleaned = super().clean()
-        parts = [self._read('questions_file'), self._read('notes_file')]
-        parts = [p for p in parts if p is not None]
-        if not parts:
+        if self.errors:
+            return cleaned
+        payload = self._read('questions_file')
+        if payload is None:
+            raise forms.ValidationError('問題の JSON ファイルを選んでください。')
+        if payload['notes'] is not None:
             raise forms.ValidationError(
-                '問題と技術解説のどちらか一方は選んでください。'
+                'このファイルには技術解説（"notes"）が入っています。'
+                'このアプリは技術解説を使わないので取り込めません。問題（"questions"）だけのファイルにしてください。'
             )
-
-        merged = {'questions': None, 'notes': None}
-        for side, label in (('questions', '問題'), ('notes', '技術解説')):
-            found = [p[side] for p in parts if p[side] is not None]
-            if len(found) > 1:
-                raise forms.ValidationError(
-                    '選んだ2つのファイルの両方に{}が入っています。'
-                    'どちらを使うか決められないので、片方にまとめてください。'.format(label)
-                )
-            if found:
-                merged[side] = found[0]
+        if payload['questions'] is None:
+            raise forms.ValidationError('このファイルには問題（"questions"）が入っていません。')
 
         try:
-            self.records = validate(merged)
+            self.records = validate({'questions': payload['questions'], 'notes': None})
         except ImportError_ as exc:
             raise forms.ValidationError(str(exc))
         return cleaned

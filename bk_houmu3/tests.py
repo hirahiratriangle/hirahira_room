@@ -557,6 +557,14 @@ class ViewTests(TestCase):
         for word in ('図が本質の問題は作れません', '上付き', '組合せを1つの選択肢'):
             self.assertIn(word, html)
 
+    def test_prompt_asks_for_questions_only(self):
+        """法務3級は技術解説を使わないので、プロンプトでも作らせない。"""
+        prompt = build_prompt()
+        self.assertIn('技術解説（"notes"）は作らないでください', prompt)
+        self.assertNotIn('"notes": [', prompt)
+        self.assertNotIn('科目B', prompt)
+        self.assertIn('choices は5つ', prompt)
+
     def test_prompt_states_unsupported_formats(self):
         """利用者が AI に渡すプロンプトにも、扱えない形式を書いておく。"""
         from .exam import build_prompt
@@ -1161,12 +1169,6 @@ class ManageTests(TestCase):
             content_type='application/json',
         )}
 
-    def _upload_with_notes(self, n=3, codes=(9, 11), topic=None):
-        return self._json_upload({
-            'notes': build_notes(codes=codes, topic=topic),
-            'questions': json.loads(self._payload(n)),
-        })
-
     def _payload(self, n=3, prefix='問題'):
         return json.dumps([
             {
@@ -1197,19 +1199,11 @@ class ManageTests(TestCase):
         self.assertNotContains(response, '<textarea')
 
     def test_a_large_file_is_accepted(self):
-        """解説を添えると 1MB を超えるので、その大きさで通ること。"""
+        """解説の長い問題を収録しても受け付けること（2MB を超える大きさで確かめる）。"""
         records = json.loads(self._payload(200, '大きな問題'))
-        notes = [
-            {
-                'category': 11, 'topic': '情報セキュリティ',
-                'title': '解説{}'.format(i), 'body': 'あ' * 8000, 'source': 'テスト',
-            }
-            for i in range(120)
-        ]
-        payload = json.dumps(
-            {'notes': notes, 'questions': records}, ensure_ascii=False
-        ).encode('utf-8')
-        # 小分類ぶんの解説を厚く書いた実運用の大きさを想定する。
+        for record in records:
+            record['explanation'] = 'あ' * 4000
+        payload = json.dumps({'questions': records}, ensure_ascii=False).encode('utf-8')
         self.assertGreater(len(payload), 2 * 1024 * 1024, '2MB を超える前提のテスト')
 
         response = self.client.post(reverse('bk_houmu3:manage_upload'), {
@@ -1218,7 +1212,6 @@ class ManageTests(TestCase):
         })
         self.assertRedirects(response, reverse('bk_houmu3:manage_list'))
         self.assertEqual(Question.objects.all().count(), 200)
-        self.assertEqual(LearningNote.objects.all().count(), 120)
 
     def test_upload_is_required(self):
         response = self.client.post(reverse('bk_houmu3:manage_upload'), {})
@@ -1311,29 +1304,26 @@ class ManageTests(TestCase):
                 self.assertTrue(response.context['form'].errors)
                 self.assertEqual(Question.objects.all().count(), 0)
 
-    def test_export_round_trips_without_losing_notes(self):
-        """書き出して取り込み直しても、問題も解説も失われないこと。
+    def test_export_round_trips(self):
+        """書き出して取り込み直すと、元の問題集に戻ること。
 
-        取り込みは解説も一括で差し替えるので、書き出しに解説が入っていないと、
-        往復しただけで教材が消える。
+        書き出しに技術解説は入れない。入れると取り込みの画面が弾くので、往復できなくなる。
         """
-        self.client.post(reverse('bk_houmu3:manage_upload'), self._upload_with_notes(4))
+        self.client.post(reverse('bk_houmu3:manage_upload'), self._json_upload(json.loads(self._payload(4))))
         before_q = Question.objects.all().count()
-        before_n = LearningNote.objects.all().count()
-        self.assertEqual((before_q, before_n), (4, 2))
+        self.assertEqual(before_q, 4)
 
         response = self.client.get(reverse('bk_houmu3:manage_export'))
         self.assertEqual(response.status_code, 200)
         payload = json.loads(response.content.decode('utf-8'))
         self.assertEqual(len(payload['questions']), 4)
-        self.assertEqual(len(payload['notes']), 2)
+        self.assertNotIn('notes', payload)
         self.assertNotIn('key', payload['questions'][0], '書き出しにキーは含めない')
 
         response = self.client.post(
             reverse('bk_houmu3:manage_upload'), self._json_upload(payload))
         self.assertRedirects(response, reverse('bk_houmu3:manage_list'))
         self.assertEqual(Question.objects.all().count(), before_q)
-        self.assertEqual(LearningNote.objects.all().count(), before_n)
 
     def test_choice_labels_cover_a_long_answer_group(self):
         """選択肢が多くても記号が割り当たること。"""
@@ -1458,60 +1448,41 @@ class ImportNotesTests(TestCase):
         kept.refresh_from_db()
         self.assertEqual(kept.explanation, '書き直した解説')
 
-    def test_both_files_can_be_uploaded_at_once(self):
-        """問題と解説を別々の欄で選んで、1回で取り込める。"""
-        admin = make_learner('twofiles', is_admin=True)
-        enter(self.client, admin)
-        questions = json.dumps({'questions': [
-            {'category': 11, 'stem': 'まとめて取り込む問題',
-             'choices': ['a', 'b', 'c', 'd'], 'answer': 0},
-        ]}, ensure_ascii=False)
-        notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
+    def test_notes_cannot_be_uploaded_from_the_screen(self):
+        """法務3級は技術解説を使わないので、取り込みの画面は解説を受け付けない。
 
-        response = self.client.post(reverse('bk_houmu3:manage_upload'), {
-            'questions_file': SimpleUploadedFile('q.json', questions.encode('utf-8')),
-            'notes_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
-        })
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(Question.objects.filter(template__isnull=True).count(), 1)
-        self.assertEqual(LearningNote.objects.count(), 2)
-
-    def test_notes_file_alone_is_accepted_from_the_screen(self):
-        """解説の欄だけ選んでも取り込める。問題には触らない。"""
+        解説の欄は置かず、問題のファイルに "notes" が入っていたら取り違えとして弾く。
+        弾いたときは問題にも触らない。
+        """
         build_questions(per_category=1)
         before = Question.objects.count()
-        admin = make_learner('notesonly', is_admin=True)
+        admin = make_learner('nonotes', is_admin=True)
         enter(self.client, admin)
-        notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
 
-        response = self.client.post(reverse('bk_houmu3:manage_upload'), {
-            'notes_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
-        })
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(LearningNote.objects.count(), 2)
-        self.assertEqual(Question.objects.count(), before, '問題はそのまま')
+        page = self.client.get(reverse('bk_houmu3:manage_upload'))
+        self.assertNotContains(page, 'name="notes_file"')
+        self.assertNotIn('notes_file', page.context['form'].fields)
 
-    def test_upload_needs_at_least_one_file(self):
-        """どちらも選ばずに送ったら、理由を添えて止める。"""
+        questions = [{'category': 11, 'stem': 'まとめて取り込む問題',
+                      'choices': ['a', 'b', 'c', 'd', 'e'], 'answer': 0}]
+        for payload in ({'notes': build_notes()}, {'notes': build_notes(), 'questions': questions}):
+            with self.subTest(keys=sorted(payload)):
+                response = self.client.post(reverse('bk_houmu3:manage_upload'), {
+                    'questions_file': SimpleUploadedFile(
+                        'x.json', json.dumps(payload, ensure_ascii=False).encode('utf-8')),
+                })
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, '技術解説（&quot;notes&quot;）が入っています')
+                self.assertEqual(LearningNote.objects.count(), 0)
+                self.assertEqual(Question.objects.count(), before, '弾いたら問題にも触らない')
+
+    def test_upload_needs_a_file(self):
+        """ファイルを選ばずに送ったら、理由を添えて止める。"""
         admin = make_learner('nofile', is_admin=True)
         enter(self.client, admin)
         response = self.client.post(reverse('bk_houmu3:manage_upload'), {})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'どちらか一方は選んでください')
-
-    def test_same_side_in_both_files_is_rejected(self):
-        """両方の欄に問題を入れたら、どちらを使うか決められないので弾く。"""
-        admin = make_learner('bothq', is_admin=True)
-        enter(self.client, admin)
-        payload = json.dumps({'questions': [
-            {'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0},
-        ]}, ensure_ascii=False).encode('utf-8')
-        response = self.client.post(reverse('bk_houmu3:manage_upload'), {
-            'questions_file': SimpleUploadedFile('a.json', payload),
-            'notes_file': SimpleUploadedFile('b.json', payload),
-        })
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '両方に問題が入っています')
+        self.assertContains(response, '問題の JSON ファイルを選んでください')
 
     def test_preview_counts_without_writing(self):
         """下見は数えるだけで、1件も書き込まない。"""
