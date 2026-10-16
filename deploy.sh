@@ -41,12 +41,42 @@ fi
 
 echo "デプロイするコミット: $(git log --oneline -1)"
 echo "zip のファイル数: $(unzip -Z1 "$ZIP" | wc -l | tr -d ' ')"
-# --track-status false：デプロイ（ビルド）の完了までは待つが、そのあとの「起動状態の追跡」はしない。
-# 追跡を有効にしたままだと、デプロイが数分で終わっていても返ってこないことがあった
-# （2026-10-16。Azure 側は3分で完了していたのに、コマンドが30分戻らなかった）。
-# 起動したかは、このあと自分で確かめる。
-az webapp deploy --name hirahira-room --resource-group hirahira --src-path "$ZIP" --type zip \
-    --track-status false
+# zip を送ったらすぐ戻る（--async true）。完了は Azure 側のデプロイ記録で確かめる。
+# 同期のまま（--async を付けない）だと、Azure 側でデプロイが3分で終わっていても
+# コマンドが戻らないことがあった。--track-status false にしても同じだった（2026-10-16 に2回）。
+APP="--name hirahira-room --resource-group hirahira"
+SENT_AT="$(date -u +%Y-%m-%dT%H:%M:%S)"
+az webapp deploy $APP --src-path "$ZIP" --type zip --async true --track-status false
+
+# デプロイの完了を待つ（最大15分）。送った時刻より後に受け付けた記録が complete になるまで。
+# status は Kudu の値で、4 が成功、3 が失敗。
+echo "ビルドとデプロイの完了を待っています…"
+i=0
+while :; do
+    # 1行に「受け付け時刻 完了したか 状態」を並べて読む（-o tsv は1項目1行で出るので使わない）
+    ROW="$(az webapp log deployment list $APP --query "[0]" -o json 2>/dev/null \
+        | python3 -c 'import json,sys; d=json.load(sys.stdin) or {}; print(str(d.get("received_time",""))[:19], str(d.get("complete","")).lower(), d.get("status",""))' \
+        2>/dev/null || true)"
+    RECEIVED="$(echo "$ROW" | cut -d' ' -f1)"
+    COMPLETE="$(echo "$ROW" | cut -d' ' -f2)"
+    STATUS="$(echo "$ROW" | cut -d' ' -f3)"
+    # 送った時刻以後に受け付けた記録か（ISO 形式なので文字列の並びで前後が決まる）
+    LATER="$(printf '%s\n%s\n' "$SENT_AT" "$RECEIVED" | sort | tail -1)"
+    if [ -n "$RECEIVED" ] && [ "$LATER" = "$RECEIVED" ] && [ "$COMPLETE" = "true" ]; then
+        if [ "$STATUS" = "4" ]; then
+            echo "デプロイが完了しました（受け付け ${RECEIVED}Z）。"
+            break
+        fi
+        echo "デプロイが失敗しました（status ${STATUS}）。az webapp log deployment show $APP で確かめてください。" >&2
+        exit 1
+    fi
+    i=$((i + 1))
+    if [ "$i" -ge 60 ]; then
+        echo "15分待ってもデプロイが終わりません。az webapp log deployment list $APP で確かめてください。" >&2
+        exit 1
+    fi
+    sleep 15
+done
 
 # 起動を待つ。ログイン画面が 200 を返せば動いている（最大10分）
 URL="https://hirahira-room.azurewebsites.net/accounts/login/"
@@ -54,7 +84,7 @@ i=0
 until [ "$(curl -s -o /dev/null -m 30 -w '%{http_code}' "$URL")" = "200" ]; do
     i=$((i + 1))
     if [ "$i" -ge 40 ]; then
-        echo "10分待ってもサイトが応答しません。az webapp log tail で確かめてください。" >&2
+        echo "10分待ってもサイトが応答しません。az webapp log tail $APP で確かめてください。" >&2
         exit 1
     fi
     sleep 15
