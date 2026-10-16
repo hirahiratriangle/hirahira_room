@@ -27,7 +27,7 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 ZIP="$(mktemp -d)/hirahira_room.zip"
-trap 'rm -rf "$(dirname "$ZIP")"' EXIT
+trap 'rm -rf "$(dirname "$ZIP")"' EXIT   # az を裏で動かすところで、止める処理も足して張り直す
 
 git archive --format=zip -o "$ZIP" HEAD
 
@@ -41,14 +41,20 @@ fi
 
 echo "デプロイするコミット: $(git log --oneline -1)"
 echo "zip のファイル数: $(unzip -Z1 "$ZIP" | wc -l | tr -d ' ')"
-# zip を送ったらすぐ戻る（--async true）。完了は Azure 側のデプロイ記録で確かめる。
-# 同期のまま（--async を付けない）だと、Azure 側でデプロイが3分で終わっていても
-# コマンドが戻らないことがあった。--track-status false にしても同じだった（2026-10-16 に2回）。
+# az webapp deploy は、Azure 側でデプロイが終わっても戻らないことがある。
+# 同期でも、--track-status false でも、--async true でも同じだった（2026-10-16 に3回。
+# どれも Azure 側は約3分で完了していた）。そこで az は裏で動かし、完了は Azure の
+# デプロイ記録で確かめ、終わったら固まった az を止める。
 APP="--name hirahira-room --resource-group hirahira"
+LOG="$(dirname "$ZIP")/az.log"
 SENT_AT="$(date -u +%Y-%m-%dT%H:%M:%S)"
-az webapp deploy $APP --src-path "$ZIP" --type zip --async true --track-status false
+az webapp deploy $APP --src-path "$ZIP" --type zip --async true --track-status false >"$LOG" 2>&1 &
+AZ_PID=$!
+# az はシェルの包みで、中で python が動く。子から止めてから親を止める
+stop_az() { pkill -P "$AZ_PID" 2>/dev/null || true; kill "$AZ_PID" 2>/dev/null || true; }
+trap 'stop_az; rm -rf "$(dirname "$ZIP")"' EXIT
 
-# デプロイの完了を待つ（最大15分）。送った時刻より後に受け付けた記録が complete になるまで。
+# デプロイの完了を待つ（最大15分）。送った時刻以後に受け付けた記録が complete になるまで。
 # status は Kudu の値で、4 が成功、3 が失敗。
 echo "ビルドとデプロイの完了を待っています…"
 i=0
@@ -63,12 +69,23 @@ while :; do
     # 送った時刻以後に受け付けた記録か（ISO 形式なので文字列の並びで前後が決まる）
     LATER="$(printf '%s\n%s\n' "$SENT_AT" "$RECEIVED" | sort | tail -1)"
     if [ -n "$RECEIVED" ] && [ "$LATER" = "$RECEIVED" ] && [ "$COMPLETE" = "true" ]; then
+        stop_az
         if [ "$STATUS" = "4" ]; then
             echo "デプロイが完了しました（受け付け ${RECEIVED}Z）。"
             break
         fi
         echo "デプロイが失敗しました（status ${STATUS}）。az webapp log deployment show $APP で確かめてください。" >&2
         exit 1
+    fi
+    # az が自分で終わったら、終了コードを一度だけ受け取る。失敗して終わった
+    # （ログインが切れている、など）なら、記録を待っても来ないので止める
+    if [ -z "${AZ_RC:-}" ] && ! kill -0 "$AZ_PID" 2>/dev/null; then
+        if wait "$AZ_PID"; then AZ_RC=0; else AZ_RC=$?; fi
+        if [ "$AZ_RC" != 0 ]; then
+            echo "az webapp deploy が失敗しました（終了コード ${AZ_RC}）。" >&2
+            cat "$LOG" >&2
+            exit 1
+        fi
     fi
     i=$((i + 1))
     if [ "$i" -ge 60 ]; then
