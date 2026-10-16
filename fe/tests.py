@@ -951,6 +951,14 @@ class LearnerIdTests(TestCase):
     def _post(self, code, action):
         return self.client.post(reverse('fe:index'), {'code': code, 'action': action})
 
+    def test_the_entrance_says_how_the_records_are_used(self):
+        """記録を本人の機能以外に何に使うかを、入口と切り替え画面に書いておく。"""
+        for name in ('fe:index', 'fe:enter'):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name))
+                self.assertContains(response, 'ID ごとの成績が分からない形に集計して')
+                self.assertContains(response, '運営は ID ごとの記録を見られます。')
+
     def test_the_id_is_forgotten_when_the_browser_is_closed(self):
         """入った ID は、ブラウザを閉じたら消える Cookie にも置く。消えたら入口に戻る。
 
