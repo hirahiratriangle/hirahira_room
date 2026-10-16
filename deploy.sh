@@ -41,4 +41,22 @@ fi
 
 echo "デプロイするコミット: $(git log --oneline -1)"
 echo "zip のファイル数: $(unzip -Z1 "$ZIP" | wc -l | tr -d ' ')"
-az webapp deploy --name hirahira-room --resource-group hirahira --src-path "$ZIP" --type zip
+# --track-status false：デプロイ（ビルド）の完了までは待つが、そのあとの「起動状態の追跡」はしない。
+# 追跡を有効にしたままだと、デプロイが数分で終わっていても返ってこないことがあった
+# （2026-10-16。Azure 側は3分で完了していたのに、コマンドが30分戻らなかった）。
+# 起動したかは、このあと自分で確かめる。
+az webapp deploy --name hirahira-room --resource-group hirahira --src-path "$ZIP" --type zip \
+    --track-status false
+
+# 起動を待つ。ログイン画面が 200 を返せば動いている（最大10分）
+URL="https://hirahira-room.azurewebsites.net/accounts/login/"
+i=0
+until [ "$(curl -s -o /dev/null -m 30 -w '%{http_code}' "$URL")" = "200" ]; do
+    i=$((i + 1))
+    if [ "$i" -ge 40 ]; then
+        echo "10分待ってもサイトが応答しません。az webapp log tail で確かめてください。" >&2
+        exit 1
+    fi
+    sleep 15
+done
+echo "デプロイしました。サイトは応答しています。"
