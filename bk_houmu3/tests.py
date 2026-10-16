@@ -565,6 +565,16 @@ class ViewTests(TestCase):
         for word in ('図が必要な問題は作らない', '2のn乗', 'ルビ', '複数正解や部分点はない'):
             self.assertIn(word, prompt)
 
+    def test_learning_mode_has_no_entry(self):
+        """法務3級は解説（notes）を作らないので、学習モードの入口をどの画面にも出さない。"""
+        learn = reverse('bk_houmu3:learn_start')
+        for url in (dashboard(self.learner), reverse('bk_houmu3:quiz'), reverse('bk_houmu3:stats'),
+                    reverse('bk_houmu3:history')):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertNotContains(response, 'href="{}"'.format(learn))
+                self.assertNotContains(response, '学習モード')
+
     def test_index_renders(self):
         response = self.client.get(dashboard(self.learner))
         self.assertEqual(response.status_code, 200)
