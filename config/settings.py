@@ -36,6 +36,9 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # メディアファイル設定
 MEDIA_ROOT = '/home/site/wwwroot/media'
 
+# 読み上げ音声は wwwroot の外に置く。wwwroot はデプロイで中身が入れ替わることがある。
+FE_AUDIO_ROOT = '/home/fe_audio'
+
 # ロギング設定（Azure用に修正）
 LOGGING = {
     'version': 1,

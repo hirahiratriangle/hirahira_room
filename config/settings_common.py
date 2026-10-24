@@ -139,6 +139,9 @@ LOGIN_URL = 'account_login'
 # メディアファイル設定
 MEDIA_URL = '/media/'
 
+# FE の技術解説の読み上げ音声（manage.py make_note_audio で作る）
+FE_AUDIO_ROOT = BASE_DIR / 'media' / 'fe_audio'
+
 # カスタムユーザーモデルの指定
 AUTH_USER_MODEL = 'accounts.CustomUser'
 

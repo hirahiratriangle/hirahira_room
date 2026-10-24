@@ -14,6 +14,9 @@ urlpatterns = [
     # 学習モード（先に解説を読み、そのあと同じ範囲を解く）
     path('learn/', views.LearnStartView.as_view(), name='learn_start'),
     path('learn/<int:pk>/read/', views.LearnReadView.as_view(), name='learn_read'),
+    # 読み上げを再生している間は、読む時間を止める
+    path('learn/<int:pk>/timer/', views.LearnTimerView.as_view(), name='learn_timer'),
+    path('learn/audio/<str:name>', views.NoteAudioView.as_view(), name='note_audio'),
     path('learn/<int:pk>/quiz/', views.LearnQuizView.as_view(), name='learn_quiz'),
     path('learn/<int:pk>/next/', views.LearnNextView.as_view(), name='learn_next'),
     path('learn/<int:pk>/abandon/', views.LearnAbandonView.as_view(), name='learn_abandon'),

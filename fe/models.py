@@ -540,6 +540,9 @@ class LearningRound(models.Model):
     position = models.PositiveSmallIntegerField(verbose_name='解答中の位置', default=0)
     started_at = models.DateTimeField(verbose_name='開始日時', auto_now_add=True)
     finished_at = models.DateTimeField(verbose_name='終了日時', null=True, blank=True)
+    # 読み上げている間は読む時間を止める。止めていた合計と、いま止めている始まり。
+    paused_seconds = models.PositiveIntegerField(verbose_name='止めていた秒数', default=0)
+    paused_at = models.DateTimeField(verbose_name='止めた日時', null=True, blank=True)
 
     class Meta:
         verbose_name = verbose_name_plural = 'FE 学習ラウンド'
@@ -562,6 +565,29 @@ class LearningRound(models.Model):
             LearningNote.objects.filter(category=self.note.category, topic=self.note.topic)
             .select_related('category').order_by('id')
         )
+
+    def remaining_seconds(self, now=None):
+        """読む時間の残り。開始時刻から数え、止めていた時間は差し引く。"""
+        now = now or timezone.now()
+        paused = self.paused_seconds
+        if self.paused_at is not None:
+            paused += (now - self.paused_at).total_seconds()
+        elapsed = (now - self.started_at).total_seconds() - paused
+        return max(0, int(self.reading_seconds - elapsed))
+
+    def pause(self, now=None):
+        """読む時間を止める。止まっていれば何もしない。"""
+        if self.paused_at is None:
+            self.paused_at = now or timezone.now()
+            self.save(update_fields=['paused_at'])
+
+    def resume(self, now=None):
+        """読む時間を動かす。止めていた時間を合計に足す。"""
+        if self.paused_at is not None:
+            now = now or timezone.now()
+            self.paused_seconds += int((now - self.paused_at).total_seconds())
+            self.paused_at = None
+            self.save(update_fields=['paused_seconds', 'paused_at'])
 
     @property
     def title(self):

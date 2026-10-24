@@ -6,8 +6,12 @@
   ・一括差し替えをしても解答履歴と分野別の正答率が残るか
 """
 
+import io
 import json
 import random
+import tempfile
+from pathlib import Path
+from unittest import mock
 import html
 import re
 
@@ -15,9 +19,11 @@ from accounts.models import CustomUser
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Sum
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.utils import timezone
 from django.urls import reverse
 
+from . import speech
 from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
 from .importer import (ImportError_, needs_confirmation, parse, preview, sync,
@@ -2686,3 +2692,185 @@ class FigureTests(TestCase):
         })
         self.assertContains(response, 'src="{}"'.format(png_uri()), msg_prefix='答えた後も図を出す')
         self.assertContains(response, 'src="{}"'.format(png_uri(4)))
+
+
+class NoteAudioTests(TestCase):
+    """技術解説の読み上げ。音声は解説ごとに一度だけ作り、読んでいる間は時間を止める。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+        cls.learner = make_learner('listener')
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        override = override_settings(FE_AUDIO_ROOT=folder.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.root = Path(folder.name)
+        enter(self.client, self.learner)
+
+    def _start_round(self):
+        build_questions(per_category=12)
+        LearningNote.objects.all().delete()
+        for note in build_notes(codes=(9,)):
+            LearningNote.objects.create(
+                category=Category.objects.get(code=note['category']),
+                topic=note['topic'], title=note['title'],
+                body=note['body'], source=note['source'],
+            )
+        self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        return LearningRound.objects.get(learner=self.learner)
+
+    def _put_audio(self, note, data=b'0123456789'):
+        (self.root / speech.audio_name(note)).write_bytes(data)
+
+    def test_spoken_text_reads_symbols_as_words(self):
+        self.assertEqual(speech.spoken_text('n×(n−1)÷2'), 'nかける(nひく1)わる2')
+        self.assertEqual(speech.spoken_text('相関係数は−1から1'), '相関係数はマイナス1から1')
+        self.assertEqual(speech.spoken_text('30＋22、P＝10'), '30たす22、Pイコール10')
+        self.assertEqual(speech.spoken_text('JavaやC++'), 'Javaやシープラスプラス')
+
+    def test_long_text_is_split_at_paragraphs(self):
+        text = '\n\n'.join(['あ' * 500, 'い' * 500, 'う' * 500])
+        parts = speech.chunks(text)
+        self.assertEqual(parts, ['あ' * 500 + '\n' + 'い' * 500, 'う' * 500])
+
+    def test_name_changes_only_when_the_body_changes(self):
+        note = LearningNote(title='見出し', body='本文')
+        same = LearningNote(title='別の見出し', body='本文')
+        edited = LearningNote(title='見出し', body='直した本文')
+        self.assertEqual(speech.audio_name(note), speech.audio_name(same))
+        self.assertNotEqual(speech.audio_name(note), speech.audio_name(edited))
+        self.assertRegex(speech.audio_name(note), speech.NAME_PATTERN)
+
+    def test_player_appears_only_when_the_audio_exists(self):
+        round_ = self._start_round()
+        url = reverse('fe:learn_read', args=[round_.pk])
+        self.assertNotContains(self.client.get(url), '<audio')
+
+        self._put_audio(round_.note)
+        self.assertContains(
+            self.client.get(url),
+            reverse('fe:note_audio', args=[speech.audio_name(round_.note)]),
+        )
+
+    def test_audio_answers_range_requests(self):
+        """iPhone の Safari は Range 要求で取りに来るので、206 で一部だけ返す。"""
+        round_ = self._start_round()
+        self._put_audio(round_.note)
+        url = reverse('fe:note_audio', args=[speech.audio_name(round_.note)])
+
+        whole = self.client.get(url)
+        self.assertEqual(whole.status_code, 200)
+        self.assertEqual(b''.join(whole.streaming_content), b'0123456789')
+        self.assertEqual(whole['Accept-Ranges'], 'bytes')
+
+        part = self.client.get(url, HTTP_RANGE='bytes=0-1')
+        self.assertEqual(part.status_code, 206)
+        self.assertEqual(part.content, b'01')
+        self.assertEqual(part['Content-Range'], 'bytes 0-1/10')
+
+        tail = self.client.get(url, HTTP_RANGE='bytes=-3')
+        self.assertEqual(tail.content, b'789')
+        self.assertEqual(self.client.get(url, HTTP_RANGE='bytes=4-').content, b'456789')
+        self.assertEqual(self.client.get(url, HTTP_RANGE='bytes=20-').status_code, 416)
+
+    def test_audio_rejects_other_names_and_strangers(self):
+        self.assertEqual(
+            self.client.get(reverse('fe:note_audio', args=['db.sqlite3'])).status_code, 404
+        )
+        self.assertEqual(
+            self.client.get(reverse('fe:note_audio', args=['0' * 20 + '.mp3'])).status_code, 404
+        )
+        round_ = self._start_round()
+        self._put_audio(round_.note)
+        stranger = self.client_class()
+        response = stranger.get(reverse('fe:note_audio', args=[speech.audio_name(round_.note)]))
+        self.assertRedirects(response, reverse('fe:index'), fetch_redirect_response=False)
+
+    def test_time_spent_listening_is_not_counted(self):
+        round_ = self._start_round()
+        now = timezone.now()
+        LearningRound.objects.filter(pk=round_.pk).update(
+            started_at=now - timezone.timedelta(seconds=200),
+            paused_at=now - timezone.timedelta(seconds=150),
+        )
+        round_.refresh_from_db()
+        # 200秒前に始め、150秒前から止めている。進んだのは50秒だけ
+        self.assertEqual(round_.remaining_seconds(now), 250)
+        round_.resume(now)
+        self.assertEqual(round_.paused_seconds, 150)
+        self.assertEqual(round_.remaining_seconds(now), 250)
+
+    def test_timer_endpoint_pauses_and_resumes(self):
+        round_ = self._start_round()
+        url = reverse('fe:learn_timer', args=[round_.pk])
+        response = self.client.post(url, {'state': 'pause'})
+        self.assertIn('remaining', response.json())
+        round_.refresh_from_db()
+        self.assertIsNotNone(round_.paused_at)
+
+        self.client.post(url, {'state': 'resume'})
+        round_.refresh_from_db()
+        self.assertIsNone(round_.paused_at)
+
+    def test_reloading_while_paused_starts_the_timer_again(self):
+        """開き直すと読み上げは止まっているので、止めたままにしない。"""
+        round_ = self._start_round()
+        LearningRound.objects.filter(pk=round_.pk).update(
+            paused_at=timezone.now() - timezone.timedelta(seconds=30),
+        )
+        self.client.get(reverse('fe:learn_read', args=[round_.pk]))
+        round_.refresh_from_db()
+        self.assertIsNone(round_.paused_at)
+        self.assertGreaterEqual(round_.paused_seconds, 30)
+
+    def test_command_makes_only_missing_audio(self):
+        round_ = self._start_round()
+        notes = list(LearningNote.objects.all())
+        self._put_audio(notes[0])
+        calls = []
+
+        def fake(text, key, region):
+            calls.append(text)
+            return b'mp3'
+
+        with mock.patch.object(speech, 'synthesize', fake), \
+                mock.patch.object(speech, 'REQUEST_INTERVAL', 0), \
+                mock.patch.dict('os.environ', {'AZURE_SPEECH_KEY': 'k', 'AZURE_SPEECH_REGION': 'r'}):
+            call_command('make_note_audio', stdout=io.StringIO())
+        self.assertEqual(len(calls), len(notes) - 1)
+        for note in notes:
+            self.assertTrue(speech.has_audio(note))
+
+        (self.root / ('f' * 20 + '.mp3')).write_bytes(b'old')
+        call_command('make_note_audio', '--prune', stdout=io.StringIO())
+        self.assertEqual(
+            sorted(p.name for p in self.root.iterdir()),
+            sorted(speech.audio_name(n) for n in notes),
+        )
+
+    def test_only_subject_a_notes_are_read_aloud(self):
+        """科目Bの解説には音声を作らず、ファイルがあっても再生ボタンを出さない。"""
+        round_ = self._start_round()
+        b_category = Category.objects.filter(subject=Question.SUBJECT_B).first()
+        b_note = LearningNote.objects.create(
+            category=b_category, topic='擬似言語', title='科目Bの解説', body='科目Bの本文',
+        )
+        self.assertFalse(speech.speaks(b_note))
+        self._put_audio(b_note)
+        self.assertFalse(speech.has_audio(b_note))
+
+        with mock.patch.object(speech, 'synthesize', return_value=b'mp3') as fake, \
+                mock.patch.object(speech, 'REQUEST_INTERVAL', 0), \
+                mock.patch.dict('os.environ', {'AZURE_SPEECH_KEY': 'k', 'AZURE_SPEECH_REGION': 'r'}):
+            call_command('make_note_audio', stdout=io.StringIO())
+        texts = [c.args[0] for c in fake.call_args_list]
+        self.assertFalse(any('科目Bの本文' in t for t in texts))
+        self.assertTrue(speech.has_audio(round_.note))
+
+        LearningRound.objects.filter(pk=round_.pk).update(note=b_note)
+        page = self.client.get(reverse('fe:learn_read', args=[round_.pk]))
+        self.assertNotContains(page, '<audio')

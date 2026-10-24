@@ -16,6 +16,7 @@ login_not_required で外してあり、hirahira_room にログインしなく�
 import logging
 
 import json
+import re
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
@@ -23,7 +24,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
-from django.http import Http404
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -35,6 +36,7 @@ from .forms import LearnerForm, PassReportForm, QuestionUploadForm
 from .importer import (ImportError_, needs_confirmation, parse,
                        preview, sync, validate)
 from .learning import current_item, focus_category, grade, note_menu, start_round
+from . import speech
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
                      LearningRound, PassReport, Question, QuestionTemplate,
                      StudySession)
@@ -716,14 +718,22 @@ class LearnReadView(LearnerRequiredMixin, generic.View):
         if round_.phase == LearningRound.PHASE_QUIZ:
             return redirect('fe:learn_quiz', pk=round_.pk)
 
-        elapsed = (timezone.now() - round_.started_at).total_seconds()
+        # 開き直した時点で読み上げは止まっているので、止めていた時間を動かす
+        if round_.phase == LearningRound.PHASE_READING:
+            round_.resume()
+        # 同じ小分類の解説は、まとめて続けて読む
+        notes = round_.notes
+        for note in notes:
+            note.audio_url = (
+                reverse('fe:note_audio', args=[speech.audio_name(note)])
+                if speech.has_audio(note) else None
+            )
         return render(request, self.template_name, {
             'round': round_,
-            # 同じ小分類の解説は、まとめて続けて読む
-            'notes': round_.notes,
+            'notes': notes,
             'finished': round_.phase == LearningRound.PHASE_DONE,
             # 途中で再読み込みしても、残り時間は開始時刻から数え直す
-            'remaining': max(0, int(round_.reading_seconds - elapsed)),
+            'remaining': round_.remaining_seconds(),
         })
 
     def post(self, request, pk, *args, **kwargs):
@@ -732,6 +742,69 @@ class LearnReadView(LearnerRequiredMixin, generic.View):
             round_.phase = LearningRound.PHASE_QUIZ
             round_.save(update_fields=['phase'])
         return redirect('fe:learn_quiz', pk=round_.pk)
+
+
+class LearnTimerView(LearnerRequiredMixin, generic.View):
+    """読む時間を止める・動かす。読み上げを再生している間は止める。
+
+    残り時間はサーバーで数えているので、止めたこともサーバーに残す。画面の
+    数字だけ止めると、再読み込みしたときに止めていた分が消える。
+    """
+
+    def post(self, request, pk, *args, **kwargs):
+        round_ = get_object_or_404(LearningRound, pk=pk, learner=self.learner)
+        if round_.phase == LearningRound.PHASE_READING:
+            if request.POST.get('state') == 'pause':
+                round_.pause()
+            else:
+                round_.resume()
+        return JsonResponse({'remaining': round_.remaining_seconds()})
+
+
+_RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')
+
+
+class NoteAudioView(LearnerRequiredMixin, generic.View):
+    """技術解説の読み上げ音声を返す。
+
+    iPhone の Safari は音声を「何バイト目から何バイト目まで」と区切って取りに来る
+    （Range 要求）。これに 206 で応えないと、再生や途中への移動ができないことがある。
+    ファイル名は本文から計算したハッシュで、中身が変わることはないので長く持たせる。
+    """
+
+    def get(self, request, name, *args, **kwargs):
+        if not speech.NAME_PATTERN.match(name):
+            raise Http404
+        path = speech.audio_root() / name
+        if not path.is_file():
+            raise Http404
+        size = path.stat().st_size
+        match = _RANGE.match(request.headers.get('Range', ''))
+        if match is None:
+            response = FileResponse(open(path, 'rb'), content_type='audio/mpeg')
+        else:
+            first, last = match.groups()
+            if first:
+                start, end = int(first), int(last) if last else size - 1
+            elif last:
+                # 「末尾の n バイト」の形
+                start, end = max(0, size - int(last)), size - 1
+            else:
+                start, end = 0, size - 1
+            end = min(end, size - 1)
+            if start > end:
+                response = HttpResponse(status=416)
+                response['Content-Range'] = 'bytes */{}'.format(size)
+                return response
+            with open(path, 'rb') as audio:
+                audio.seek(start)
+                data = audio.read(end - start + 1)
+            response = HttpResponse(data, status=206, content_type='audio/mpeg')
+            response['Content-Range'] = 'bytes {}-{}/{}'.format(start, end, size)
+            response['Content-Length'] = str(len(data))
+        response['Accept-Ranges'] = 'bytes'
+        response['Cache-Control'] = 'private, max-age=31536000, immutable'
+        return response
 
 
 class LearnQuizView(LearnerRequiredMixin, generic.View):

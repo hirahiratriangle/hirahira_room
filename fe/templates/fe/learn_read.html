@@ -29,6 +29,7 @@
             読み終わったら、この範囲から{{ round.total }}問出題します
         </div>
         <div class="d-flex align-items-center gap-3">
+            <span class="small text-muted d-none" id="timerPaused">読み上げ中は止めています</span>
             <span class="fw-bold fs-5" id="timer" style="color:#2c5aa0;">--:--</span>
             <form method="post" action="{% url 'fe:learn_abandon' round.pk %}" class="mb-0">
                 {% csrf_token %}
@@ -50,6 +51,9 @@
             {% if notes|length > 1 %}<span class="text-muted small ms-2">{{ forloop.counter }} / {{ notes|length }}</span>{% endif %}
         </div>
         <h2 class="h4 fw-bold mb-3">{{ note.title }}</h2>
+        {% if note.audio_url %}
+        <audio class="fe-note-audio w-100 mb-3" controls preload="none" src="{{ note.audio_url }}"></audio>
+        {% endif %}
         <div class="fe-note-body">{{ note.body }}</div>
         {% if note.source %}
         <div class="text-muted small mt-4 pt-3 border-top">出題範囲：{{ note.source }}<br>本文は、この範囲の用語をもとに書き起こしたものです。</div>
@@ -61,32 +65,97 @@
 
 {% block extra_js %}
 <script>
+// 一度に鳴らす読み上げは1本だけ。終わったラウンドで読み返すときも同じ。
+// 読み上げるのは画面を見ている間だけ。別のタブに移ったり画面を消したりしたら止める
+// （戻っても自動では再開しない）。
+(function () {
+    var players = Array.prototype.slice.call(document.querySelectorAll('.fe-note-audio'));
+    players.forEach(function (player) {
+        player.addEventListener('play', function () {
+            players.forEach(function (other) { if (other !== player) { other.pause(); } });
+        });
+    });
+    var stopAll = function () {
+        players.forEach(function (player) { player.pause(); });
+    };
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') { stopAll(); }
+    });
+    window.addEventListener('pagehide', stopAll);
+})();
+
 // 残り時間は開始時刻から数えるので、再読み込みしても増えない。
-// 0 になったら解答へ自動で進む。
+// 0 になったら解答へ自動で進む。読み上げを再生している間は止める。
 (function () {
     var remaining = {{ remaining }};
     var label = document.getElementById('timer');
+    var paused = document.getElementById('timerPaused');
     var button = document.getElementById('goQuiz');
     if (!label || !button) { return; }
+    var players = Array.prototype.slice.call(document.querySelectorAll('.fe-note-audio'));
+    var token = button.form.querySelector('[name=csrfmiddlewaretoken]').value;
+    var id = null;
 
     var render = function () {
         var m = Math.floor(remaining / 60);
         var s = remaining % 60;
         label.textContent = m + ':' + (s < 10 ? '0' : '') + s;
     };
-    render();
-    if (remaining <= 0) { button.form.submit(); return; }
-
-    var id = setInterval(function () {
+    var tick = function () {
         remaining -= 1;
         if (remaining <= 0) {
-            clearInterval(id);
+            stop();
             render();
             button.form.submit();
             return;
         }
         render();
-    }, 1000);
+    };
+    var start = function () {
+        if (id === null) { id = setInterval(tick, 1000); }
+    };
+    var stop = function () {
+        clearInterval(id);
+        id = null;
+    };
+    // 止めたことはサーバーにも残す。残り時間はサーバーの値に合わせ直す。
+    var send = function (state) {
+        return fetch('{% url "fe:learn_timer" round.pk %}', {
+            method: 'POST',
+            headers: {'X-CSRFToken': token},
+            body: new URLSearchParams({state: state}),
+            credentials: 'same-origin'
+        }).then(function (response) { return response.json(); })
+          .then(function (data) { remaining = data.remaining; render(); })
+          .catch(function () {});
+    };
+    var playing = function () {
+        return players.some(function (player) { return !player.paused; });
+    };
+
+    players.forEach(function (player) {
+        player.addEventListener('play', function () {
+            stop();
+            paused.classList.remove('d-none');
+            send('pause');
+        });
+        var onStop = function () {
+            // 別の解説の読み上げに切り替えただけなら、止めたままにする
+            if (playing()) { return; }
+            send('resume').then(function () {
+                if (playing()) { return; }
+                paused.classList.add('d-none');
+                if (remaining <= 0) { button.form.submit(); return; }
+                start();
+            });
+        };
+        player.addEventListener('pause', onStop);
+        player.addEventListener('ended', onStop);
+    });
+
+    render();
+    if (remaining <= 0) { button.form.submit(); return; }
+    start();
 })();
 </script>
 {% endblock %}
