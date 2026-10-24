@@ -10,6 +10,8 @@ urlpatterns = [
     # 入っていても開ける入口。別の ID に切り替えるときに使う
     path('enter/', views.EnterView.as_view(), name='enter'),
     path('quiz/', views.QuizView.as_view(), name='quiz'),
+    # 問題と解説の読み上げ音声（manage.py make_question_audio で作ったもの）
+    path('audio/<str:name>', views.QuestionAudioView.as_view(), name='question_audio'),
     path('quiz/settings/', views.QuizSettingsView.as_view(), name='quiz_settings'),
     # 学習モード（先に解説を読み、そのあと同じ範囲を解く）
     path('learn/', views.LearnStartView.as_view(), name='learn_start'),

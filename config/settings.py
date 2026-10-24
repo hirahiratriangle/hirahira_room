@@ -38,6 +38,7 @@ MEDIA_ROOT = '/home/site/wwwroot/media'
 
 # 読み上げ音声は wwwroot の外に置く。wwwroot はデプロイで中身が入れ替わることがある。
 FE_AUDIO_ROOT = '/home/fe_audio'
+BK_HOUMU3_AUDIO_ROOT = '/home/bk_houmu3_audio'
 
 # ロギング設定（Azure用に修正）
 LOGGING = {

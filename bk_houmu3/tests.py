@@ -6,8 +6,12 @@
   ・一括差し替えをしても解答履歴と分野別の正答率が残るか
 """
 
+import io
 import json
 import random
+import tempfile
+from pathlib import Path
+from unittest import mock
 import html
 import re
 
@@ -15,9 +19,10 @@ from accounts.models import CustomUser
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Sum
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from . import speech
 from .exam import EXAM, build_prompt
 from .generators import REGISTRY, generate_question
 from .importer import (ImportError_, needs_confirmation, parse, preview, sync,
@@ -2442,3 +2447,106 @@ class ManageNeedsStaffTests(TestCase):
             with self.subTest(page=name):
                 self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
+
+class QuestionAudioTests(TestCase):
+    """問題と解説の読み上げ。音声は文ごとに一度だけ作り、解答の前は問題を、後は解説を流す。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+        cls.learner = make_learner('listener')
+        build_questions(per_category=1)
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        override = override_settings(BK_HOUMU3_AUDIO_ROOT=folder.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.root = Path(folder.name)
+        enter(self.client, self.learner)
+
+    def _put_audio(self, text, data=b'0123456789'):
+        (self.root / speech.audio_name(text)).write_bytes(data)
+
+    def _shown_question(self):
+        page = self.client.get(reverse('bk_houmu3:quiz'))
+        return page, Question.objects.get(pk=self.client.session['bk_houmu3_pending_question_id'])
+
+    def test_question_text_reads_choices_with_numbers(self):
+        question = Question(stem='正しいものはどれですか。', choices=['甲である。', '乙である。'])
+        self.assertEqual(speech.question_text(question), '正しいものはどれですか。\n\n1、甲である。\n\n2、乙である。')
+
+    def test_spoken_text_drops_brackets_of_choice_numbers(self):
+        self.assertEqual(speech.spoken_text('（2）は正しく、(5)は誤り'), '2は正しく、5は誤り')
+        self.assertEqual(speech.spoken_text('（同条2項）'), '（同条2項）')
+        self.assertEqual(speech.spoken_text('3日～5日'), '3日から5日')
+
+    def test_long_text_is_split_at_lines(self):
+        text = '\n'.join(['あ' * 500, 'い' * 500, 'う' * 500])
+        self.assertEqual(speech.chunks(text), ['あ' * 500 + '\n' + 'い' * 500, 'う' * 500])
+
+    def test_name_changes_only_when_the_text_changes(self):
+        self.assertEqual(speech.audio_name('本文'), speech.audio_name('本文'))
+        self.assertNotEqual(speech.audio_name('本文'), speech.audio_name('直した本文'))
+        self.assertRegex(speech.audio_name('本文'), speech.NAME_PATTERN)
+
+    def test_player_appears_only_when_the_audio_exists(self):
+        page, question = self._shown_question()
+        self.assertNotContains(page, '<audio')
+        self._put_audio(speech.question_text(question))
+        # 選択肢を選ばずに送ると、同じ問題を出し直す（このときも問題を読み上げる）
+        page = self.client.post(reverse('bk_houmu3:quiz'), {'question_id': question.id})
+        self.assertContains(page, reverse('bk_houmu3:question_audio', args=[
+            speech.audio_name(speech.question_text(question))]))
+
+    def test_explanation_is_played_after_answering(self):
+        page, question = self._shown_question()
+        self._put_audio(speech.question_text(question))
+        self._put_audio(speech.explanation_text(question))
+        page = self.client.post(reverse('bk_houmu3:quiz'), {
+            'question_id': question.id, 'choice': question.answer_index,
+        })
+        self.assertContains(page, '<audio', count=1, msg_prefix='解答した後は解説だけを流す')
+        self.assertContains(page, speech.audio_name(speech.explanation_text(question)))
+
+    def test_audio_is_served_with_ranges(self):
+        self._put_audio('本文')
+        url = reverse('bk_houmu3:question_audio', args=[speech.audio_name('本文')])
+        whole = self.client.get(url)
+        self.assertEqual(whole.status_code, 200)
+        self.assertEqual(b''.join(whole.streaming_content), b'0123456789')
+        part = self.client.get(url, HTTP_RANGE='bytes=2-4')
+        self.assertEqual(part.status_code, 206)
+        self.assertEqual(part.content, b'234')
+        self.assertEqual(part['Content-Range'], 'bytes 2-4/10')
+        self.assertEqual(self.client.get(url, HTTP_RANGE='bytes=-3').content, b'789')
+        self.assertEqual(self.client.get(url, HTTP_RANGE='bytes=20-').status_code, 416)
+
+    def test_audio_needs_an_id_and_a_valid_name(self):
+        self._put_audio('本文')
+        url = reverse('bk_houmu3:question_audio', args=[speech.audio_name('本文')])
+        self.assertEqual(self.client.get(reverse('bk_houmu3:question_audio', args=['x.mp3'])).status_code, 404)
+        self.client.logout()
+        self.assertNotEqual(self.client.get(url).status_code, 200)
+
+    def test_command_makes_only_missing_audio(self):
+        question = Question.objects.first()
+        self._put_audio(speech.question_text(question))
+        with mock.patch.object(speech, 'synthesize', return_value=b'mp3') as fake, \
+                mock.patch.object(speech, 'REQUEST_INTERVAL', 0), \
+                mock.patch.dict('os.environ', {'AZURE_SPEECH_KEY': 'k', 'AZURE_SPEECH_REGION': 'r'}):
+            call_command('make_question_audio', stdout=io.StringIO())
+            sent = [c.args[0] for c in fake.call_args_list]
+            self.assertNotIn(speech.spoken_text(speech.question_text(question)), sent)
+            # 解説はどの問題も同じ「解説」なので1本だけ作る
+            self.assertEqual(sent.count('解説'), 1)
+            fake.reset_mock()
+            call_command('make_question_audio', stdout=io.StringIO())
+            fake.assert_not_called()
+        self.assertTrue(speech.has_audio(speech.explanation_text(question)))
+
+        (self.root / 'ffffffffffffffffffff.mp3').write_bytes(b'old')
+        call_command('make_question_audio', '--prune', stdout=io.StringIO())
+        self.assertFalse((self.root / 'ffffffffffffffffffff.mp3').exists())
+        self.assertTrue(speech.has_audio(speech.explanation_text(question)))

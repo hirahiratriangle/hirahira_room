@@ -142,6 +142,9 @@ MEDIA_URL = '/media/'
 # FE の技術解説の読み上げ音声（manage.py make_note_audio で作る）
 FE_AUDIO_ROOT = BASE_DIR / 'media' / 'fe_audio'
 
+# 法務3級の問題と解説の読み上げ音声（manage.py make_question_audio で作る）
+BK_HOUMU3_AUDIO_ROOT = BASE_DIR / 'media' / 'bk_houmu3_audio'
+
 # カスタムユーザーモデルの指定
 AUTH_USER_MODEL = 'accounts.CustomUser'
 

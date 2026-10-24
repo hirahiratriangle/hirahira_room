@@ -17,13 +17,14 @@ hirahira_room へのログインが要る。基本情報版は学習の画面を
 import logging
 
 import json
+import re
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -38,6 +39,7 @@ from .learning import current_item, focus_category, grade, note_menu, start_roun
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
                      LearningRound, PassReport, Question, QuestionTemplate,
                      StudySession)
+from . import speech
 from .selection import pick_question
 from .stats import (categories_for, category_options, category_stats, daily_counts,
                     field_stats, overall_stats, record_progress, site_summary,
@@ -349,6 +351,8 @@ class QuizView(LearnerRequiredMixin, generic.View):
 
         return render(request, self.template_name, {
             'question': question,
+            # 解答する前は問題文と選択肢を、解答した後は解説を読み上げる
+            'question_audio_url': speech.audio_url(speech.question_text(question)),
             'reason': reason,
             'study_session': study_session,
             'categories': category_options(self.learner, study_session.mode),
@@ -377,6 +381,7 @@ class QuizView(LearnerRequiredMixin, generic.View):
             messages.error(request, '選択肢を選んでください。')
             return render(request, self.template_name, {
                 'question': question,
+                'question_audio_url': speech.audio_url(speech.question_text(question)),
                 'study_session': study_session,
                 'categories': category_options(self.learner, study_session.mode),
                 'progress': self._progress(self.learner, question.category),
@@ -418,6 +423,7 @@ class QuizView(LearnerRequiredMixin, generic.View):
             'study_session': study_session,
             'categories': category_options(self.learner, study_session.mode),
             'answered': True,
+            'explanation_audio_url': speech.audio_url(speech.explanation_text(question)),
             'selected': selected,
             'selected_label': Question.choice_label(selected),
             'is_correct': is_correct,
@@ -439,6 +445,52 @@ class QuizView(LearnerRequiredMixin, generic.View):
             'correct': correct,
             'rate_percent': round(correct / total * 100) if total else None,
         }
+
+
+_RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')
+
+
+class QuestionAudioView(LearnerRequiredMixin, generic.View):
+    """問題と解説の読み上げ音声を返す。
+
+    iPhone の Safari は音声を「何バイト目から何バイト目まで」と区切って取りに来る
+    （Range 要求）。これに 206 で応えないと、再生や途中への移動ができないことがある。
+    ファイル名は読ませる文から計算したハッシュで、中身が変わることはないので長く持たせる。
+    """
+
+    def get(self, request, name, *args, **kwargs):
+        if not speech.NAME_PATTERN.match(name):
+            raise Http404
+        path = speech.audio_root() / name
+        if not path.is_file():
+            raise Http404
+        size = path.stat().st_size
+        match = _RANGE.match(request.headers.get('Range', ''))
+        if match is None:
+            response = FileResponse(open(path, 'rb'), content_type='audio/mpeg')
+        else:
+            first, last = match.groups()
+            if first:
+                start, end = int(first), int(last) if last else size - 1
+            elif last:
+                # 「末尾の n バイト」の形
+                start, end = max(0, size - int(last)), size - 1
+            else:
+                start, end = 0, size - 1
+            end = min(end, size - 1)
+            if start > end:
+                response = HttpResponse(status=416)
+                response['Content-Range'] = 'bytes */{}'.format(size)
+                return response
+            with open(path, 'rb') as audio:
+                audio.seek(start)
+                data = audio.read(end - start + 1)
+            response = HttpResponse(data, status=206, content_type='audio/mpeg')
+            response['Content-Range'] = 'bytes {}-{}/{}'.format(start, end, size)
+            response['Content-Length'] = str(len(data))
+        response['Accept-Ranges'] = 'bytes'
+        response['Cache-Control'] = 'private, max-age=31536000, immutable'
+        return response
 
 
 class StatsView(LearnerRequiredMixin, generic.TemplateView):

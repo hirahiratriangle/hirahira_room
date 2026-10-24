@@ -47,6 +47,11 @@
         <div class="fe-stem {% if question.subject == 'B' %}fe-stem-b{% endif %}">{{ question.stem }}</div>
     </div>
 
+    {% if not answered and question_audio_url %}
+    <!-- 問題文と選択肢の読み上げ -->
+    <audio class="fe-audio w-100 mb-3" controls preload="none" src="{{ question_audio_url }}"></audio>
+    {% endif %}
+
     {% if answered %}
     <!-- 採点結果 -->
     <div class="alert {% if is_correct %}alert-success{% else %}alert-danger{% endif %} d-flex align-items-center">
@@ -78,6 +83,9 @@
     {% if question.explanation %}
     <div class="border-start border-4 ps-3 mb-4" style="border-color:#2c5aa0 !important;">
         <h2 class="h6" style="color:#2c5aa0;">解説</h2>
+        {% if explanation_audio_url %}
+        <audio class="fe-audio w-100 mb-2" controls preload="none" src="{{ explanation_audio_url }}"></audio>
+        {% endif %}
         <p class="mb-2" style="line-height:1.9;">{{ question.explanation }}</p>
     </div>
     {% endif %}
@@ -127,4 +135,22 @@
 
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 読み上げるのは画面を見ている間だけ。別のタブに移ったり画面を消したりしたら止める
+// （戻っても自動では再開しない）。
+(function () {
+    var players = Array.prototype.slice.call(document.querySelectorAll('.fe-audio'));
+    if (!players.length) { return; }
+    var stopAll = function () {
+        players.forEach(function (player) { player.pause(); });
+    };
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') { stopAll(); }
+    });
+    window.addEventListener('pagehide', stopAll);
+})();
+</script>
 {% endblock %}
