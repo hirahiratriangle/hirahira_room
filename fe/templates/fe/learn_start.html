@@ -42,7 +42,7 @@
             いま何が選ばれているかは上の行に分野名で出す。
             {% endcomment %}
             <label class="fe-row fe-auto d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
-                <input class="form-check-input mt-0" type="radio" name="note" value="">
+                <input class="form-check-input mt-0" type="radio" name="note" value="" autocomplete="off">
                 <span class="fw-bold">おまかせ</span>
             </label>
 
@@ -51,7 +51,7 @@
             指定している分野は開かない。選ぶのは利用者なので、どれも選んだ状態にはしない。
             {% endcomment %}
             {% for group in groups %}
-            <details class="fe-group border-bottom"{% if opened.code == group.category.code %} open{% endif %}>
+            <details class="fe-group border-bottom"{% if opened.code == group.category.code %} open data-opened{% endif %}>
                 <summary class="d-flex justify-content-between align-items-center p-2 px-3"
                          style="cursor:pointer;">
                     <span>
@@ -75,7 +75,7 @@
                     {% for entry in group.notes %}
                     <label class="fe-row d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0{% if not entry.questions %} text-muted{% endif %}">
                         <input class="form-check-input mt-0" type="radio" name="note"
-                               value="{{ entry.note.pk }}"
+                               value="{{ entry.note.pk }}" autocomplete="off"
                                {% if not entry.questions %}disabled{% endif %}>
                         {% if entry.note.topic %}
                         <span class="badge bg-secondary">{{ entry.note.topic }}</span>
@@ -135,11 +135,16 @@
 
 {% block extra_js %}
 <script>
-// 前の選択が残って再表示されたときは、その中分類を開いておく。
-// 畳んだままだと、どこを選んだのか見えない。
-(function () {
-    var checked = document.querySelector('.fe-group input[name="note"]:checked');
-    if (checked) { checked.closest('details').open = true; }
-})();
+// 「戻る」で表示し直したときも、前の選択は残さない。ブラウザが選択を復元すると、
+// 分野を指定していても前に選んだ中分類が「選択中」になって開いてしまう。
+// 開くのは、サーバーが開いた中分類（直前に学習したもの）だけに戻す。
+window.addEventListener('pageshow', function () {
+    document.querySelectorAll('.fe-pick input[name="note"]').forEach(function (input) {
+        input.checked = false;
+    });
+    document.querySelectorAll('.fe-group').forEach(function (group) {
+        group.open = group.hasAttribute('data-opened');
+    });
+});
 </script>
 {% endblock %}
