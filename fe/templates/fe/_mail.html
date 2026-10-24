@@ -1,0 +1,76 @@
+{% comment %}
+ダッシュボードの「問題メール」の欄。登録・送り方の変更は fe:mail_settings へ送る。
+mail_subscription（無ければ未登録）、mail_topic_groups、mail_picked_topics、
+mail_marathon_total を受け取る（fe.views.mail_context）。
+{% endcomment %}
+<section class="mb-5" id="mail">
+    <h2 class="h5 mb-3" style="color:#2c5aa0;">問題メール</h2>
+    <div class="border rounded p-3">
+        {% if learner.is_temporary %}
+        <div class="small text-muted mb-0">
+            問題メールには ID の登録が必要です。<a href="{% url 'fe:enter' %}">ID を登録する</a>と使えます。
+        </div>
+        {% else %}
+        <p class="small text-muted">
+            毎日0時ごろ、学習モードと同じ小分類ごとに最大10問を、解答・解説とあなたの分野別正答率を付けて送ります。
+            マラソンと特訓は両方選べます（両方なら1日2通）。
+        </p>
+
+        {% if mail_subscription.email %}
+        <div class="alert alert-light border small">
+            配信先 <strong>{{ mail_subscription.masked_email }}</strong>
+            {% if mail_subscription.marathon %}
+            <span class="ms-2">マラソン {{ mail_subscription.marathon_position }}／{{ mail_marathon_total }} 問まで送信済み{% if mail_subscription.marathon_laps %}（{{ mail_subscription.marathon_laps|add:1 }}周目）{% endif %}</span>
+            {% endif %}
+            <div class="text-muted mt-1">アドレスの変更と解除は、届いたメールのリンクからだけできます。</div>
+        </div>
+        {% elif mail_subscription.pending_email %}
+        <div class="alert alert-info small">
+            確認のメールを送ってあります。メールのリンクを開いて「受け取る」を押すと登録されます。
+            届かないときは、時間をおいてもう一度登録してください。
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'fe:mail_settings' %}" class="m-0">
+            {% csrf_token %}
+            {% if not mail_subscription.email %}
+            <div class="mb-3" style="max-width: 24rem;">
+                <label class="form-label small" for="fe-mail-email">メールアドレス</label>
+                <input type="email" class="form-control form-control-sm" id="fe-mail-email" name="email" required
+                       autocomplete="email" placeholder="you@example.com">
+            </div>
+            {% endif %}
+
+            <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" name="marathon" id="fe-mail-marathon"
+                       {% if mail_subscription.marathon %}checked{% endif %}>
+                <label class="form-check-label" for="fe-mail-marathon">
+                    <strong>マラソン</strong> <span class="small text-muted">全問を、はじめから順番に（科目A→科目B、シラバスの順）</span>
+                </label>
+            </div>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="training" id="fe-mail-training"
+                       {% if mail_subscription.training %}checked{% endif %}>
+                <label class="form-check-label" for="fe-mail-training">
+                    <strong>特訓</strong> <span class="small text-muted">選んだ小分類を1通に1つずつ、順に</span>
+                </label>
+            </div>
+            <div class="mb-3 ms-4" id="fe-mail-topics">
+                {% include 'fe/_topic_picker.html' with groups=mail_topic_groups picked=mail_picked_topics name='topics' %}
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">
+                {% if mail_subscription.email %}送り方を保存{% else %}確認のメールを送る{% endif %}
+            </button>
+        </form>
+
+        {% if mail_subscription.email %}
+        <form method="post" action="{% url 'fe:mail_settings' %}" class="mt-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="send_stop">
+            <button type="submit" class="btn btn-link btn-sm p-0 text-muted">解除用のメールを配信先へ送る</button>
+        </form>
+        {% endif %}
+        {% endif %}
+    </div>
+</section>

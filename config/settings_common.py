@@ -169,6 +169,17 @@ ACCOUNT_EMAIL_SUBJECT_PREFIX = f'[{SITE_DISPLAY_NAME}] '
 # 未設定ならエンドポイントは 503 を返し、何も送らない。
 COUNTDOWN_REMINDER_TOKEN = os.environ.get('COUNTDOWN_REMINDER_TOKEN', '')
 
+# ---- 基本情報の問題メール（fe/mail.py） ----
+# 毎日0時の送信を起こす呼び出し（/fe/tasks/send-mails/）の共有トークン。
+# 未設定なら入口は 503 を返し、何も送らない。GitHub の Secrets の FE_MAIL_TOKEN と同じ値。
+FE_MAIL_TOKEN = os.environ.get('FE_MAIL_TOKEN', '')
+# メールに書くリンクの頭。送信はリクエストの外から起きるので、設定で持つ。
+FE_SITE_URL = os.environ.get('FE_SITE_URL', 'https://hirahira-room.azurewebsites.net')
+# 確認のメールのリンクの有効期限（秒）
+FE_MAIL_CONFIRM_MAX_AGE = 60 * 60
+# 確認・解除のメールを、同じ ID から続けて送らせない間隔（秒）
+FE_MAIL_LINK_INTERVAL = 5 * 60
+
 
 # ==================================
 # アップロードの上限

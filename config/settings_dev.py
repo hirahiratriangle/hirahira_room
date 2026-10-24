@@ -100,3 +100,6 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# 問題メールのリンクは手元のサーバーへ向ける
+FE_SITE_URL = os.environ.get('FE_SITE_URL', 'http://127.0.0.1:8000')

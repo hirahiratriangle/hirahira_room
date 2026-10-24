@@ -15,31 +15,35 @@ login_not_required で外してあり、hirahira_room にログインしなく�
 
 import logging
 
+import hmac
 import json
 import re
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import PermissionDenied
+from django.conf import settings
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.core.validators import validate_email
 from django.utils.decorators import method_decorator
 from django.views import generic
+from django.views.decorators.csrf import csrf_exempt
 
 from .exam import EXAM, build_prompt
 from .forms import LearnerForm, PassReportForm, QuestionUploadForm
 from .importer import (ImportError_, needs_confirmation, parse,
                        preview, sync, validate)
 from .learning import current_item, focus_category, grade, note_menu, start_round
-from . import speech
+from . import mail, speech
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
-                     LearningRound, PassReport, Question, QuestionTemplate,
-                     StudySession)
+                     LearningRound, MailSubscription, PassReport, Question,
+                     QuestionTemplate, StudySession)
 from .selection import pick_question
 from .stats import (categories_for, category_options, category_stats, daily_counts,
                     field_stats, overall_stats, record_progress, site_summary,
@@ -290,6 +294,7 @@ class DashboardView(LearnerRequiredMixin, generic.TemplateView):
         context['summary'] = site_summary()
         context['my_report'] = PassReport.objects.filter(learner=learner).first()
         context['pass_form'] = PassReportForm()
+        context.update(mail_context(learner))
         return context
 
 
@@ -919,3 +924,166 @@ class LearnResultView(LearnerRequiredMixin, generic.DetailView):
         context['items'] = items
         context['missed'] = [i for i in items if i.is_correct is False]
         return context
+
+
+# ---- 問題メール（fe.mail） ----
+
+def mail_context(learner):
+    """ダッシュボードの「問題メール」の欄に渡すもの。"""
+    if learner.is_temporary:
+        return {'mail_subscription': None}
+    subscription = MailSubscription.objects.filter(learner=learner).first()
+    picked = {
+        mail.topic_value(code, topic) for code, topic in (subscription.training_topics if subscription else [])
+    }
+    total = len(mail.marathon_questions()) if subscription and subscription.marathon else 0
+    return {
+        'mail_subscription': subscription,
+        'mail_topic_groups': mail.topic_choices(),
+        'mail_picked_topics': picked,
+        'mail_marathon_total': total,
+    }
+
+
+class MailSettingsView(LearnerRequiredMixin, generic.View):
+    """問題メールの登録と、送り方の変更。
+
+    未登録なら、アドレスに確認のメールを送る（登録はリンクを開いてから）。
+    登録済みならアドレスは変えず、送り方と特訓の小分類だけを変える。
+    action=send_stop なら、配信先へ解除用のメールを送る。
+    """
+
+    def check_learner(self, learner):
+        if learner.is_temporary:
+            raise PermissionDenied('問題メールには ID の登録が必要です。')
+
+    def post(self, request, *args, **kwargs):
+        back = dashboard_url(self.learner) + '#mail'
+        subscription, _ = MailSubscription.objects.get_or_create(learner=self.learner)
+
+        if request.POST.get('action') == 'send_stop':
+            if not subscription.email:
+                return redirect(back)
+            if not mail.can_send_link(subscription):
+                messages.error(request, '解除用のメールは送ったばかりです。少し時間をおいてください。')
+                return redirect(back)
+            mail.send_stop_link(subscription)
+            subscription.link_sent_at = timezone.now()
+            subscription.save(update_fields=['link_sent_at'])
+            messages.success(request, '登録されているアドレスに、解除用のメールを送りました。')
+            return redirect(back)
+
+        marathon = request.POST.get('marathon') == 'on'
+        training = request.POST.get('training') == 'on'
+        topics = mail.parse_topic_values(request.POST.getlist('topics'))
+        if training and not topics:
+            messages.error(request, '特訓では、小分類を1つ以上選んでください。')
+            return redirect(back)
+
+        email = request.POST.get('email', '').strip()
+        if not subscription.email:
+            if not (marathon or training):
+                messages.error(request, 'マラソンか特訓の、少なくとも一方を選んでください。')
+                return redirect(back)
+            try:
+                validate_email(email)
+            except ValidationError:
+                messages.error(request, 'メールアドレスの形が正しくありません。')
+                return redirect(back)
+            if not mail.can_send_link(subscription):
+                messages.error(request, '確認のメールは送ったばかりです。少し時間をおいてください。')
+                return redirect(back)
+
+        if topics != subscription.training_topics:
+            # 選び直したら、選んだ小分類の最初から
+            subscription.training_index = subscription.training_offset = 0
+        subscription.marathon = marathon
+        subscription.training = training
+        subscription.training_topics = topics
+
+        if subscription.email:
+            subscription.save()
+            messages.success(request, '問題メールの送り方を変えました。')
+            return redirect(back)
+
+        subscription.pending_email = email
+        subscription.link_sent_at = timezone.now()
+        subscription.save()
+        mail.send_confirmation(subscription)
+        messages.success(
+            request,
+            '確認のメールを送りました。メールのリンクを開いて「受け取る」を押すと登録されます。',
+        )
+        return redirect(back)
+
+
+@method_decorator(login_not_required, name='dispatch')
+class MailConfirmView(generic.View):
+    """確認のメールのリンク。開いただけでは登録せず、「受け取る」を押して登録する。
+
+    メールソフトや迷惑メールの検査がリンクを先に開くことがあるため。
+    別の端末で開くこともあるので、入っている ID は見ない。
+    """
+
+    template_name = 'fe/mail_link.html'
+
+    def get(self, request, token):
+        try:
+            subscription = mail.read_confirm_token(token)
+        except mail.LinkInvalid:
+            return render(request, self.template_name, {'invalid': True, 'kind': 'confirm'})
+        return render(request, self.template_name, {'kind': 'confirm', 'subscription': subscription})
+
+    def post(self, request, token):
+        try:
+            subscription = mail.read_confirm_token(token)
+        except mail.LinkInvalid:
+            return render(request, self.template_name, {'invalid': True, 'kind': 'confirm'})
+        mail.confirm(subscription)
+        return render(request, self.template_name, {'done': True, 'kind': 'confirm', 'subscription': subscription})
+
+
+@method_decorator(login_not_required, name='dispatch')
+class MailStopView(generic.View):
+    """解除のリンク。開いただけでは解除せず、「配信を止める」を押して解除する。"""
+
+    template_name = 'fe/mail_link.html'
+
+    def get(self, request, token):
+        try:
+            subscription = mail.read_stop_token(token)
+        except mail.LinkInvalid:
+            return render(request, self.template_name, {'invalid': True, 'kind': 'stop'})
+        return render(request, self.template_name, {'kind': 'stop', 'subscription': subscription})
+
+    def post(self, request, token):
+        try:
+            subscription = mail.read_stop_token(token)
+        except mail.LinkInvalid:
+            return render(request, self.template_name, {'invalid': True, 'kind': 'stop'})
+        mail.stop(subscription)
+        return render(request, self.template_name, {'done': True, 'kind': 'stop', 'subscription': subscription})
+
+
+@method_decorator(login_not_required, name='dispatch')
+@method_decorator(csrf_exempt, name='dispatch')
+class SendMailsView(generic.View):
+    """問題メールの送信を、GitHub Actions の定期実行から起こす入口。
+
+    Azure App Service には cron が無いため、毎日0時に POST で叩かせる。
+    ログインの代わりに共有トークン（settings.FE_MAIL_TOKEN）で確かめる。
+    countdown の SendRemindersView と同じ形。
+    """
+
+    def post(self, request):
+        expected = settings.FE_MAIL_TOKEN
+        if not expected:
+            logger.error('FE_MAIL_TOKEN が未設定のため、問題メールを送れません。')
+            return JsonResponse({'detail': '問題メール用のトークンが未設定です。'}, status=503)
+        provided = request.headers.get('X-Fe-Mail-Token', '')
+        if not hmac.compare_digest(provided, expected):
+            logger.warning('問題メールの送信が、不正なトークンで試みられました。')
+            return JsonResponse({'detail': '認証できません。'}, status=403)
+        result = mail.send_daily()
+        logger.info('問題メールを送りました（%s）', result)
+        return JsonResponse(result)

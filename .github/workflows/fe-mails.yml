@@ -1,0 +1,35 @@
+name: 基本情報の問題メール送信
+
+# Azure App Service (Linux) には cron が無いため、ここから毎日叩く。
+# 実際に送るのはサイト側（/fe/tasks/send-mails/ → fe/mail.py の send_daily）。
+# cron は UTC 指定。15:00 UTC = 翌日 0:00 JST。
+# 同じ日に何度呼んでも、同じ登録の同じ送り方には1通しか送らないので、
+# 「Run workflow」で手で流し直してよい。
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:  # 手動実行（動作確認用）
+
+permissions: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 問題メールの送信を起動する
+        env:
+          ENDPOINT: ${{ secrets.FE_MAIL_URL }}
+          TOKEN: ${{ secrets.FE_MAIL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ENDPOINT}" ] || [ -z "${TOKEN}" ]; then
+            echo "FE_MAIL_URL と FE_MAIL_TOKEN を Secrets に設定してください。" >&2
+            exit 1
+          fi
+          # 図の多い問題を何通も送ると時間がかかるので、待ち時間は長めにする
+          curl --silent --show-error --fail-with-body \
+               --max-time 600 \
+               --retry 3 --retry-delay 30 --retry-all-errors \
+               -X POST "${ENDPOINT}" \
+               -H "X-Fe-Mail-Token: ${TOKEN}"
+          echo

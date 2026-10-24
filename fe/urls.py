@@ -27,6 +27,12 @@ urlpatterns = [
     # 本番合格の申告（集計はダッシュボードに出す）
     path('pass/', views.PassReportView.as_view(), name='pass_report'),
 
+    # 問題メール（毎日0時に届く。登録はダッシュボードから、確定と解除はメールのリンクから）
+    path('mail/', views.MailSettingsView.as_view(), name='mail_settings'),
+    path('mail/confirm/<str:token>/', views.MailConfirmView.as_view(), name='mail_confirm'),
+    path('mail/stop/<str:token>/', views.MailStopView.as_view(), name='mail_stop'),
+    path('tasks/send-mails/', views.SendMailsView.as_view(), name='send_mails'),
+
     # 問題の管理（全 ID で共有する問題集。管理用の ID だけが使え、登録は JSON の一括差し替えで行う）
     path('manage/', views.ManageListView.as_view(), name='manage_list'),
     path('manage/upload/', views.QuestionUploadView.as_view(), name='manage_upload'),

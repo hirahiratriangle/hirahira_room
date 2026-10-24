@@ -1,0 +1,84 @@
+{% comment %}
+特訓の小分類を選ぶ部品。中分類ごとに畳み、開くと小分類のチェックボックスが並ぶ。
+中分類の見出しのチェックで、その中分類の小分類をまとめて選べる。
+groups（fe.mail.topic_choices）、picked（選んである値の集合）、name（送る名前）を受け取る。
+{% endcomment %}
+<div class="fe-topic-picker" data-name="{{ name }}">
+    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+        <div class="small">選んでいる小分類 <strong class="fe-topic-count">0</strong> 件</div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary fe-topic-open">すべて開く</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary fe-topic-clear">選択を外す</button>
+        </div>
+    </div>
+    <div class="border rounded" style="max-height: 28rem; overflow-y: auto;">
+        {% regroup groups by category.get_subject_display as subjects %}
+        {% for subject in subjects %}
+        <div class="px-3 py-1 small fw-bold text-white" style="background-color:#2c5aa0;">{{ subject.grouper }}</div>
+        {% for group in subject.list %}
+        <details class="fe-topic-group border-bottom">
+            <summary class="px-3 py-2 d-flex align-items-center gap-2" style="cursor:pointer;">
+                <input type="checkbox" class="form-check-input mt-0 fe-topic-all" aria-label="{{ group.category.label }} をまとめて選ぶ">
+                <span class="flex-fill">{{ group.category.label }}</span>
+                <span class="badge rounded-pill text-bg-light border fe-topic-group-count"></span>
+            </summary>
+            <div class="px-4 pb-2">
+                {% for t in group.topics %}
+                <div class="form-check">
+                    <input class="form-check-input fe-topic" type="checkbox" name="{{ name }}" value="{{ t.value }}"
+                           id="{{ name }}-{{ group.category.code }}-{{ forloop.counter }}"
+                           {% if t.value in picked %}checked{% endif %}>
+                    <label class="form-check-label small" for="{{ name }}-{{ group.category.code }}-{{ forloop.counter }}">
+                        {{ t.topic|default:"（小分類なし）" }} <span class="text-muted">{{ t.count }}問</span>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endfor %}
+        {% endfor %}
+    </div>
+</div>
+<script>
+(function () {
+    document.querySelectorAll('.fe-topic-picker').forEach(function (picker) {
+        function refresh() {
+            var total = 0;
+            picker.querySelectorAll('.fe-topic-group').forEach(function (group) {
+                var boxes = group.querySelectorAll('.fe-topic');
+                var on = group.querySelectorAll('.fe-topic:checked').length;
+                var all = group.querySelector('.fe-topic-all');
+                all.checked = on === boxes.length;
+                all.indeterminate = on > 0 && on < boxes.length;
+                group.querySelector('.fe-topic-group-count').textContent = on ? on + '/' + boxes.length : '';
+                total += on;
+            });
+            picker.querySelector('.fe-topic-count').textContent = total;
+        }
+        picker.querySelectorAll('.fe-topic-all').forEach(function (all) {
+            // 見出しのチェックを押しても、畳んだ・開いたが切り替わらないようにする
+            all.addEventListener('click', function (event) {
+                event.stopPropagation();
+                all.closest('.fe-topic-group').querySelectorAll('.fe-topic').forEach(function (box) {
+                    box.checked = all.checked;
+                });
+                refresh();
+            });
+        });
+        picker.querySelectorAll('.fe-topic').forEach(function (box) {
+            box.addEventListener('change', refresh);
+        });
+        picker.querySelector('.fe-topic-open').addEventListener('click', function () {
+            var groups = picker.querySelectorAll('.fe-topic-group');
+            var open = Array.prototype.some.call(groups, function (g) { return !g.open; });
+            groups.forEach(function (g) { g.open = open; });
+            this.textContent = open ? 'すべて畳む' : 'すべて開く';
+        });
+        picker.querySelector('.fe-topic-clear').addEventListener('click', function () {
+            picker.querySelectorAll('.fe-topic').forEach(function (box) { box.checked = false; });
+            refresh();
+        });
+        refresh();
+    });
+})();
+</script>

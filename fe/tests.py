@@ -2874,3 +2874,206 @@ class NoteAudioTests(TestCase):
         LearningRound.objects.filter(pk=round_.pk).update(note=b_note)
         page = self.client.get(reverse('fe:learn_read', args=[round_.pk]))
         self.assertNotContains(page, '<audio')
+
+
+class MailTests(TestCase):
+    """問題メール。確認のメールを経た登録、メールのリンクからだけの解除、毎日の送り方。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+
+    def setUp(self):
+        from django.core import mail as outbox
+        self.outbox = outbox
+        self.learner = make_learner('mailer')
+        enter(self.client, self.learner)
+
+    def _sync(self, counts):
+        """{(中分類番号, 小分類): 問数} の問題を作る。"""
+        records = []
+        for (code, topic), n in counts.items():
+            category = Category.objects.get(code=code)
+            for i in range(n):
+                records.append({
+                    'category': code, 'subject': category.subject, 'topic': topic,
+                    'stem': '{}の問題{}'.format(topic, i),
+                    'choices': ['選択肢{}-{}'.format(j, i) for j in range(6 if code > 100 else 4)],
+                    'answer': 1, 'explanation': '{}の解説{}'.format(topic, i), 'source': '自作',
+                })
+        return sync(validate({'questions': records, 'notes': None}))
+
+    def _subscribe(self, email='me@example.com', **fields):
+        from .models import MailSubscription
+        subscription, _ = MailSubscription.objects.get_or_create(learner=self.learner)
+        subscription.email = email
+        for key, value in fields.items():
+            setattr(subscription, key, value)
+        subscription.save()
+        return subscription
+
+    def _link(self, message):
+        return re.search(r'http://\S+/fe/mail/\S+/', message.body).group(0).split('8000', 1)[1]
+
+    # ---- 登録と解除 ----
+
+    def test_address_is_saved_only_after_pressing_receive(self):
+        from .models import MailSubscription
+        self._sync({(11, '情報セキュリティ'): 3})
+        response = self.client.post(reverse('fe:mail_settings'), {
+            'email': 'me@example.com', 'marathon': 'on',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(self.outbox.outbox), 1)
+        self.assertEqual(self.outbox.outbox[0].to, ['me@example.com'])
+        subscription = MailSubscription.objects.get(learner=self.learner)
+        self.assertEqual(subscription.email, '')
+
+        link = self._link(self.outbox.outbox[0])
+        self.client.logout()  # 別の端末で開いても使える
+        self.assertContains(self.client.get(link), '受け取る')
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.email, '', '開いただけでは登録しない')
+        self.assertContains(self.client.post(link), '登録しました')
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.email, 'me@example.com')
+        self.assertContains(self.client.post(link), 'このリンクは使えません')
+
+    def test_old_confirm_link_dies_when_another_address_is_requested(self):
+        self.client.post(reverse('fe:mail_settings'), {'email': 'a@example.com', 'marathon': 'on'})
+        old = self._link(self.outbox.outbox[0])
+        with override_settings(FE_MAIL_LINK_INTERVAL=0):
+            self.client.post(reverse('fe:mail_settings'), {'email': 'b@example.com', 'marathon': 'on'})
+        self.assertContains(self.client.post(old), 'このリンクは使えません')
+        self.assertContains(self.client.post(self._link(self.outbox.outbox[1])), '登録しました')
+
+    def test_confirmation_mails_are_throttled(self):
+        self.client.post(reverse('fe:mail_settings'), {'email': 'a@example.com', 'marathon': 'on'})
+        self.client.post(reverse('fe:mail_settings'), {'email': 'b@example.com', 'marathon': 'on'})
+        self.assertEqual(len(self.outbox.outbox), 1)
+
+    def test_registered_address_cannot_be_changed_from_the_screen(self):
+        self._subscribe(marathon=True)
+        self._sync({(11, '情報セキュリティ'): 3})
+        self.client.post(reverse('fe:mail_settings'), {
+            'email': 'attacker@example.com', 'training': 'on', 'topics': ['11|情報セキュリティ'],
+        })
+        subscription = self.learner.mail_subscription
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.email, 'me@example.com')
+        self.assertFalse(subscription.marathon)
+        self.assertTrue(subscription.training)
+        self.assertEqual(subscription.training_topics, [[11, '情報セキュリティ']])
+        self.assertEqual(len(self.outbox.outbox), 0)
+
+    def test_training_needs_a_topic(self):
+        self.client.post(reverse('fe:mail_settings'), {'email': 'a@example.com', 'training': 'on'})
+        self.assertEqual(len(self.outbox.outbox), 0)
+
+    def test_stop_only_from_the_mailed_link(self):
+        subscription = self._subscribe(marathon=True)
+        self.client.post(reverse('fe:mail_settings'), {'action': 'send_stop'})
+        self.assertEqual(self.outbox.outbox[0].to, ['me@example.com'])
+        link = self._link(self.outbox.outbox[0])
+        self.client.get(link)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.email, 'me@example.com', '開いただけでは解除しない')
+        self.assertContains(self.client.post(link), '配信を止めました')
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.email, '')
+
+    def test_temporary_use_cannot_subscribe(self):
+        temporary = Learner.objects.create(code=None)
+        put_learner(self.client, temporary.pk)
+        response = self.client.post(reverse('fe:mail_settings'), {'email': 'a@example.com', 'marathon': 'on'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_dashboard_shows_the_picker(self):
+        self._sync({(11, '情報セキュリティ'): 3, (101, 'アルゴリズム'): 2})
+        response = self.client.get(dashboard(self.learner))
+        self.assertContains(response, 'id="mail"')
+        self.assertContains(response, 'value="11|情報セキュリティ"')
+        self.assertContains(response, 'value="101|アルゴリズム"')
+
+    # ---- 送り方 ----
+
+    def test_marathon_goes_in_order_by_topic_and_wraps(self):
+        from .mail import send_daily
+        self._sync({(11, '情報セキュリティ'): 12, (2, 'データ構造'): 3})
+        subscription = self._subscribe(marathon=True)
+        day = timezone.localdate()
+
+        sizes = []
+        for i in range(4):
+            send_daily(day + timezone.timedelta(days=i))
+            sizes.append(self.outbox.outbox[-1].body.count('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n問'))
+        # 中分類2（3問）→ 中分類11の10問 → 残り2問 → 最初に戻って中分類2
+        self.assertEqual(sizes, [3, 10, 2, 3])
+        self.assertIn('データ構造', self.outbox.outbox[0].subject)
+        self.assertIn('1〜3問目／全15問・2周目', self.outbox.outbox[3].subject)
+        subscription.refresh_from_db()
+        self.assertEqual((subscription.marathon_position, subscription.marathon_laps), (3, 1))
+
+    def test_same_day_is_sent_once(self):
+        from .mail import send_daily
+        self._sync({(11, '情報セキュリティ'): 3})
+        self._subscribe(marathon=True)
+        self.assertEqual(send_daily()['marathon'], 1)
+        self.assertEqual(send_daily()['marathon'], 0)
+        self.assertEqual(len(self.outbox.outbox), 1)
+
+    def test_training_runs_through_picked_topics_and_marathon_in_parallel(self):
+        from .mail import send_daily
+        self._sync({(11, '情報セキュリティ'): 12, (2, 'データ構造'): 3, (9, 'データベース'): 4})
+        self._subscribe(marathon=True, training=True,
+                        training_topics=[[11, '情報セキュリティ'], [9, 'データベース']])
+        day = timezone.localdate()
+        result = send_daily(day)
+        self.assertEqual((result['marathon'], result['training']), (1, 1))
+        for i in range(1, 4):
+            send_daily(day + timezone.timedelta(days=i))
+        subjects = [m.subject for m in self.outbox.outbox if '特訓' in m.subject]
+        self.assertIn('情報セキュリティ（1〜10問目／12問）', subjects[0])
+        self.assertIn('情報セキュリティ（11〜12問目／12問）', subjects[1])
+        self.assertIn('データベース（1〜4問目／4問）', subjects[2])
+        self.assertIn('情報セキュリティ（1〜10問目／12問）', subjects[3])
+
+    def test_mail_has_answers_my_rates_stop_link_and_inline_figures(self):
+        from .mail import send_daily
+        self._sync({(11, '情報セキュリティ'): 1})
+        question = Question.objects.get(template__isnull=True)
+        question.figures = [{'src': png_uri(), 'alt': '構成図'}]
+        question.save()
+        answer(self.learner, question, True)
+        self._subscribe(marathon=True)
+        send_daily()
+        message = self.outbox.outbox[0]
+        self.assertIn('正解 イ', message.body)
+        self.assertIn('情報セキュリティの解説0', message.body)
+        self.assertIn('100％（1/1）', message.body)
+        self.assertIn('/fe/mail/stop/', message.body)
+        html_body = message.alternatives[0][0]
+        self.assertIn('cid:q{}-f0@fe.mail'.format(question.id), html_body)
+        images = [part for part in message.attachments if getattr(part, 'get_content_type', None)]
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0]['Content-ID'], '<q{}-f0@fe.mail>'.format(question.id))
+        self.assertIn('Content-Type: multipart/related', message.message().as_string())
+
+    def test_stopped_address_gets_nothing(self):
+        from .mail import send_daily
+        self._sync({(11, '情報セキュリティ'): 3})
+        self._subscribe(email='', marathon=True)
+        self.assertEqual(send_daily()['marathon'], 0)
+
+    # ---- 起動口 ----
+
+    def test_task_endpoint_needs_the_token(self):
+        url = reverse('fe:send_mails')
+        self.client.logout()
+        with override_settings(FE_MAIL_TOKEN=''):
+            self.assertEqual(self.client.post(url).status_code, 503)
+        with override_settings(FE_MAIL_TOKEN='secret'):
+            self.assertEqual(self.client.post(url, HTTP_X_FE_MAIL_TOKEN='wrong').status_code, 403)
+            response = self.client.post(url, HTTP_X_FE_MAIL_TOKEN='secret')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), {'marathon': 0, 'training': 0, 'failed': 0})

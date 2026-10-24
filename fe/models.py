@@ -643,6 +643,55 @@ class LearningItem(models.Model):
         return Question.choice_label(self.selected_index)
 
 
+class MailSubscription(models.Model):
+    """毎日0時に届く問題メールの登録。ID ごとに1件で、送り方は fe.mail が受け持つ。
+
+    ID には合言葉がないので、アドレスは確認のメールのリンクを開いて「受け取る」を
+    押したものだけを email に入れる。それまでは pending_email に置く。登録したあとは
+    画面からアドレスを変えられず、解除もメールのリンクからだけできる。
+
+    マラソンと特訓は並行して両方選べる。両方なら1日2通になる。
+    """
+
+    learner = models.OneToOneField(
+        Learner, verbose_name='ID', on_delete=models.CASCADE,
+        related_name='mail_subscription',
+    )
+    # 確認を済ませたアドレス。空なら未登録（または解除済み）
+    email = models.EmailField(verbose_name='配信先', blank=True)
+    pending_email = models.EmailField(verbose_name='確認待ちのアドレス', blank=True)
+    # 確認・解除のメールを続けて送らせないための控え
+    link_sent_at = models.DateTimeField(verbose_name='確認・解除のメールを送った日時', null=True, blank=True)
+
+    # マラソン：全問を、はじめから順番に送る。位置は全問の並び（fe.mail.marathon_questions）の何番目か。
+    # 問題の取り込みで並びが変わっても、位置はそのまま使う。
+    marathon = models.BooleanField(verbose_name='マラソン', default=False)
+    marathon_position = models.PositiveIntegerField(verbose_name='マラソンの次の位置', default=0)
+    marathon_laps = models.PositiveIntegerField(verbose_name='マラソンの周回数', default=0)
+    marathon_sent_on = models.DateField(verbose_name='マラソンを最後に送った日', null=True, blank=True)
+
+    # 特訓：選んだ小分類を順に、1通に1つずつ送る。[[中分類番号, 小分類], ...]
+    training = models.BooleanField(verbose_name='特訓', default=False)
+    training_topics = models.JSONField(verbose_name='特訓の小分類', default=list, blank=True)
+    training_index = models.PositiveIntegerField(verbose_name='特訓の次の小分類', default=0)
+    training_offset = models.PositiveIntegerField(verbose_name='特訓の小分類の中の次の位置', default=0)
+    training_sent_on = models.DateField(verbose_name='特訓を最後に送った日', null=True, blank=True)
+
+    created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE メール配信'
+
+    def __str__(self):
+        return '{} {}'.format(self.learner, '登録済み' if self.email else '未登録')
+
+    @property
+    def masked_email(self):
+        """画面に出す配信先。ID を知っている人なら誰でも見られるので、伏せて出す。"""
+        local, _, domain = self.email.partition('@')
+        return '{}***@{}'.format(local[:1], domain) if self.email else ''
+
+
 class PassReport(models.Model):
     """本番に合格したという本人の申告。集計ページの「合格者数」はこれを数える。
 

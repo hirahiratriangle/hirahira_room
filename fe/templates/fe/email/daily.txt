@@ -1,0 +1,39 @@
+{% autoescape off %}基本情報技術者試験 対策（{{ mode_label }}） {{ today|date:"Y年n月j日" }}
+
+{{ category.label }}{% if topic %}／{{ topic }}{% endif %}
+{{ progress }}
+
+解答と解説は、問題のあとにまとめてあります。
+図のある問題は、HTML 表示のメールソフトで図が出ます。
+
+{% for row in rows %}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+問{{ row.number }}
+
+{{ row.question.stem }}
+{% if row.figures %}（図 {{ row.figures|length }} 点）
+{% endif %}
+{% for choice in row.choices %}{{ choice.label }}　{% if choice.cid %}（図）{% endif %}{{ choice.text }}
+{% endfor %}
+{% endfor %}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 解答と解説
+{% for row in rows %}
+問{{ row.number }}　正解 {{ row.question.answer_label }}{% if row.question.answer_text %}　{{ row.question.answer_text }}{% endif %}
+{% if row.question.explanation %}{{ row.question.explanation }}
+{% endif %}{% if row.question.source_text %}出典：{% if row.question.origin_label %}{{ row.question.origin_label }} {% endif %}{{ row.question.source_text }}
+{% endif %}{% endfor %}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ あなたの分野別正答率（ID: {{ learner.code }}、アプリで解いた分）
+{% for row in stats %}{% if row.category.id == category.id %}▶{% else %}　{% endif %}{{ row.category.label }}　{% if row.rate_percent is not None %}{{ row.rate_percent }}％（{{ row.correct }}/{{ row.total }}）{% else %}—{% endif %}
+{% endfor %}
+メールの問題はアプリの成績に記録されません。
+
+ダッシュボードを開く:
+{{ dashboard_url }}
+
+問題メールを止める:
+{{ stop_url }}
+
+--
+{{ site_name }} 基本情報技術者試験 対策
+このメールは自動送信です。
+{% endautoescape %}

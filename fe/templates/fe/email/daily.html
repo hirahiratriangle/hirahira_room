@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f6f9;">
+<div style="max-width:680px;margin:0 auto;padding:16px;font-family:-apple-system,'Hiragino Sans','Hiragino Kaku Gothic ProN',Meiryo,sans-serif;color:#222;line-height:1.7;">
+
+<div style="background:#2c5aa0;color:#fff;border-radius:6px;padding:14px 16px;">
+  <div style="font-size:13px;">基本情報技術者試験 対策（{{ mode_label }}）　{{ today|date:"Y年n月j日" }}</div>
+  <div style="font-size:18px;font-weight:bold;margin-top:4px;">{{ category.label }}{% if topic %}／{{ topic }}{% endif %}</div>
+  <div style="font-size:13px;margin-top:2px;">{{ progress }}</div>
+</div>
+<p style="font-size:13px;color:#555;">解答と解説は、問題のあとにまとめてあります。</p>
+
+{% for row in rows %}
+<div style="background:#fff;border:1px solid #dde3ec;border-radius:6px;padding:14px 16px;margin-bottom:12px;">
+  <div style="font-weight:bold;color:#2c5aa0;margin-bottom:6px;">問{{ row.number }}</div>
+  <div style="white-space:pre-wrap;">{{ row.question.stem }}</div>
+  {% for figure in row.figures %}
+  <div style="margin-top:10px;"><img src="cid:{{ figure.cid }}" alt="{{ figure.alt }}" style="max-width:100%;height:auto;background:#fff;border:1px solid #dde3ec;border-radius:4px;padding:6px;"></div>
+  {% endfor %}
+  <table role="presentation" style="margin-top:10px;border-collapse:collapse;width:100%;">
+    {% for choice in row.choices %}
+    <tr>
+      <td style="vertical-align:top;padding:3px 8px 3px 0;white-space:nowrap;font-weight:bold;">{{ choice.label }}</td>
+      <td style="vertical-align:top;padding:3px 0;white-space:pre-wrap;">{% if choice.cid %}<img src="cid:{{ choice.cid }}" alt="{{ choice.label }}" style="max-width:100%;height:auto;background:#fff;">{% if choice.text %}<br>{% endif %}{% endif %}{{ choice.text }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endfor %}
+
+<h2 style="font-size:16px;color:#2c5aa0;margin:24px 0 8px;">解答と解説</h2>
+{% for row in rows %}
+<div style="background:#fff;border:1px solid #dde3ec;border-radius:6px;padding:12px 16px;margin-bottom:10px;">
+  <div><span style="font-weight:bold;color:#2c5aa0;">問{{ row.number }}</span>　正解 <strong>{{ row.question.answer_label }}</strong>{% if row.question.answer_text %}　{{ row.question.answer_text }}{% endif %}</div>
+  {% if row.question.explanation %}<div style="white-space:pre-wrap;font-size:14px;color:#444;margin-top:6px;">{{ row.question.explanation }}</div>{% endif %}
+  {% if row.question.source_text %}<div style="font-size:12px;color:#777;margin-top:6px;">出典：{% if row.question.origin_label %}{{ row.question.origin_label }} {% endif %}{{ row.question.source_text }}</div>{% endif %}
+</div>
+{% endfor %}
+
+<h2 style="font-size:16px;color:#2c5aa0;margin:24px 0 8px;">あなたの分野別正答率</h2>
+<p style="font-size:12px;color:#777;margin:0 0 6px;">ID: {{ learner.code }}。アプリで解いた分の成績です。メールの問題は記録されません。</p>
+<table style="border-collapse:collapse;width:100%;background:#fff;border:1px solid #dde3ec;font-size:13px;">
+  {% for row in stats %}
+  <tr style="{% if row.category.id == category.id %}background:#eef3fa;font-weight:bold;{% endif %}">
+    <td style="padding:4px 8px;border-bottom:1px solid #eef0f4;">{{ row.category.label }}</td>
+    <td style="padding:4px 8px;border-bottom:1px solid #eef0f4;text-align:right;white-space:nowrap;">{% if row.rate_percent is not None %}{{ row.rate_percent }}％<span style="color:#888;font-weight:normal;">（{{ row.correct }}/{{ row.total }}）</span>{% else %}—{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<p style="margin-top:20px;font-size:14px;">
+  <a href="{{ dashboard_url }}" style="color:#2c5aa0;">ダッシュボードを開く</a>
+</p>
+<p style="font-size:12px;color:#777;border-top:1px solid #dde3ec;padding-top:10px;">
+  {{ site_name }} 基本情報技術者試験 対策　このメールは自動送信です。<br>
+  <a href="{{ stop_url }}" style="color:#777;">問題メールを止める</a>
+</p>
+</div>
+</body>
+</html>

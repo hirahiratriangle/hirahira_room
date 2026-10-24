@@ -24,6 +24,7 @@
 | `selection.py` | 出題する1問の選定（重点出題のロジック） |
 | `stats.py` | 理解度の記録（`record_progress`）と集計 |
 | `views.py` | ダッシュボード／演習／分野別正答率／履歴／問題の取り込み |
+| `mail.py` | 毎日0時の問題メール（マラソン・特訓）。登録は確認メール経由、解除はメールのリンクから。GitHub Actions の `fe-mails.yml` が `/fe/tasks/send-mails/` を叩いて送る |
 
 ## 初期セットアップ
 

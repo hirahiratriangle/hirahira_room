@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% comment %}
+問題メールの確認（kind=confirm）と解除（kind=stop）のリンクを開いた画面。
+開いただけでは何もせず、ボタンを押したときに確定する。
+{% endcomment %}
+
+{% block title %}問題メール | FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h3 fw-bold mb-0">基本情報の問題メール</h1>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-6">
+            <div class="border rounded p-4">
+            {% if invalid %}
+                <p class="mb-0">
+                    このリンクは使えません。期限が切れたか、すでに使われたか、
+                    {% if kind == 'confirm' %}あとから別のアドレスで手続きし直されています。
+                    ダッシュボードからもう一度登録してください。{% else %}配信先がすでに変わっているか、解除されています。{% endif %}
+                </p>
+            {% elif done %}
+                {% if kind == 'confirm' %}
+                <p class="mb-2"><strong>登録しました。</strong></p>
+                <p class="small mb-0">
+                    ID「{{ subscription.learner.code }}」の問題メールが、毎日0時ごろに届きます。
+                    止めるときは、メールの末尾のリンクから解除してください。
+                </p>
+                {% else %}
+                <p class="mb-2"><strong>配信を止めました。</strong></p>
+                <p class="small mb-0">登録されていたアドレスは消しました。今後、問題メールは届きません。</p>
+                {% endif %}
+            {% else %}
+                <form method="post" class="m-0">
+                    {% csrf_token %}
+                    {% if kind == 'confirm' %}
+                    <p>
+                        ID「<strong>{{ subscription.learner.code }}</strong>」の問題メールを、このアドレスで受け取りますか。
+                    </p>
+                    <p class="small text-muted">
+                        登録したあとは、届いたメールのリンクからしか解除できません。
+                    </p>
+                    <button type="submit" class="btn btn-primary">受け取る</button>
+                    {% else %}
+                    <p>
+                        ID「<strong>{{ subscription.learner.code }}</strong>」の問題メールを止めますか。
+                        登録されているアドレスは消えます。
+                    </p>
+                    <button type="submit" class="btn btn-outline-danger">配信を止める</button>
+                    {% endif %}
+                </form>
+            {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
