@@ -1181,8 +1181,8 @@ class ManageTests(TestCase):
         enter(self.client, self.learner)
 
     def _upload(self, n=3, prefix='問題'):
-        """取り込みは JSON ファイル1本だけなので、テストもファイルで投げる。"""
-        return {'questions_file': SimpleUploadedFile(
+        """取り込みは JSON ファイルだけなので、テストもファイルで投げる。"""
+        return {'questions_a_file': SimpleUploadedFile(
             'q.json', self._payload(n, prefix).encode('utf-8'),
             content_type='application/json',
         )}
@@ -1199,17 +1199,18 @@ class ManageTests(TestCase):
             })
         return response
 
-    def _json_upload(self, records):
-        return {'questions_file': SimpleUploadedFile(
+    def _json_upload(self, records, field='questions_a_file'):
+        return {field: SimpleUploadedFile(
             'q.json', json.dumps(records, ensure_ascii=False).encode('utf-8'),
             content_type='application/json',
         )}
 
     def _upload_with_notes(self, n=3, codes=(9, 11), topic=None):
-        return self._json_upload({
-            'notes': build_notes(codes=codes, topic=topic),
-            'questions': json.loads(self._payload(n)),
-        })
+        return {
+            **self._json_upload({'questions': json.loads(self._payload(n))}),
+            **self._json_upload(
+                {'notes': build_notes(codes=codes, topic=topic)}, 'notes_a_file'),
+        }
 
     def _payload(self, n=3, prefix='問題'):
         return json.dumps([
@@ -1250,15 +1251,14 @@ class ManageTests(TestCase):
             }
             for i in range(120)
         ]
-        payload = json.dumps(
-            {'notes': notes, 'questions': records}, ensure_ascii=False
-        ).encode('utf-8')
+        payload = json.dumps({'notes': notes}, ensure_ascii=False).encode('utf-8')
         # 小分類ぶんの解説を厚く書いた実運用の大きさを想定する。
         self.assertGreater(len(payload), 2 * 1024 * 1024, '2MB を超える前提のテスト')
 
         response = self.client.post(reverse('fe:manage_upload'), {
-            'questions_file': SimpleUploadedFile('big.json', payload,
-                                         content_type='application/json'),
+            **self._json_upload({'questions': records}),
+            'notes_a_file': SimpleUploadedFile('big.json', payload,
+                                               content_type='application/json'),
         })
         self.assertRedirects(response, reverse('fe:manage_list'))
         self.assertEqual(Question.objects.all().count(), 200)
@@ -1326,14 +1326,14 @@ class ManageTests(TestCase):
         build_questions()
         self._post_upload(self._upload(2))
         self.assertEqual(
-            Question.objects.filter(template__isnull=True).count(), 2,
+            Question.objects.filter(template__isnull=True, subject='A').count(), 2,
             '問題集は共有なので、取り込むと全員の問題集が入れ替わる',
         )
 
     def test_broken_json_is_rejected_without_touching_anything(self):
         self.client.post(reverse('fe:manage_upload'), self._upload(2))
         before = list(Question.objects.all().values_list('id', flat=True))
-        response = self.client.post(reverse('fe:manage_upload'), {'questions_file': SimpleUploadedFile(
+        response = self.client.post(reverse('fe:manage_upload'), {'questions_a_file': SimpleUploadedFile(
             'q.json', b'{ not json', content_type='application/json')})
         self.assertEqual(response.status_code, 200)
         after = list(Question.objects.all().values_list('id', flat=True))
@@ -1366,15 +1366,25 @@ class ManageTests(TestCase):
         before_n = LearningNote.objects.all().count()
         self.assertEqual((before_q, before_n), (4, 2))
 
-        response = self.client.get(reverse('fe:manage_export'))
-        self.assertEqual(response.status_code, 200)
-        payload = json.loads(response.content.decode('utf-8'))
-        self.assertEqual(len(payload['questions']), 4)
-        self.assertEqual(len(payload['notes']), 2)
-        self.assertNotIn('key', payload['questions'][0], '書き出しにキーは含めない')
+        def export(side):
+            response = self.client.get(
+                reverse('fe:manage_export'), {'side': side, 'subject': 'A'})
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(
+                'fe_{}_a.json'.format(side), response['Content-Disposition'])
+            return json.loads(response.content.decode('utf-8'))
 
-        response = self.client.post(
-            reverse('fe:manage_upload'), self._json_upload(payload))
+        questions, notes = export('questions'), export('notes')
+        self.assertEqual(list(questions), ['questions'], '問題のファイルに解説は入れない')
+        self.assertEqual(list(notes), ['notes'])
+        self.assertEqual(len(questions['questions']), 4)
+        self.assertEqual(len(notes['notes']), 2)
+        self.assertNotIn('key', questions['questions'][0], '書き出しにキーは含めない')
+
+        response = self.client.post(reverse('fe:manage_upload'), {
+            **self._json_upload(questions),
+            **self._json_upload(notes, 'notes_a_file'),
+        })
         self.assertRedirects(response, reverse('fe:manage_list'))
         self.assertEqual(Question.objects.all().count(), before_q)
         self.assertEqual(LearningNote.objects.all().count(), before_n)
@@ -1386,12 +1396,25 @@ class ManageTests(TestCase):
             category=b, topic=b.name, title='科目Bの解説', body='本文',
         )
         payload = json.loads(
-            self.client.get(reverse('fe:manage_export'), {'subject': 'A'})
+            self.client.get(reverse('fe:manage_export'), {'side': 'notes', 'subject': 'A'})
             .content.decode('utf-8')
         )
         self.assertTrue(payload['notes'])
         for note in payload['notes']:
             self.assertLess(note['category'], 100, '科目Aの書き出しに科目Bの解説が混ざらない')
+        payload = json.loads(
+            self.client.get(reverse('fe:manage_export'), {'side': 'notes', 'subject': 'B'})
+            .content.decode('utf-8')
+        )
+        self.assertEqual([n['title'] for n in payload['notes']], ['科目Bの解説'])
+
+    def test_export_needs_the_side_and_subject(self):
+        """4本のどれを出すかが決まらない書き出しは受け付けない。"""
+        for params in ({}, {'side': 'questions'}, {'subject': 'A'},
+                       {'side': 'all', 'subject': 'A'}):
+            with self.subTest(params=params):
+                response = self.client.get(reverse('fe:manage_export'), params)
+                self.assertEqual(response.status_code, 404)
 
     def test_choice_labels_cover_a_long_answer_group(self):
         """選択肢が多くても記号が割り当たること。"""
@@ -1399,7 +1422,7 @@ class ManageTests(TestCase):
             'category': 103, 'subject': 'B', 'stem': 'x',
             'choices': ['選択肢{}'.format(i) for i in range(9)], 'answer': 8,
             'explanation': '解説',
-        }]))
+        }], 'questions_b_file'))
         question = Question.objects.get(template__isnull=True)
         labels = [label for _, label, _ in question.labeled_choices()]
         self.assertEqual(labels, list('アイウエオカキクケ'))
@@ -1476,8 +1499,8 @@ class ImportNotesTests(TestCase):
     def test_sync_updates_in_place_and_removes_missing(self):
         """解説や正解だけ直したら更新、ファイルから消えたら削除。"""
         build_questions(per_category=2)
-        total = Question.objects.filter(template__isnull=True).count()
         kept = Question.objects.filter(template__isnull=True).first()
+        total = Question.objects.filter(template__isnull=True, subject=kept.subject).count()
         records = [{
             'category': kept.category.code, 'subject': kept.subject,
             'stem': kept.stem, 'choices': kept.choices, 'answer': kept.answer_index,
@@ -1500,8 +1523,8 @@ class ImportNotesTests(TestCase):
         notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
 
         response = self.client.post(reverse('fe:manage_upload'), {
-            'questions_file': SimpleUploadedFile('q.json', questions.encode('utf-8')),
-            'notes_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
+            'questions_a_file': SimpleUploadedFile('q.json', questions.encode('utf-8')),
+            'notes_a_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
         })
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Question.objects.filter(template__isnull=True).count(), 1)
@@ -1516,33 +1539,101 @@ class ImportNotesTests(TestCase):
         notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
 
         response = self.client.post(reverse('fe:manage_upload'), {
-            'notes_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
+            'notes_a_file': SimpleUploadedFile('n.json', notes.encode('utf-8')),
         })
         self.assertEqual(response.status_code, 302)
         self.assertEqual(LearningNote.objects.count(), 2)
         self.assertEqual(Question.objects.count(), before, '問題はそのまま')
 
     def test_upload_needs_at_least_one_file(self):
-        """どちらも選ばずに送ったら、理由を添えて止める。"""
+        """どの欄も選ばずに送ったら、理由を添えて止める。"""
         admin = make_learner('nofile', is_admin=True)
         enter(self.client, admin)
         response = self.client.post(reverse('fe:manage_upload'), {})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'どちらか一方は選んでください')
+        self.assertContains(response, '取り込むファイルを1つ以上選んでください')
 
-    def test_same_side_in_both_files_is_rejected(self):
-        """両方の欄に問題を入れたら、どちらを使うか決められないので弾く。"""
-        admin = make_learner('bothq', is_admin=True)
+    def test_a_file_in_the_wrong_slot_is_rejected(self):
+        """欄と中身の側・科目が合わないファイルは、取り込む前に止める。"""
+        build_questions(per_category=1)
+        before = Question.objects.count()
+        admin = make_learner('wrongslot', is_admin=True)
         enter(self.client, admin)
-        payload = json.dumps({'questions': [
-            {'category': 11, 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0},
+        a_questions = json.dumps({'questions': [
+            {'category': 11, 'subject': 'A', 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0},
         ]}, ensure_ascii=False).encode('utf-8')
+        a_notes = json.dumps({'notes': build_notes()}, ensure_ascii=False).encode('utf-8')
+        both = json.dumps({
+            'questions': json.loads(a_questions)['questions'], 'notes': build_notes(),
+        }, ensure_ascii=False).encode('utf-8')
+        cases = {
+            '科目Aの問題を科目Bの欄に': ('questions_b_file', a_questions, '科目Bではありません'),
+            '科目Aの解説を科目Bの欄に': ('notes_b_file', a_notes, '科目Bではありません'),
+            '解説を問題の欄に': ('questions_a_file', a_notes, '技術解説が入っています'),
+            '問題を解説の欄に': ('notes_a_file', a_questions, '問題が入っています'),
+            '両方入りのファイル': ('questions_a_file', both, '技術解説が入っています'),
+        }
+        for label, (field, payload, message) in cases.items():
+            with self.subTest(label=label):
+                response = self.client.post(reverse('fe:manage_upload'), {
+                    field: SimpleUploadedFile('x.json', payload),
+                })
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, message)
+                self.assertEqual(Question.objects.count(), before, '何も変わらない')
+
+    def test_one_subject_leaves_the_other_subject_alone(self):
+        """科目Aのファイルだけを取り込んでも、科目Bの問題と解説は消えない。
+
+        問題も解説も科目ごとに別のファイルにしているので、ファイルに出てこない
+        科目まで同期の対象にすると、片方を取り込むたびにもう片方が全部消える。
+        """
+        build_questions(per_category=1)
+        b_note = Category.objects.filter(subject='B').first()
+        sync(validate({'questions': None, 'notes': build_notes() + [{
+            'category': b_note.code, 'topic': b_note.name, 'title': '科目Bの解説', 'body': '本文',
+        }]}))
+        b_questions = Question.objects.filter(template__isnull=True, subject='B').count()
+        self.assertTrue(b_questions)
+
+        result = sync(validate({'questions': [
+            {'category': 11, 'subject': 'A', 'stem': '科目Aだけ', 'choices': ['a', 'b'], 'answer': 0},
+        ], 'notes': build_notes(codes=(9,))}))
+
+        self.assertEqual(result['questions']['subjects'], ['A'])
+        self.assertEqual(result['notes']['subjects'], ['A'])
+        self.assertEqual(
+            Question.objects.filter(template__isnull=True, subject='B').count(), b_questions,
+            '科目Bの問題はそのまま',
+        )
+        self.assertEqual(
+            Question.objects.filter(template__isnull=True, subject='A').count(), 1,
+            '科目Aはファイルの内容に揃う',
+        )
+        self.assertTrue(LearningNote.objects.filter(title='科目Bの解説').exists(), '科目Bの解説も残る')
+        self.assertEqual(LearningNote.objects.filter(category__subject='A').count(), 1)
+
+    def test_four_files_can_be_uploaded_at_once(self):
+        """4つの欄をまとめて選んで、1回で取り込める。"""
+        admin = make_learner('fourfiles', is_admin=True)
+        enter(self.client, admin)
+        b = Category.objects.filter(subject='B').first()
+        files = {
+            'questions_a_file': {'questions': [
+                {'category': 11, 'subject': 'A', 'stem': 'A問', 'choices': ['a', 'b'], 'answer': 0}]},
+            'questions_b_file': {'questions': [
+                {'category': b.code, 'subject': 'B', 'stem': 'B問', 'choices': ['a', 'b'], 'answer': 1}]},
+            'notes_a_file': {'notes': build_notes()},
+            'notes_b_file': {'notes': [
+                {'category': b.code, 'topic': b.name, 'title': 'B解説', 'body': '本文'}]},
+        }
         response = self.client.post(reverse('fe:manage_upload'), {
-            'questions_file': SimpleUploadedFile('a.json', payload),
-            'notes_file': SimpleUploadedFile('b.json', payload),
+            field: SimpleUploadedFile(field + '.json', json.dumps(data, ensure_ascii=False).encode('utf-8'))
+            for field, data in files.items()
         })
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '両方に問題が入っています')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Question.objects.filter(template__isnull=True).count(), 2)
+        self.assertEqual(LearningNote.objects.count(), 3)
 
     def test_preview_counts_without_writing(self):
         """下見は数えるだけで、1件も書き込まない。"""
@@ -1561,8 +1652,9 @@ class ImportNotesTests(TestCase):
     def test_large_removal_needs_confirmation(self):
         """削除が既存の3割を超えたら、確定の前に止める。"""
         build_questions(per_category=1)
-        total = Question.objects.filter(template__isnull=True).count()
         kept = Question.objects.filter(template__isnull=True).first()
+        # 同期はファイルに出てくる科目の中だけなので、数えるのも同じ科目
+        total = Question.objects.filter(template__isnull=True, subject=kept.subject).count()
         one = [{
             'category': kept.category.code, 'subject': kept.subject, 'stem': kept.stem,
             'choices': kept.choices, 'answer': kept.answer_index,
@@ -1573,7 +1665,7 @@ class ImportNotesTests(TestCase):
         self.assertTrue(needs_confirmation(counts))
 
         # 3割以下なら止めない
-        few = Question.objects.filter(template__isnull=True)[:total - 1]
+        few = Question.objects.filter(template__isnull=True, subject=kept.subject)[:total - 1]
         records = [{
             'category': q.category.code, 'subject': q.subject, 'stem': q.stem,
             'choices': q.choices, 'answer': q.answer_index,
@@ -1596,7 +1688,7 @@ class ImportNotesTests(TestCase):
         }]}, ensure_ascii=False)
 
         response = self.client.post(reverse('fe:manage_upload'), {
-            'questions_file': SimpleUploadedFile('q.json', payload.encode('utf-8')),
+            'questions_a_file': SimpleUploadedFile('q.json', payload.encode('utf-8')),
         })
         self.assertEqual(response.status_code, 200, '遷移せず確認画面を出す')
         self.assertContains(response, '削除が多いので、一度止めました')
@@ -1607,7 +1699,8 @@ class ImportNotesTests(TestCase):
             'confirm': '1', 'payload': payload,
         })
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(Question.objects.filter(template__isnull=True).count(), 1)
+        self.assertEqual(
+            Question.objects.filter(template__isnull=True, subject=kept.subject).count(), 1)
 
     def test_duplicate_keys_in_one_file_are_rejected(self):
         """同じ鍵が1つのファイルに2件あると、どちらが勝つか不定なので止める。"""

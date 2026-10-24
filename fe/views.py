@@ -602,8 +602,9 @@ class QuestionUploadView(AdminRequiredMixin, generic.FormView):
                 lines.append('{}：変更なし（ファイルに{}が含まれていません）'.format(label, label))
                 continue
             lines.append(
-                '{}：追加 {} / 更新 {} / 変更なし {} / 削除 {}'.format(
-                    label, counts['added'], counts['updated'],
+                '{}（{}）：追加 {} / 更新 {} / 変更なし {} / 削除 {}'.format(
+                    label, '・'.join('科目' + s for s in counts['subjects']),
+                    counts['added'], counts['updated'],
                     counts['unchanged'], counts['removed'],
                 )
             )
@@ -851,10 +852,14 @@ class QuestionExportView(AdminRequiredMixin, generic.View):
     """共有の問題を、取り込みと同じ形式の JSON で書き出す。"""
 
     def get(self, request, *args, **kwargs):
+        # 手元のファイルと同じく、問題・解説 × 科目A・科目B の4本のどれか1本を出す
+        side = request.GET.get('side')
         subject = request.GET.get('subject')
-        payload = export_records(subject)
+        if side not in ('questions', 'notes') or subject not in ('A', 'B'):
+            raise Http404('書き出すファイルの指定がありません。')
+        payload = export_records(side, subject)
         body = json.dumps(payload, ensure_ascii=False, indent=1)
         response = HttpResponse(body, content_type='application/json; charset=utf-8')
-        name = 'fe_{}.json'.format(subject.lower()) if subject in ('A', 'B') else 'fe_all.json'
+        name = 'fe_{}_{}.json'.format(side, subject.lower())
         response['Content-Disposition'] = 'attachment; filename="{}"'.format(name)
         return response

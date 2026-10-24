@@ -30,7 +30,8 @@ def parse(payload):
 
     問題と解説は更新の頻度が違う（問題は作問のたびに入れ替わるが、解説は
     ほぼ固定で、苦戦している分野だけ後から書き足す）ので、別々のファイルで
-    渡せるようにしてある。**入っていない側は触らない。** そのため
+    渡せるようにしてある。さらにそれぞれを科目A・科目Bで分けるので、手元の
+    ファイルは4本になる。**入っていない側・科目は触らない。** そのため
     「空の配列が入っている」と「キーごと無い」を区別して持つ。
     """
     try:
@@ -242,7 +243,11 @@ def sync(payload, apply=True):
 
     テンプレートが生成した計算問題は JSON に無くて当然なので触らない。
 
-    返すのは件数の内訳。利用者に見せて、削除が異常に多くないかを確かめる。
+    **ファイルに入っていない科目にも触らない。** 問題も解説も科目Aと科目Bで
+    別のファイルにしているので、科目Aのファイルだけを取り込んで科目Bが消えては
+    困る。突き合わせと削除は、ファイルに出てくる科目の中だけで行う。
+
+    返すのは件数の内訳と、対象にした科目。利用者に見せて、削除が異常に多くないかを確かめる。
     """
     categories = {c.code: c for c in Category.objects.all()}
     result = {}
@@ -251,9 +256,10 @@ def sync(payload, apply=True):
     if records is None:
         result['questions'] = None
     else:
+        subjects = sorted({r.get('subject', Question.SUBJECT_A) for r in records})
         existing = {
             question_key(q.subject, q.category.code, q.stem): q
-            for q in Question.objects.filter(template__isnull=True)
+            for q in Question.objects.filter(template__isnull=True, subject__in=subjects)
             .select_related('category')
         }
         added = updated = unchanged = 0
@@ -296,16 +302,19 @@ def sync(payload, apply=True):
                 Question.objects.filter(pk__in=stale).delete()
         result['questions'] = {
             'added': added, 'updated': updated,
-            'unchanged': unchanged, 'removed': removed,
+            'unchanged': unchanged, 'removed': removed, 'subjects': subjects,
         }
 
     notes = payload.get('notes')
     if notes is None:
         result['notes'] = None
     else:
+        # 解説は科目を持たないので、中分類の科目で決める
+        subjects = sorted({categories[r['category']].subject for r in notes})
         existing = {
             note_key(n.category.code, n.title): n
-            for n in LearningNote.objects.select_related('category')
+            for n in LearningNote.objects.filter(category__subject__in=subjects)
+            .select_related('category')
         }
         added = updated = unchanged = 0
         seen = set()
@@ -339,31 +348,25 @@ def sync(payload, apply=True):
                 LearningNote.objects.filter(pk__in=stale).delete()
         result['notes'] = {
             'added': added, 'updated': updated,
-            'unchanged': unchanged, 'removed': removed,
+            'unchanged': unchanged, 'removed': removed, 'subjects': subjects,
         }
 
     return result
 
 
-def export_records(subject=None):
-    """共有の問題と技術解説を、取り込みと同じ形式で書き出す。
+def export_records(side, subject):
+    """共有の問題か技術解説の片方を、1科目ぶんだけ取り込みと同じ形式で書き出す。
 
-    控えを取る用途なので、問題と解説の両方を1つにまとめて出す。
-    取り込みは同期なので、これをそのまま戻せば書き出した時点の状態に戻る。
-
-    subject を指定すると、その科目のぶんだけを出す。ただし取り込みは
-    ファイルに無い行を消すため、片方の科目だけを戻すともう一方は消える。
-    控えを取るなら指定しない。
+    手元の JSON と同じく、問題・解説 × 科目A・科目B の4本に分けて出す。
+    取り込みはファイルに出てくる科目の中だけを同期するので、書き出した1本を
+    そのまま戻せば、その科目のその側だけが書き出した時点の状態に戻る。
     """
-    questions = Question.objects.filter(template__isnull=True, is_active=True)
-    notes = LearningNote.objects.all()
-    if subject in (Question.SUBJECT_A, Question.SUBJECT_B):
-        questions = questions.filter(subject=subject)
-        # 分類が科目ごとに別なので、解説もその科目のものだけになる
-        notes = notes.filter(category__subject=subject)
-
-    return {
-        'notes': [
+    if side == 'notes':
+        notes = (
+            LearningNote.objects.filter(category__subject=subject)
+            .select_related('category').order_by('category__code', 'id')
+        )
+        return {'notes': [
             {
                 'category': n.category.code,
                 'topic': n.topic,
@@ -371,20 +374,24 @@ def export_records(subject=None):
                 'body': n.body,
                 'source': n.source,
             }
-            for n in notes.select_related('category').order_by('category__code', 'id')
-        ],
-        'questions': [
-            {
-                'category': q.category.code,
-                'subject': q.subject,
-                'topic': q.topic,
-                'difficulty': q.difficulty,
-                'stem': q.stem,
-                'choices': q.choices,
-                'answer': q.answer_index,
-                'explanation': q.explanation,
-                'source': q.source,
-            }
-            for q in questions.select_related('category').order_by('category__code', 'id')
-        ],
-    }
+            for n in notes
+        ]}
+
+    questions = (
+        Question.objects.filter(template__isnull=True, is_active=True, subject=subject)
+        .select_related('category').order_by('category__code', 'id')
+    )
+    return {'questions': [
+        {
+            'category': q.category.code,
+            'subject': q.subject,
+            'topic': q.topic,
+            'difficulty': q.difficulty,
+            'stem': q.stem,
+            'choices': q.choices,
+            'answer': q.answer_index,
+            'explanation': q.explanation,
+            'source': q.source,
+        }
+        for q in questions
+    ]}

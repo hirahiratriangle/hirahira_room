@@ -10,7 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from .importer import ImportError_, parse, validate
-from .models import Learner
+from .models import Category, Learner, Question
 
 # 上限は設定に一本化してある。Django 側の上限とずれないようにするため。
 MAX_UPLOAD_BYTES = settings.FE_MAX_UPLOAD_BYTES
@@ -28,17 +28,27 @@ def _file_field(label, help_text):
 class QuestionUploadForm(forms.Form):
     """JSON ファイルのアップロード。
 
-    問題と解説は更新の頻度が違うので別のファイルで渡せる。欄も分けてあり、
-    片方だけ選んでも、両方選んでも取り込める。選ばなかったほうには触らない。
-    両方に同じ側（問題なら問題）が入っていたら、どちらを使うか決められないので弾く。
+    問題と解説は更新の頻度が違い、科目Aと科目Bも別々に作るので、手元の
+    ファイルは 問題・解説 × 科目A・科目B の4本になる。欄もその4つに分けてあり、
+    どれか1つだけ選んでも、まとめて選んでも取り込める。選ばなかった欄の
+    中身（その側のその科目）には触らない。
+
+    欄ごとに、入っている側と科目が欄と合っているかを確かめる。科目Aの欄に
+    科目Bのファイルを選ぶといった取り違えを、取り込む前に止めるため。
     """
 
-    questions_file = _file_field(
-        '問題のJSON', '問題だけを選んだときは、いまの技術解説はそのまま残ります。',
+    # (欄の名前, 側, 科目, 見出し)
+    SLOTS = (
+        ('questions_a_file', 'questions', Question.SUBJECT_A, '問題（科目A）'),
+        ('questions_b_file', 'questions', Question.SUBJECT_B, '問題（科目B）'),
+        ('notes_a_file', 'notes', Question.SUBJECT_A, '技術解説（科目A）'),
+        ('notes_b_file', 'notes', Question.SUBJECT_B, '技術解説（科目B）'),
     )
-    notes_file = _file_field(
-        '技術解説のJSON', '解説だけを選んだときは、いまの問題はそのまま残ります。',
-    )
+
+    questions_a_file = _file_field('問題（科目A）のJSON', '例：fe_questions_a.json')
+    questions_b_file = _file_field('問題（科目B）のJSON', '例：fe_questions_b.json')
+    notes_a_file = _file_field('技術解説（科目A）のJSON', '例：fe_notes_a.json')
+    notes_b_file = _file_field('技術解説（科目B）のJSON', '例：fe_notes_b.json')
 
     def _read(self, field):
         """1本ぶんを読んで、取り込める内容かを確かめる。"""
@@ -63,30 +73,53 @@ class QuestionUploadForm(forms.Form):
         except ImportError_ as exc:
             raise forms.ValidationError('{}：{}'.format(upload.name, exc))
 
+    @staticmethod
+    def _check_slot(name, payload, side, subject, label, subjects):
+        """欄と中身の側・科目が合っているか。合わなければ理由を添えて止める。"""
+        other, other_label = (
+            ('notes', '技術解説') if side == 'questions' else ('questions', '問題')
+        )
+        if payload[side] is None or payload[other] is not None:
+            raise forms.ValidationError(
+                '{}：「{}」の欄に{}が入っています。{}だけのファイルを選んでください。'.format(
+                    name, label, other_label, label,
+                )
+            )
+        subject_label = '科目A' if subject == Question.SUBJECT_A else '科目B'
+        for i, r in enumerate(payload[side], start=1):
+            if not isinstance(r, dict):
+                continue  # 形の検査は validate に任せる
+            if side == 'questions':
+                found = r.get('subject', Question.SUBJECT_A)
+            else:
+                found = subjects.get(r.get('category'))
+            if found is not None and found != subject:
+                raise forms.ValidationError(
+                    '{}：{}件目が{}ではありません。「{}」の欄には{}だけを入れてください。'.format(
+                        name, i, subject_label, label, subject_label,
+                    )
+                )
+
     def clean(self):
-        """2つの欄をまとめて1つの取り込み内容にする。
+        """4つの欄をまとめて1つの取り込み内容にする。
 
         検証を通ってからでないと1件も書き込まないので、壊れたファイルを
         選んでも、いまの問題集と解説はそのまま残る。
         """
         cleaned = super().clean()
-        parts = [self._read('questions_file'), self._read('notes_file')]
-        parts = [p for p in parts if p is not None]
-        if not parts:
-            raise forms.ValidationError(
-                '問題と技術解説のどちらか一方は選んでください。'
-            )
-
+        subjects = dict(Category.objects.values_list('code', 'subject'))
         merged = {'questions': None, 'notes': None}
-        for side, label in (('questions', '問題'), ('notes', '技術解説')):
-            found = [p[side] for p in parts if p[side] is not None]
-            if len(found) > 1:
-                raise forms.ValidationError(
-                    '選んだ2つのファイルの両方に{}が入っています。'
-                    'どちらを使うか決められないので、片方にまとめてください。'.format(label)
-                )
-            if found:
-                merged[side] = found[0]
+        for field, side, subject, label in self.SLOTS:
+            payload = self._read(field)
+            if payload is None:
+                continue
+            self._check_slot(
+                self.cleaned_data[field].name, payload, side, subject, label, subjects,
+            )
+            merged[side] = (merged[side] or []) + payload[side]
+
+        if merged['questions'] is None and merged['notes'] is None:
+            raise forms.ValidationError('取り込むファイルを1つ以上選んでください。')
 
         try:
             self.records = validate(merged)
