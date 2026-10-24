@@ -16,6 +16,8 @@ from django.db import models
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from .crypto import decrypt, encrypt
+
 # 科目。要綱が科目ごとに別の出題範囲を定めているので、分類も科目を持つ。
 SUBJECT_A = 'A'
 SUBJECT_B = 'B'
@@ -647,8 +649,11 @@ class MailSubscription(models.Model):
     """毎日0時に届く問題メールの登録。ID ごとに1件で、送り方は fe.mail が受け持つ。
 
     ID には合言葉がないので、アドレスは確認のメールのリンクを開いて「受け取る」を
-    押したものだけを email に入れる。それまでは pending_email に置く。登録したあとは
+    押したものだけを email に入れる。それまでは pending_email に置き、確認の期限
+    （FE_MAIL_CONFIRM_MAX_AGE）を過ぎたら消す（fe.mail.purge_pending）。登録したあとは
     画面からアドレスを変えられず、解除もメールのリンクからだけできる。
+
+    アドレスは DB に暗号化して持つ（fe.crypto）。読み書きは email と pending_email を通す。
 
     マラソンと特訓は並行して両方選べる。両方なら1日2通になる。
     """
@@ -657,10 +662,11 @@ class MailSubscription(models.Model):
         Learner, verbose_name='ID', on_delete=models.CASCADE,
         related_name='mail_subscription',
     )
-    # 確認を済ませたアドレス。空なら未登録（または解除済み）
-    email = models.EmailField(verbose_name='配信先', blank=True)
-    pending_email = models.EmailField(verbose_name='確認待ちのアドレス', blank=True)
-    # 確認・解除のメールを続けて送らせないための控え
+    # 確認を済ませたアドレス（暗号化）。空なら未登録（または解除済み）
+    email_enc = models.TextField(verbose_name='配信先（暗号化）', blank=True, editable=False)
+    pending_email_enc = models.TextField(verbose_name='確認待ちのアドレス（暗号化）', blank=True, editable=False)
+    # 確認・解除のメールを続けて送らせないための控え。確認待ちのアドレスを置いた日時も兼ねる
+    # （確認待ちがあるのは、確認のメールを送ってから「受け取る」が押されるまでの間だけ）
     link_sent_at = models.DateTimeField(verbose_name='確認・解除のメールを送った日時', null=True, blank=True)
 
     # マラソン：全問を、はじめから順番に送る。位置は全問の並び（fe.mail.marathon_questions）の何番目か。
@@ -686,10 +692,27 @@ class MailSubscription(models.Model):
         return '{} {}'.format(self.learner, '登録済み' if self.email else '未登録')
 
     @property
+    def email(self):
+        return decrypt(self.email_enc)
+
+    @email.setter
+    def email(self, value):
+        self.email_enc = encrypt(value)
+
+    @property
+    def pending_email(self):
+        return decrypt(self.pending_email_enc)
+
+    @pending_email.setter
+    def pending_email(self, value):
+        self.pending_email_enc = encrypt(value)
+
+    @property
     def masked_email(self):
         """画面に出す配信先。ID を知っている人なら誰でも見られるので、伏せて出す。"""
-        local, _, domain = self.email.partition('@')
-        return '{}***@{}'.format(local[:1], domain) if self.email else ''
+        email = self.email
+        local, _, domain = email.partition('@')
+        return '{}***@{}'.format(local[:1], domain) if email else ''
 
 
 class PassReport(models.Model):

@@ -932,6 +932,7 @@ def mail_context(learner):
     """ダッシュボードの「問題メール」の欄に渡すもの。"""
     if learner.is_temporary:
         return {'mail_subscription': None}
+    mail.purge_pending()
     subscription = MailSubscription.objects.filter(learner=learner).first()
     picked = {
         mail.topic_value(code, topic) for code, topic in (subscription.training_topics if subscription else [])

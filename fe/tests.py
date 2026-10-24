@@ -2982,6 +2982,59 @@ class MailTests(TestCase):
         subscription.refresh_from_db()
         self.assertEqual(subscription.email, '')
 
+    def test_addresses_are_encrypted_in_the_db(self):
+        from django.db import connection
+        self.client.post(reverse('fe:mail_settings'), {'email': 'secret@example.com', 'marathon': 'on'})
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT email_enc, pending_email_enc FROM fe_mailsubscription')
+            rows = cursor.fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], '')
+        self.assertNotIn('secret', rows[0][1])
+        self.assertEqual(self.learner.mail_subscription.pending_email, 'secret@example.com')
+
+        self.client.post(self._link(self.outbox.outbox[0]))
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT email_enc, pending_email_enc FROM fe_mailsubscription')
+            email_enc, pending_enc = cursor.fetchone()
+        self.assertNotIn('secret', email_enc)
+        self.assertEqual(pending_enc, '')
+        self.learner.mail_subscription.refresh_from_db()
+        self.assertEqual(self.learner.mail_subscription.email, 'secret@example.com')
+
+    def test_unreadable_address_counts_as_unregistered(self):
+        """SECRET_KEY を替えて読めなくなった宛先には送らない。"""
+        from .mail import send_daily
+        self._sync({(11, '情報セキュリティ'): 3})
+        self._subscribe(marathon=True)
+        with override_settings(SECRET_KEY='another-key-' + 'x' * 40, SECRET_KEY_FALLBACKS=[]):
+            self.assertEqual(self.learner.mail_subscription.email, '')
+            self.assertEqual(send_daily()['marathon'], 0)
+
+    def test_pending_address_is_purged_after_the_deadline(self):
+        from .mail import purge_pending
+        self.client.post(reverse('fe:mail_settings'), {'email': 'late@example.com', 'marathon': 'on'})
+        subscription = self.learner.mail_subscription
+        link = self._link(self.outbox.outbox[0])
+        sent_at = subscription.link_sent_at
+        self.assertEqual(purge_pending(sent_at + timezone.timedelta(minutes=59)), 0)
+        self.assertEqual(purge_pending(sent_at + timezone.timedelta(minutes=61)), 1)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.pending_email, '')
+        self.assertContains(self.client.post(link), 'このリンクは使えません')
+
+    def test_dashboard_and_daily_run_purge_expired_pending(self):
+        from .mail import send_daily
+        from .models import MailSubscription
+        self.client.post(reverse('fe:mail_settings'), {'email': 'late@example.com', 'marathon': 'on'})
+        MailSubscription.objects.update(link_sent_at=timezone.now() - timezone.timedelta(hours=2))
+        self.assertNotContains(self.client.get(dashboard(self.learner)), '確認のメールを送ってあります')
+        self.assertEqual(MailSubscription.objects.exclude(pending_email_enc='').count(), 0)
+
+        MailSubscription.objects.update(pending_email_enc='x', link_sent_at=None)
+        send_daily()
+        self.assertEqual(MailSubscription.objects.exclude(pending_email_enc='').count(), 0)
+
     def test_temporary_use_cannot_subscribe(self):
         temporary = Learner.objects.create(code=None)
         put_learner(self.client, temporary.pk)

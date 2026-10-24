@@ -2,7 +2,8 @@
 
 登録 … ダッシュボードから、ID ごとに1件。ID には合言葉がなく、ID を知っている人なら
        誰でも操作できるので、入力されたアドレスに確認のメールを送り、そのリンクを
-       開いて「受け取る」を押したアドレスだけを配信先にする。登録したあとは、画面から
+       開いて「受け取る」を押したアドレスだけを配信先にする。確認待ちのアドレスは、
+       確認の期限を過ぎたら消す（purge_pending）。登録したあとは、画面から
        アドレスを変えられない（変えたいときは解除して登録し直す）。
        送り方（マラソン・特訓・特訓の小分類）は画面から変えられる。
 解除 … 登録されたアドレスに届くメールのリンクからだけできる。リンクは毎回のメールに
@@ -15,11 +16,12 @@
 
 公開問題の図は data URI で持っているが、多くのメールソフトは data URI の画像を
 出さないので、HTML メールの添付（インライン画像）にして本文から参照する。
-アドレスはログに出さない。
+アドレスは DB に暗号化して持ち（fe.crypto）、ログに出さない。
 """
 
 import base64
 import binascii
+import datetime
 import hashlib
 import logging
 import re
@@ -29,6 +31,7 @@ from email.mime.image import MIMEImage
 from django.conf import settings
 from django.core import signing
 from django.core.mail import BadHeaderError, EmailMessage, EmailMultiAlternatives
+from django.db.models import Q
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -94,7 +97,22 @@ def confirm(subscription):
     """確認待ちのアドレスを配信先にする。"""
     subscription.email = subscription.pending_email
     subscription.pending_email = ''
-    subscription.save(update_fields=['email', 'pending_email'])
+    subscription.save(update_fields=['email_enc', 'pending_email_enc'])
+
+
+def purge_pending(now=None):
+    """確認の期限（FE_MAIL_CONFIRM_MAX_AGE）を過ぎた確認待ちのアドレスを消す。消した件数を返す。
+
+    期限を過ぎたリンクはもう使えないので、アドレスを残しておく理由がない。
+    毎日の送信のたびと、ダッシュボードを開いたときに呼ぶ。
+    """
+    now = now or timezone.now()
+    limit = now - datetime.timedelta(seconds=settings.FE_MAIL_CONFIRM_MAX_AGE)
+    return (
+        MailSubscription.objects.exclude(pending_email_enc='')
+        .filter(Q(link_sent_at__lt=limit) | Q(link_sent_at__isnull=True))
+        .update(pending_email_enc='')
+    )
 
 
 def make_stop_token(subscription):
@@ -121,7 +139,7 @@ def read_stop_token(token):
 def stop(subscription):
     """解除する。アドレスを消し、送り方の選択と進み具合は残す（登録し直したら続きから）。"""
     subscription.email = ''
-    subscription.save(update_fields=['email'])
+    subscription.save(update_fields=['email_enc'])
 
 
 def _footer():
@@ -386,12 +404,16 @@ def send_daily(today=None):
     次に呼ばれたときに送り直す。
     """
     today = today or timezone.localdate()
+    purge_pending()
     result = {'marathon': 0, 'training': 0, 'failed': 0}
     subscriptions = (
-        MailSubscription.objects.exclude(email='').select_related('learner')
+        MailSubscription.objects.exclude(email_enc='').select_related('learner')
         .filter(learner__code__isnull=False)
     )
     for subscription in subscriptions:
+        if not subscription.email:
+            # 鍵が替わって読めなくなったもの。送れないので飛ばす
+            continue
         for mode, pick, sent_on, fields in (
             ('marathon', next_marathon, subscription.marathon_sent_on,
              ('marathon_position', 'marathon_laps', 'marathon_sent_on')),
