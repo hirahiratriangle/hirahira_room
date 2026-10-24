@@ -23,7 +23,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
-from django.http import Http404, HttpResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -32,7 +32,7 @@ from django.views import generic
 
 from .exam import EXAM, build_prompt
 from .forms import LearnerForm, PassReportForm, QuestionUploadForm
-from .importer import (ImportError_, export_records, needs_confirmation, parse,
+from .importer import (ImportError_, needs_confirmation, parse,
                        preview, sync, validate)
 from .learning import current_item, focus_category, grade, note_menu, start_round
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
@@ -537,7 +537,7 @@ class HistoryView(LearnerRequiredMixin, generic.ListView):
 # ================================================================ 問題の管理
 # 問題は全 ID で共有し、JSON の取り込みが唯一の作成・更新経路。
 # 画面に入力フォームを置かないので、手元の JSON と画面の内容がずれない。
-# 一覧・取り込み・書き出しは、管理用の ID だけが使える。
+# 一覧・取り込みは、管理用の ID だけが使える。
 
 
 class ManageListView(AdminRequiredMixin, generic.ListView):
@@ -846,20 +846,3 @@ class LearnResultView(LearnerRequiredMixin, generic.DetailView):
         context['items'] = items
         context['missed'] = [i for i in items if i.is_correct is False]
         return context
-
-
-class QuestionExportView(AdminRequiredMixin, generic.View):
-    """共有の問題を、取り込みと同じ形式の JSON で書き出す。"""
-
-    def get(self, request, *args, **kwargs):
-        # 手元のファイルと同じく、問題・解説 × 科目A・科目B の4本のどれか1本を出す
-        side = request.GET.get('side')
-        subject = request.GET.get('subject')
-        if side not in ('questions', 'notes') or subject not in ('A', 'B'):
-            raise Http404('書き出すファイルの指定がありません。')
-        payload = export_records(side, subject)
-        body = json.dumps(payload, ensure_ascii=False, indent=1)
-        response = HttpResponse(body, content_type='application/json; charset=utf-8')
-        name = 'fe_{}_{}.json'.format(side, subject.lower())
-        response['Content-Disposition'] = 'attachment; filename="{}"'.format(name)
-        return response

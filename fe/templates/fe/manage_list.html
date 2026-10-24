@@ -53,21 +53,10 @@
         <a href="{% url 'fe:manage_upload' %}" class="btn btn-primary btn-sm">
             <i class="fas fa-upload me-1"></i>JSONを取り込む
         </a>
-        <a href="{% url 'fe:manage_export' %}?side=questions&subject=A" class="btn btn-outline-primary btn-sm">
-            問題（科目A）を書き出す
-        </a>
-        <a href="{% url 'fe:manage_export' %}?side=questions&subject=B" class="btn btn-outline-primary btn-sm">
-            問題（科目B）を書き出す
-        </a>
-        <a href="{% url 'fe:manage_export' %}?side=notes&subject=A" class="btn btn-outline-primary btn-sm">
-            技術解説（科目A）を書き出す
-        </a>
-        <a href="{% url 'fe:manage_export' %}?side=notes&subject=B" class="btn btn-outline-primary btn-sm">
-            技術解説（科目B）を書き出す
-        </a>
     </div>
     <p class="small text-muted">
-        書き出しは取り込みと同じ<strong>4本の分け方</strong>です。それぞれを同じ欄へ取り込み直せば元に戻ります。
+        問題と技術解説の正は<strong>手元の JSON（問題・技術解説 × 科目A・科目B の4本）</strong>です。
+        直すときは手元のファイルを直して、取り込み直してください。
     </p>
 
     <form method="get" class="row g-2 align-items-end mb-4">

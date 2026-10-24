@@ -52,7 +52,7 @@ class Learner(models.Model):
     )
     is_admin = models.BooleanField(
         verbose_name='管理用', default=False,
-        help_text='問題集の取り込み・書き出しと、問題の一覧ができる。',
+        help_text='問題集の取り込みと、問題の一覧ができる。',
     )
     created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
     # 一時的な記録をいつ消してよいかの判断に使う。画面を開くたびに更新する。

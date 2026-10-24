@@ -809,7 +809,7 @@ class ViewTests(TestCase):
         """管理用の ID で入っていても、ログインしていなければ管理画面は開けない。"""
         self.client.logout()
         put_learner(self.client, make_learner('boss', is_admin=True).pk)
-        for name in ('fe:manage_list', 'fe:manage_upload', 'fe:manage_export'):
+        for name in ('fe:manage_list', 'fe:manage_upload'):
             with self.subTest(page=name):
                 response = self.client.get(reverse(name))
                 self.assertEqual(response.status_code, 302)
@@ -1156,7 +1156,7 @@ class LearnerIdTests(TestCase):
     def test_only_an_admin_id_can_manage_questions(self):
         build_questions()
         enter(self.client, make_learner('plain'))
-        for name in ('fe:manage_list', 'fe:manage_upload', 'fe:manage_export'):
+        for name in ('fe:manage_list', 'fe:manage_upload'):
             with self.subTest(page=name):
                 self.assertEqual(self.client.get(reverse(name)).status_code, 403)
         response = self.client.post(reverse('fe:manage_upload'), {})
@@ -1355,66 +1355,11 @@ class ManageTests(TestCase):
                 self.assertTrue(response.context['form'].errors)
                 self.assertEqual(Question.objects.all().count(), 0)
 
-    def test_export_round_trips_without_losing_notes(self):
-        """書き出して取り込み直しても、問題も解説も失われないこと。
-
-        取り込みは解説も一括で差し替えるので、書き出しに解説が入っていないと、
-        往復しただけで教材が消える。
-        """
-        self.client.post(reverse('fe:manage_upload'), self._upload_with_notes(4))
-        before_q = Question.objects.all().count()
-        before_n = LearningNote.objects.all().count()
-        self.assertEqual((before_q, before_n), (4, 2))
-
-        def export(side):
-            response = self.client.get(
-                reverse('fe:manage_export'), {'side': side, 'subject': 'A'})
-            self.assertEqual(response.status_code, 200)
-            self.assertIn(
-                'fe_{}_a.json'.format(side), response['Content-Disposition'])
-            return json.loads(response.content.decode('utf-8'))
-
-        questions, notes = export('questions'), export('notes')
-        self.assertEqual(list(questions), ['questions'], '問題のファイルに解説は入れない')
-        self.assertEqual(list(notes), ['notes'])
-        self.assertEqual(len(questions['questions']), 4)
-        self.assertEqual(len(notes['notes']), 2)
-        self.assertNotIn('key', questions['questions'][0], '書き出しにキーは含めない')
-
-        response = self.client.post(reverse('fe:manage_upload'), {
-            **self._json_upload(questions),
-            **self._json_upload(notes, 'notes_a_file'),
-        })
-        self.assertRedirects(response, reverse('fe:manage_list'))
-        self.assertEqual(Question.objects.all().count(), before_q)
-        self.assertEqual(LearningNote.objects.all().count(), before_n)
-
-    def test_export_can_be_limited_to_one_subject(self):
-        self.client.post(reverse('fe:manage_upload'), self._upload_with_notes(3))
-        b = Category.objects.filter(subject='B').first()
-        LearningNote.objects.create(
-            category=b, topic=b.name, title='科目Bの解説', body='本文',
-        )
-        payload = json.loads(
-            self.client.get(reverse('fe:manage_export'), {'side': 'notes', 'subject': 'A'})
-            .content.decode('utf-8')
-        )
-        self.assertTrue(payload['notes'])
-        for note in payload['notes']:
-            self.assertLess(note['category'], 100, '科目Aの書き出しに科目Bの解説が混ざらない')
-        payload = json.loads(
-            self.client.get(reverse('fe:manage_export'), {'side': 'notes', 'subject': 'B'})
-            .content.decode('utf-8')
-        )
-        self.assertEqual([n['title'] for n in payload['notes']], ['科目Bの解説'])
-
-    def test_export_needs_the_side_and_subject(self):
-        """4本のどれを出すかが決まらない書き出しは受け付けない。"""
-        for params in ({}, {'side': 'questions'}, {'subject': 'A'},
-                       {'side': 'all', 'subject': 'A'}):
-            with self.subTest(params=params):
-                response = self.client.get(reverse('fe:manage_export'), params)
-                self.assertEqual(response.status_code, 404)
+    def test_export_is_not_offered(self):
+        """正は手元の JSON なので、アプリから書き出す道は置かない。"""
+        response = self.client.get(reverse('fe:manage_list'))
+        self.assertNotContains(response, '書き出す')
+        self.assertNotContains(response, 'manage/export')
 
     def test_choice_labels_cover_a_long_answer_group(self):
         """選択肢が多くても記号が割り当たること。"""
@@ -2593,7 +2538,7 @@ class ExamDefinitionTests(TestCase):
 class ManageNeedsStaffTests(TestCase):
     """問題の管理は、管理用の ID に加えて、スタッフ権限のあるアカウントが要る。"""
 
-    PAGES = ('fe:manage_list', 'fe:manage_upload', 'fe:manage_export')
+    PAGES = ('fe:manage_list', 'fe:manage_upload')
 
     @classmethod
     def setUpTestData(cls):

@@ -27,7 +27,6 @@ urlpatterns = [
     # 問題の管理（全 ID で共有する問題集。管理用の ID だけが使え、登録は JSON の一括差し替えで行う）
     path('manage/', views.ManageListView.as_view(), name='manage_list'),
     path('manage/upload/', views.QuestionUploadView.as_view(), name='manage_upload'),
-    path('manage/export/', views.QuestionExportView.as_view(), name='manage_export'),
 
     # ダッシュボード（マイページ）。ほかの画面の URL と重ならないよう最後に置く
     path('<str:code>/', views.DashboardView.as_view(), name='dashboard'),
