@@ -2491,24 +2491,53 @@ class QuestionAudioTests(TestCase):
         self.assertNotEqual(speech.audio_name('本文'), speech.audio_name('直した本文'))
         self.assertRegex(speech.audio_name('本文'), speech.NAME_PATTERN)
 
-    def test_player_appears_only_when_the_audio_exists(self):
-        page, question = self._shown_question()
-        self.assertNotContains(page, '<audio')
-        self._put_audio(speech.question_text(question))
-        # 選択肢を選ばずに送ると、同じ問題を出し直す（このときも問題を読み上げる）
-        page = self.client.post(reverse('bk_houmu3:quiz'), {'question_id': question.id})
-        self.assertContains(page, reverse('bk_houmu3:question_audio', args=[
-            speech.audio_name(speech.question_text(question))]))
-
-    def test_explanation_is_played_after_answering(self):
+    def test_quiz_page_has_no_player(self):
+        """1問1答の画面には再生バーを出さない。音声は聞き流しで流す。"""
         page, question = self._shown_question()
         self._put_audio(speech.question_text(question))
         self._put_audio(speech.explanation_text(question))
         page = self.client.post(reverse('bk_houmu3:quiz'), {
             'question_id': question.id, 'choice': question.answer_index,
         })
-        self.assertContains(page, '<audio', count=1, msg_prefix='解答した後は解説だけを流す')
-        self.assertContains(page, speech.audio_name(speech.explanation_text(question)))
+        self.assertNotContains(page, '<audio')
+
+    def test_listen_page_is_linked_from_dashboard_and_header(self):
+        page = self.client.get(dashboard(self.learner))
+        self.assertContains(page, reverse('bk_houmu3:listen'))
+        self.assertContains(page, '画面を見ずに聞き流す')
+        listen = self.client.get(reverse('bk_houmu3:listen'))
+        self.assertContains(listen, 'id="listenAudio"')
+        self.assertNotContains(listen, Question.objects.first().stem, msg_prefix='画面に問題を出さない')
+
+    def test_listen_next_returns_only_questions_with_both_audio(self):
+        with_both, only_question = Question.objects.all()[:2]
+        # テスト用の問題は解説がみな同じなので、片方だけ変えて解説の音声を持たせない
+        Question.objects.filter(pk=only_question.pk).update(explanation='別の解説')
+        only_question.refresh_from_db()
+        self._put_audio(speech.question_text(with_both))
+        self._put_audio(speech.explanation_text(with_both))
+        self._put_audio(speech.question_text(only_question))
+        data = self.client.get(reverse('bk_houmu3:listen_next')).json()
+        self.assertEqual([item['id'] for item in data['items']], [with_both.id])
+        item = data['items'][0]
+        self.assertEqual(item['question_url'], speech.audio_url(speech.question_text(with_both)))
+        self.assertEqual(item['explanation_url'], speech.audio_url(speech.explanation_text(with_both)))
+        self.assertFalse(Attempt.objects.exists(), msg='聞き流しは解答にならない')
+
+    def test_listen_next_avoids_recent_then_starts_over(self):
+        """直前に流した問題は避け、尽きたら最初から流し直す。"""
+        questions = list(Question.objects.all()[:3])
+        for question in questions:
+            self._put_audio(speech.question_text(question))
+            self._put_audio(speech.explanation_text(question))
+        url = reverse('bk_houmu3:listen_next')
+        first = [item['id'] for item in self.client.get(url).json()['items']]
+        self.assertCountEqual(first, [q.id for q in questions])
+        again = [item['id'] for item in self.client.get(url).json()['items']]
+        self.assertCountEqual(again, [q.id for q in questions])
+
+    def test_listen_next_is_empty_without_audio(self):
+        self.assertEqual(self.client.get(reverse('bk_houmu3:listen_next')).json()['items'], [])
 
     def test_audio_is_served_with_ranges(self):
         self._put_audio('本文')

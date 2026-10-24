@@ -74,6 +74,9 @@
                 <a href="{% url 'bk_houmu3:quiz' %}" class="btn btn-primary">
                     <i class="fas fa-play me-1"></i>いまの設定で解く（{{ study_session.get_mode_display }}）
                 </a>
+                <a href="{% url 'bk_houmu3:listen' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-headphones me-1"></i>画面を見ずに聞き流す
+                </a>
                 <a href="{% url 'bk_houmu3:stats' %}" class="btn btn-outline-primary btn-sm">分野別の正答率</a>
                 <a href="{% url 'bk_houmu3:history' %}?result=wrong" class="btn btn-outline-primary btn-sm">まちがえた問題</a>
                 {% if learner.is_admin %}

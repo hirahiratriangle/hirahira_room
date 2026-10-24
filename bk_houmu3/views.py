@@ -24,7 +24,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -52,6 +52,12 @@ RECENT_LIMIT = 12
 SESSION_RECENT = 'bk_houmu3_recent_question_ids'
 SESSION_PENDING = 'bk_houmu3_pending_question_id'
 SESSION_SHOWN_AT = 'bk_houmu3_question_shown_at'
+# 聞き流しで直前に流した問題。1問1答の直近の履歴とは別に持つ（聞き流しは解答にならない）
+SESSION_LISTEN_RECENT = 'bk_houmu3_listen_recent_question_ids'
+# 聞き流しで一度に渡す問題の数。画面を消している間は次を取りに行けないことがあるので、まとめて渡す
+LISTEN_BATCH = 10
+# 直前に流した問題を、どれだけ続けて避けるか
+LISTEN_RECENT_LIMIT = 60
 # 入っている ID。hirahira_room のアカウントとは別に、ブラウザのセッションで持つ。
 SESSION_LEARNER = 'bk_houmu3_learner_id'
 # 入っている ID を、ブラウザを閉じたら消える Cookie にも持たせる。セッションは
@@ -68,7 +74,7 @@ def _get_study_session(learner):
 
 def _enter(request, learner):
     """その ID で入る。前の ID の出題途中の状態は持ち越さない。"""
-    for key in (SESSION_RECENT, SESSION_PENDING, SESSION_SHOWN_AT):
+    for key in (SESSION_RECENT, SESSION_PENDING, SESSION_SHOWN_AT, SESSION_LISTEN_RECENT):
         request.session.pop(key, None)
     request.session[SESSION_LEARNER] = learner.pk
     # 応答を返すときに、ブラウザを閉じたら消える Cookie を置く（remember_entry）
@@ -351,8 +357,6 @@ class QuizView(LearnerRequiredMixin, generic.View):
 
         return render(request, self.template_name, {
             'question': question,
-            # 解答する前は問題文と選択肢を、解答した後は解説を読み上げる
-            'question_audio_url': speech.audio_url(speech.question_text(question)),
             'reason': reason,
             'study_session': study_session,
             'categories': category_options(self.learner, study_session.mode),
@@ -381,7 +385,6 @@ class QuizView(LearnerRequiredMixin, generic.View):
             messages.error(request, '選択肢を選んでください。')
             return render(request, self.template_name, {
                 'question': question,
-                'question_audio_url': speech.audio_url(speech.question_text(question)),
                 'study_session': study_session,
                 'categories': category_options(self.learner, study_session.mode),
                 'progress': self._progress(self.learner, question.category),
@@ -423,7 +426,6 @@ class QuizView(LearnerRequiredMixin, generic.View):
             'study_session': study_session,
             'categories': category_options(self.learner, study_session.mode),
             'answered': True,
-            'explanation_audio_url': speech.audio_url(speech.explanation_text(question)),
             'selected': selected,
             'selected_label': Question.choice_label(selected),
             'is_correct': is_correct,
@@ -445,6 +447,75 @@ class QuizView(LearnerRequiredMixin, generic.View):
             'correct': correct,
             'rate_percent': round(correct / total * 100) if total else None,
         }
+
+
+class ListenView(LearnerRequiredMixin, generic.TemplateView):
+    """聞き流し。画面に問題を出さず、問題・選択肢 → 解答（頭の中で選ぶ間）→ 解説 と続けて流す。
+
+    出す問題は1問1答と同じ出題設定（モード・分野）で選ぶ。解答はしないので、
+    解答の記録にも正答率にも入れない。流す問題は ListenNextView から受け取る。
+    """
+
+    template_name = 'bk_houmu3/listen.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        study_session = _get_study_session(self.learner)
+        context['study_session'] = study_session
+        context['categories'] = category_options(self.learner, study_session.mode)
+        context['listen_think_seconds'] = LISTEN_THINK_SECONDS
+        return context
+
+
+# 解答の時間（選択肢を流してから解説を流すまでの間）と、次の問題までの間
+LISTEN_THINK_SECONDS = 5
+LISTEN_GAP_SECONDS = 2
+
+
+class ListenNextView(LearnerRequiredMixin, generic.View):
+    """聞き流しで次に流す問題を、まとめて返す。
+
+    問題文と解説の両方の音声がある問題だけを返す。選び方は1問1答と同じ
+    （pick_question）で、直前に流した問題は避ける。出せる問題が尽きたら、
+    避ける履歴を空にして選び直す。
+    """
+
+    def get(self, request, *args, **kwargs):
+        study_session = _get_study_session(self.learner)
+        recent = request.session.get(SESSION_LISTEN_RECENT, [])
+        items = self._pick(study_session, recent)
+        if not items and recent:
+            recent = []
+            items = self._pick(study_session, recent)
+        request.session[SESSION_LISTEN_RECENT] = recent[-LISTEN_RECENT_LIMIT:]
+        return JsonResponse({'items': items, 'gap_seconds': LISTEN_GAP_SECONDS})
+
+    def _pick(self, study_session, recent):
+        """recent を書き足しながら、流せる問題を LISTEN_BATCH 問まで選ぶ。"""
+        # 音声がそろっていない問題は、選ぶ前に除いておく（引いてから除くと、
+        # 音声の少ないうちは引き直しが尽きて、流せる問題が無いように見える）
+        silent = [
+            question.id for question in Question.objects.filter(is_active=True)
+            if not all(speech.has_audio(text) for text in
+                       (speech.question_text(question), speech.explanation_text(question)))
+        ]
+        items = []
+        while len(items) < LISTEN_BATCH:
+            question, _reason = pick_question(
+                self.learner, study_session, exclude_ids=recent + silent,
+            )
+            # 除いた問題しか残っていないと、除外を解いて選び直すモードがある
+            if question is None or question.id in recent or question.id in silent:
+                break
+            recent.append(question.id)
+            items.append({
+                'id': question.id,
+                'field': question.category.get_field_display(),
+                'category': question.category.name,
+                'question_url': speech.audio_url(speech.question_text(question)),
+                'explanation_url': speech.audio_url(speech.explanation_text(question)),
+            })
+        return items
 
 
 _RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')

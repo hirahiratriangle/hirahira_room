@@ -12,6 +12,9 @@ urlpatterns = [
     path('quiz/', views.QuizView.as_view(), name='quiz'),
     # 問題と解説の読み上げ音声（manage.py make_question_audio で作ったもの）
     path('audio/<str:name>', views.QuestionAudioView.as_view(), name='question_audio'),
+    # 聞き流し（画面に問題を出さず、問題と解説の音声を続けて流す）
+    path('listen/', views.ListenView.as_view(), name='listen'),
+    path('listen/next/', views.ListenNextView.as_view(), name='listen_next'),
     path('quiz/settings/', views.QuizSettingsView.as_view(), name='quiz_settings'),
     # 学習モード（先に解説を読み、そのあと同じ範囲を解く）
     path('learn/', views.LearnStartView.as_view(), name='learn_start'),

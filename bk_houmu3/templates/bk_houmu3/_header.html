@@ -19,6 +19,9 @@ history / manage）を渡す。sub があれば見出しの右に小さく添え
                 {% if current != 'quiz' %}<a class="text-white text-decoration-none" href="{% url 'bk_houmu3:quiz' %}">1問1答</a>
                 {% else %}<span style="color:#93aecd;">1問1答</span>{% endif %}
 
+                {% if current != 'listen' %}<a class="text-white text-decoration-none" href="{% url 'bk_houmu3:listen' %}">聞き流し</a>
+                {% else %}<span style="color:#93aecd;">聞き流し</span>{% endif %}
+
                 {# 学習モードは入口を出さない。読ませる解説（notes）を作らないため。仕組みは残してあり、解説を足したらここを戻す #}
 
                 {% if current != 'stats' %}<a class="text-white text-decoration-none" href="{% url 'bk_houmu3:stats' %}">分野別正答率</a>

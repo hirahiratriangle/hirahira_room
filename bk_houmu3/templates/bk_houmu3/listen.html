@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+
+{% block title %}聞き流し - 法務3級対策 | HirahiraRoom{% endblock %}
+
+{% block head %}
+<style>
+    .fe-listen-phase { font-size: 1.4rem; font-weight: 700; color: #2c5aa0; min-height: 2.2rem; }
+</style>
+{% endblock %}
+
+{% block header %}
+{% include 'bk_houmu3/_header.html' with page_title='聞き流し' current='listen' %}
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5" style="max-width: 720px;">
+
+    <p class="text-muted small mb-4">
+        問題 → 選択肢 → 解答（{{ listen_think_seconds }}秒、頭の中で選ぶ時間）→ 解説（正解を含む）の順に流し、
+        終わると次の問題へ自動で進みます。画面には問題を出しません。解答はしないので、
+        履歴や正答率には入りません。
+    </p>
+
+    <div class="border rounded p-4 mb-4 text-center bg-white">
+        <div class="small text-muted mb-2" id="listenCount">まだ始めていません</div>
+        <div class="fe-listen-phase mb-2" id="listenPhase">&nbsp;</div>
+        <div class="small text-muted mb-4" id="listenCategory">&nbsp;</div>
+
+        <button type="button" class="btn btn-primary btn-lg px-5" id="listenStart">
+            <i class="fas fa-play me-2"></i>聞き流しを始める
+        </button>
+        <div class="d-none flex-wrap justify-content-center gap-2" id="listenControls">
+            <button type="button" class="btn btn-outline-primary" id="listenToggle">
+                <i class="fas fa-pause me-1"></i>一時停止
+            </button>
+            <button type="button" class="btn btn-outline-primary" id="listenSkip">
+                <i class="fas fa-forward me-1"></i>次へ
+            </button>
+        </div>
+        <div class="alert alert-warning small mt-4 mb-0 d-none" id="listenEmpty">
+            いまの出題設定で流せる問題がありません。ダッシュボードで出題モードか分野を変えてください。
+        </div>
+        <audio id="listenAudio" preload="auto"></audio>
+    </div>
+
+    <div class="small text-muted">
+        出題設定：{{ study_session.get_mode_display }}{% if study_session.category %}／{{ study_session.category.name }}{% endif %}
+        （<a href="{% if request.bk_houmu3_learner.code %}{% url 'bk_houmu3:dashboard' request.bk_houmu3_learner.code %}{% else %}{% url 'bk_houmu3:index' %}{% endif %}">ダッシュボードで変える</a>）
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 1問ごとに「問題・選択肢 → 解答（頭の中で選ぶ時間）→ 解説 → 少しの間」と流し、次の問題へ進む。
+// 問題はまとめて受け取り、残りが少なくなったら次のまとまりを取りに行く。
+// 画面を消しても流し続けたいので、1問1答と違い、画面が隠れても止めない。
+(function () {
+    var THINK = {{ listen_think_seconds }};
+    var audio = document.getElementById('listenAudio');
+    var startButton = document.getElementById('listenStart');
+    var controls = document.getElementById('listenControls');
+    var toggle = document.getElementById('listenToggle');
+    var skip = document.getElementById('listenSkip');
+    var count = document.getElementById('listenCount');
+    var phase = document.getElementById('listenPhase');
+    var categoryLabel = document.getElementById('listenCategory');
+    var empty = document.getElementById('listenEmpty');
+
+    var queue = [];
+    var current = null;
+    var step = null;      // 'question' / 'think' / 'explanation' / 'gap'
+    var number = 0;
+    var gap = 2;
+    var timer = null;
+    var waitLeft = 0;
+    var paused = false;
+    var fetching = null;
+
+    var fetchMore = function () {
+        if (fetching) { return fetching; }
+        fetching = fetch('{% url "bk_houmu3:listen_next" %}', {credentials: 'same-origin'})
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                queue = queue.concat(data.items);
+                gap = data.gap_seconds;
+            })
+            .catch(function () {})
+            .then(function () { fetching = null; });
+        return fetching;
+    };
+
+    var showPhase = function (text) { phase.textContent = text; };
+
+    var setMedia = function () {
+        if (!('mediaSession' in navigator) || !current) { return; }
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: number + '問目　' + current.category,
+            artist: '法務3級 聞き流し'
+        });
+    };
+
+    var play = function (url, nextStep) {
+        step = nextStep;
+        audio.src = url;
+        audio.play().catch(function () {});
+    };
+
+    // 解答の時間・問題の間を1秒ずつ数える。一時停止したら止まり、再開で続きから数える。
+    var wait = function (seconds, label, done) {
+        clearInterval(timer);
+        waitLeft = seconds;
+        var tick = function () {
+            if (paused) { return; }
+            if (waitLeft <= 0) {
+                clearInterval(timer);
+                timer = null;
+                done();
+                return;
+            }
+            if (label) { showPhase(label + '　' + waitLeft); }
+            waitLeft -= 1;
+        };
+        tick();
+        timer = setInterval(tick, 1000);
+    };
+
+    var next = function () {
+        clearInterval(timer);
+        timer = null;
+        if (queue.length < 3) { fetchMore(); }
+        if (!queue.length) {
+            showPhase('問題を取りに行っています');
+            fetchMore().then(function () {
+                if (queue.length) { next(); return; }
+                showPhase('');
+                controls.classList.add('d-none');
+                empty.classList.remove('d-none');
+            });
+            return;
+        }
+        current = queue.shift();
+        number += 1;
+        count.textContent = number + '問目';
+        categoryLabel.textContent = current.field + '／' + current.category;
+        showPhase('問題・選択肢');
+        setMedia();
+        play(current.question_url, 'question');
+    };
+
+    audio.addEventListener('ended', function () {
+        if (step === 'question') {
+            step = 'think';
+            wait(THINK, '解答', function () {
+                showPhase('解説');
+                play(current.explanation_url, 'explanation');
+            });
+        } else if (step === 'explanation') {
+            step = 'gap';
+            showPhase('次の問題へ');
+            wait(gap, '', next);
+        }
+    });
+    // 音声が取れなかったときは、その問題を飛ばす
+    audio.addEventListener('error', function () {
+        if (step === 'question' || step === 'explanation') { next(); }
+    });
+
+    var setPaused = function (value) {
+        paused = value;
+        if (paused) {
+            audio.pause();
+            toggle.innerHTML = '<i class="fas fa-play me-1"></i>再開';
+        } else {
+            if (step === 'question' || step === 'explanation') { audio.play().catch(function () {}); }
+            toggle.innerHTML = '<i class="fas fa-pause me-1"></i>一時停止';
+        }
+    };
+
+    startButton.addEventListener('click', function () {
+        startButton.classList.add('d-none');
+        controls.classList.remove('d-none');
+        controls.classList.add('d-flex');
+        next();
+    });
+    toggle.addEventListener('click', function () { setPaused(!paused); });
+    skip.addEventListener('click', function () {
+        setPaused(false);
+        audio.pause();
+        next();
+    });
+
+    // ロック画面やイヤホンのボタンからも、一時停止・再開・次へを使えるようにする
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', function () { setPaused(false); });
+        navigator.mediaSession.setActionHandler('pause', function () { setPaused(true); });
+        navigator.mediaSession.setActionHandler('nexttrack', function () { skip.click(); });
+    }
+
+    // 始める前に最初のまとまりを受け取っておく（押してすぐ流せるように）
+    fetchMore();
+})();
+</script>
+{% endblock %}
