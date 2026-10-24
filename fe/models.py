@@ -193,12 +193,19 @@ class Question(models.Model):
     stem = models.TextField(verbose_name='問題文')
     # 選択肢のリスト。ア／イ／ウ／エ の記号は表示側で付けるので本文には含めない。
     choices = models.JSONField(verbose_name='選択肢')
+    # 図は公開問題の冊子から切り出した PNG を、data URI のまま持つ。画像を別ファイルに
+    # すると取り込みのたびに画像も運ぶことになり、JSON 4本で完結しなくなるため。
+    # figures は問題文の下に並べる図（{"src", "alt"} の配列）、choice_figures は
+    # 選択肢そのものが図の問題で、選択肢と同じ並びの data URI（図の無い選択肢は null）。
+    figures = models.JSONField(verbose_name='図', default=list, blank=True)
+    choice_figures = models.JSONField(verbose_name='選択肢の図', null=True, blank=True)
     answer_index = models.PositiveSmallIntegerField(verbose_name='正解の選択肢番号（0始まり）')
     explanation = models.TextField(verbose_name='解説', blank=True)
     difficulty = models.PositiveSmallIntegerField(
         verbose_name='難易度', choices=DIFFICULTY_CHOICES, default=2
     )
-    source = models.CharField(verbose_name='出典・根拠', max_length=120, blank=True)
+    # 出典にシラバスの項目まで書くので、転記の問題では長くなる
+    source = models.CharField(verbose_name='出典・根拠', max_length=255, blank=True)
 
 
     template = models.ForeignKey(
@@ -295,6 +302,22 @@ class Question(models.Model):
         if 0 <= self.answer_index < len(self.choices):
             return self.choices[self.answer_index]
         return ''
+
+    def choice_figure(self, index):
+        """その選択肢の図（data URI）。図の無い選択肢なら None。"""
+        figures = self.choice_figures or []
+        return figures[index] if 0 <= index < len(figures) else None
+
+    @property
+    def answer_figure(self):
+        return self.choice_figure(self.answer_index)
+
+    def choice_rows(self):
+        """(番号, 記号, 本文, 図) のリスト。labeled_choices に選択肢の図を添えたもの。"""
+        return [
+            (i, label, text, self.choice_figure(i))
+            for i, label, text in self.labeled_choices()
+        ]
 
     @staticmethod
     def choice_label(index):
@@ -465,7 +488,8 @@ class LearningNote(models.Model):
     topic = models.CharField(verbose_name='小分類', max_length=60, blank=True)
     title = models.CharField(verbose_name='見出し', max_length=120)
     body = models.TextField(verbose_name='本文')
-    source = models.CharField(verbose_name='出典', max_length=120, blank=True)
+    # 扱っているシラバスの項目を全部書くので、長くなる
+    source = models.CharField(verbose_name='出典', max_length=255, blank=True)
     created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
 
     class Meta:

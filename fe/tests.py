@@ -592,7 +592,7 @@ class ViewTests(TestCase):
             with self.subTest(url=url):
                 html = self.client.get(url).content.decode('utf-8')
                 self.assertIn('このアプリが対応していない問題・問題形式', html)
-                self.assertIn('図を見ないと解けない問題', html)
+                self.assertIn('図を見ないと解けない問題（自作の分）', html)
                 self.assertIn('本番どおりの模擬試験', html)
                 self.assertIn('記述・入力・並べ替え', html)
 
@@ -602,7 +602,7 @@ class ViewTests(TestCase):
         enter(self.client, admin)
         html = self.client.get(reverse('fe:manage_upload')).content.decode('utf-8')
         self.assertIn('このアプリで出せない問題', html)
-        for word in ('図が本質の問題は作れません', '上付き', '組合せを1つの選択肢'):
+        for word in ('図は公開問題を転記するときだけ使えます', '上付き', '組合せを1つの選択肢'):
             self.assertIn(word, html)
 
     def test_prompt_states_unsupported_formats(self):
@@ -610,7 +610,7 @@ class ViewTests(TestCase):
         from .exam import build_prompt
         prompt = build_prompt()
         self.assertIn('【このアプリが扱えないもの】', prompt)
-        for word in ('図が必要な問題は作らない', '2のn乗', 'ルビ', '複数正解や部分点はない'):
+        for word in ('図は公開問題を転記するときだけ使う', '2のn乗', 'ルビ', '複数正解や部分点はない'):
             self.assertIn(word, prompt)
 
     def test_index_renders(self):
@@ -2568,3 +2568,121 @@ class ManageNeedsStaffTests(TestCase):
             with self.subTest(page=name):
                 self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
+
+
+def png_uri(width=1, extra=b''):
+    """テスト用の小さな PNG を data URI にする。extra で大きさを水増しできる。"""
+    import base64, struct, zlib
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body))
+
+    raw = b''.join(b'\x00' + b'\xff' * width for _ in range(1))
+    png = (b'\x89PNG\r\n\x1a\n'
+           + chunk(b'IHDR', struct.pack('>IIBBBBB', width, 1, 8, 0, 0, 0, 0))
+           + chunk(b'IDAT', zlib.compress(raw))
+           + (chunk(b'tEXt', extra) if extra else b'')
+           + chunk(b'IEND', b''))
+    return 'data:image/png;base64,' + base64.b64encode(png).decode('ascii')
+
+
+class FigureTests(TestCase):
+    """図のある問題。公開問題の図を PNG の data URI で持ち、画面に出す。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+
+    def _record(self, **extra):
+        record = {
+            'category': 2, 'subject': 'A', 'topic': 'データ構造',
+            'stem': '図の木構造は2分探索木である。', 'choices': ['ア案', 'イ案', 'ウ案', 'エ案'],
+            'answer': 1, 'source': '令和7年度 科目A 問3',
+        }
+        record.update(extra)
+        return record
+
+    def _sync(self, *records):
+        return sync(validate({'questions': list(records), 'notes': None}))
+
+    def test_figures_are_imported_and_kept(self):
+        figure = {'src': png_uri(), 'alt': '根が a の2分木'}
+        self._sync(self._record(figures=[figure], choice_figures=[png_uri(), None, png_uri(2), None]))
+        question = Question.objects.get(template__isnull=True)
+        self.assertEqual(question.figures, [figure])
+        self.assertIsNone(question.choice_figure(1), '図の無い選択肢は null のまま')
+        self.assertEqual(question.answer_figure, None)
+        self.assertEqual(question.choice_rows()[2][3], png_uri(2))
+
+    def test_questions_without_figures_still_import(self):
+        self._sync(self._record())
+        question = Question.objects.get(template__isnull=True)
+        self.assertEqual(question.figures, [])
+        self.assertIsNone(question.choice_figures)
+
+    def test_changing_a_figure_is_an_update_and_keeps_the_history(self):
+        """図は鍵に入らない。図を差し替えても同じ問題のままで、解答履歴は切れない。"""
+        self._sync(self._record(figures=[{'src': png_uri(), 'alt': '旧'}]))
+        question = Question.objects.get(template__isnull=True)
+        answer(make_learner('figure'), question, correct=True)
+
+        result = self._sync(self._record(figures=[{'src': png_uri(3), 'alt': '新'}]))
+        self.assertEqual(result['questions']['updated'], 1)
+        self.assertEqual(result['questions']['removed'], 0)
+        self.assertTrue(Attempt.objects.filter(question=question).exists())
+        question.refresh_from_db()
+        self.assertEqual(question.figures[0]['alt'], '新')
+
+    def test_broken_figures_are_rejected(self):
+        ok = {'src': png_uri(), 'alt': '図'}
+        jpeg = 'data:image/jpeg;base64,' + png_uri().split(',', 1)[1]
+        not_png = 'data:image/png;base64,' + __import__('base64').b64encode(b'GIF89a....').decode()
+        cases = {
+            '配列でない': {'figures': ok},
+            'src が画像でない': {'figures': [{'src': 'javascript:alert(1)', 'alt': '図'}]},
+            'PNG 以外の形式': {'figures': [{'src': jpeg, 'alt': '図'}]},
+            '中身が PNG でない': {'figures': [{'src': not_png, 'alt': '図'}]},
+            'base64 が壊れている': {'figures': [{'src': 'data:image/png;base64,@@@', 'alt': '図'}]},
+            '大きすぎる': {'figures': [{'src': png_uri(extra=b'x' * (301 * 1024)), 'alt': '図'}]},
+            'alt が空': {'figures': [{'src': png_uri(), 'alt': ' '}]},
+            '余計なキー': {'figures': [dict(ok, title='x')]},
+            '選択肢の図の数が違う': {'choice_figures': [png_uri()]},
+            '選択肢の図が画像でない': {'choice_figures': ['x', None, None, None]},
+        }
+        for label, extra in cases.items():
+            with self.subTest(label=label):
+                with self.assertRaises(ImportError_):
+                    validate({'questions': [self._record(**extra)], 'notes': None})
+
+    def test_source_longer_than_the_column_is_rejected(self):
+        """SQLite は長さを見ないので、検査しないと手元で通って本番で落ちる。"""
+        long = 'シラバス Ver.8.0 中分類2 データ構造' + '（1）項目' * 60
+        with self.assertRaises(ImportError_):
+            validate({'questions': [self._record(source=long)], 'notes': None})
+        with self.assertRaises(ImportError_):
+            validate({'questions': None, 'notes': [
+                {'category': 2, 'topic': 'データ構造', 'title': 't', 'body': 'b', 'source': long}]})
+        # 項目まで書いた転記の出典は通る
+        validate({'questions': [self._record(
+            source='令和7年度 科目A 問3（中分類2 データ構造（2）木構造）')], 'notes': None})
+
+    def test_quiz_shows_the_figures(self):
+        self._sync(self._record(
+            figures=[{'src': png_uri(), 'alt': '根が a の2分木'}],
+            choice_figures=[png_uri(4), None, None, None],
+        ))
+        # テンプレートが生成する計算問題が選ばれないよう、その問題だけにする
+        Question.objects.filter(template__isnull=False).delete()
+        enter(self.client, make_learner('seer'))
+        response = self.client.get(reverse('fe:quiz'))
+        self.assertContains(response, 'src="{}"'.format(png_uri()))
+        self.assertContains(response, 'alt="根が a の2分木"')
+        self.assertContains(response, 'src="{}"'.format(png_uri(4)))
+
+        question = response.context['question']
+        response = self.client.post(reverse('fe:quiz'), {
+            'question_id': question.id, 'choice': question.answer_index,
+        })
+        self.assertContains(response, 'src="{}"'.format(png_uri()), msg_prefix='答えた後も図を出す')
+        self.assertContains(response, 'src="{}"'.format(png_uri(4)))

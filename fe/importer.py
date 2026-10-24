@@ -10,6 +10,8 @@
 別のテーブルへ積み上げているため、正答率と苦手分野の判定は続く。
 """
 
+import base64
+import binascii
 import json
 from django.db import transaction
 
@@ -17,6 +19,14 @@ from .models import Category, LearningNote, Question
 
 LABELS = 'アイウエオカキクケコ'
 MAX_CHOICES = len(LABELS)
+
+# 図は PNG の data URI だけを受け付ける。src はそのまま <img> に入るので、
+# 形を絞っておかないと、画像以外のもの（javascript: など）を画面に通してしまう。
+FIGURE_PREFIX = 'data:image/png;base64,'
+PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+# 1枚の上限。冊子から切り出した図は 20KB 前後なので、十分に余裕がある。
+# 画面全体を貼るような取り違えを止めるための値。
+MAX_FIGURE_BYTES = 300 * 1024
 
 class ImportError_(ValueError):
     """取り込めない JSON だったことを表す。利用者に見せる文言を持つ。"""
@@ -109,6 +119,59 @@ def _reject_duplicate_keys(questions, notes):
         seen.add(key)
 
 
+def _check_figure_src(src, where):
+    """data URI が PNG の画像として読めるかを確かめる。"""
+    if not isinstance(src, str) or not src.startswith(FIGURE_PREFIX):
+        raise ImportError_(
+            '{}：図は "{}" で始まる PNG の data URI にしてください。'.format(where, FIGURE_PREFIX)
+        )
+    try:
+        data = base64.b64decode(src[len(FIGURE_PREFIX):], validate=True)
+    except (binascii.Error, ValueError):
+        raise ImportError_('{}：図の base64 が読めません。'.format(where))
+    if not data.startswith(PNG_SIGNATURE):
+        raise ImportError_('{}：図が PNG ではありません。'.format(where))
+    if len(data) > MAX_FIGURE_BYTES:
+        raise ImportError_('{}：図が大きすぎます（{} KB。上限 {} KB）。'.format(
+            where, len(data) // 1024, MAX_FIGURE_BYTES // 1024))
+
+
+def _validate_figures(record, where):
+    """問題文の図（figures）と選択肢の図（choice_figures）を検査する。どちらも任意。"""
+    figures = record.get('figures', [])
+    if not isinstance(figures, list):
+        raise ImportError_('{}：figures は図の配列にしてください。'.format(where))
+    for j, figure in enumerate(figures, start=1):
+        at = '{} 図{}'.format(where, j)
+        if not isinstance(figure, dict) or set(figure) != {'src', 'alt'}:
+            raise ImportError_('{}：図は {{"src": ..., "alt": ...}} の形にしてください。'.format(at))
+        _check_figure_src(figure['src'], at)
+        # 画像が出ないときと読み上げのときに使う。図だけに頼る問題にしないため必須
+        if not isinstance(figure['alt'], str) or not figure['alt'].strip():
+            raise ImportError_('{}：alt（図の説明）が空です。'.format(at))
+
+    choice_figures = record.get('choice_figures')
+    if choice_figures is None:
+        return
+    if not isinstance(choice_figures, list) or len(choice_figures) != len(record['choices']):
+        raise ImportError_(
+            '{}：choice_figures は choices と同じ数（{}個）の配列にしてください。'.format(
+                where, len(record['choices']))
+        )
+    for j, src in enumerate(choice_figures):
+        if src is not None:
+            _check_figure_src(src, '{} 選択肢{}の図'.format(where, LABELS[j]))
+
+
+def _check_source_length(record, where, field):
+    """出典が保存できる長さか。SQLite は長さを見ないので、手元では通って本番で落ちる。"""
+    limit = field.max_length
+    source = record.get('source', '')
+    if isinstance(source, str) and len(source) > limit:
+        raise ImportError_('{}：source（出典）が長すぎます（{}字。上限 {}字）。'.format(
+            where, len(source), limit))
+
+
 def validate_notes(records, codes):
     """技術解説を検査する。分野・見出し・本文がそろっていることだけ見る。"""
     for i, record in enumerate(records, start=1):
@@ -125,6 +188,7 @@ def validate_notes(records, codes):
             value = record.get(field)
             if not isinstance(value, str) or not value.strip():
                 raise ImportError_('{}：{}（{}）が空です。'.format(where, field, label))
+        _check_source_length(record, where, LearningNote._meta.get_field('source'))
     return records
 
 
@@ -194,6 +258,8 @@ def validate(payload):
 
         if record.get('difficulty', 2) not in (1, 2, 3):
             raise ImportError_('{}：difficulty は 1〜3 にしてください。'.format(where))
+        _validate_figures(record, where)
+        _check_source_length(record, where, Question._meta.get_field('source'))
     return payload
 
 
@@ -276,6 +342,8 @@ def sync(payload, apply=True):
                 explanation=r.get('explanation', ''),
                 difficulty=r.get('difficulty', 2),
                 source=r.get('source', ''),
+                figures=r.get('figures', []),
+                choice_figures=r.get('choice_figures'),
                 is_active=True,
             )
             current = existing.get(key)

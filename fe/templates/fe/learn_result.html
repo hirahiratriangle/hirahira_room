@@ -47,9 +47,11 @@
             {% if item.question.topic %}<span class="text-muted small ms-2">{{ item.question.topic }}</span>{% endif %}
         </div>
         <div class="fe-stem small mb-2">{{ item.question.stem }}</div>
+        {% if item.question.figures %}<div class="mb-2">{% include 'fe/_figures.html' with figures=item.question.figures %}</div>{% endif %}
         <div class="small mb-2">
             {% if item.is_correct is False %}<span class="text-danger me-3">あなたの解答 {{ item.selected_label }}</span>{% endif %}
             <span class="text-success">正解 {{ item.question.answer_label }}　{{ item.question.answer_text }}</span>
+            {% if item.question.answer_figure %}<img src="{{ item.question.answer_figure }}" alt="正解 {{ item.question.answer_label }}：{{ item.question.answer_text }}" class="img-fluid border rounded bg-white p-1 mt-2 d-block" loading="lazy">{% endif %}
         </div>
         {% if item.question.explanation %}
         <div class="fe-stem small text-muted mb-0">{{ item.question.explanation }}</div>

@@ -47,6 +47,7 @@
     <!-- 問題文 -->
     <div class="border rounded p-4 mb-4 bg-white">
         <div class="fe-stem {% if question.subject == 'B' %}fe-stem-b{% endif %}">{{ question.stem }}</div>
+        {% include 'fe/_figures.html' with figures=question.figures %}
     </div>
 
     {% if answered %}
@@ -63,11 +64,11 @@
     </div>
 
     <div class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
-        {% for index, label, text in question.labeled_choices %}
+        {% for index, label, text, figure in question.choice_rows %}
         <div class="list-group-item d-flex
                     {% if index == question.answer_index %}list-group-item-success{% elif index == selected %}list-group-item-danger{% endif %}">
             <span class="fe-choice-label">{{ label }}</span>
-            <span class="flex-fill">{{ text }}</span>
+            <span class="flex-fill">{{ text }}{% if figure %}<img src="{{ figure }}" alt="{{ label }}：{{ text }}" class="img-fluid border rounded bg-white p-1 mt-2 d-block" loading="lazy">{% endif %}</span>
             {% if index == question.answer_index %}<span class="small text-success ms-2">正解</span>
             {% elif index == selected %}<span class="small text-danger ms-2">あなたの解答</span>{% endif %}
         </div>
@@ -101,11 +102,11 @@
         {% csrf_token %}
         <input type="hidden" name="question_id" value="{{ question.id }}">
         <div class="list-group {% if question.source %}mb-2{% else %}mb-4{% endif %}">
-            {% for index, label, text in question.labeled_choices %}
+            {% for index, label, text, figure in question.choice_rows %}
             <label class="list-group-item d-flex align-items-start fe-choice">
                 <input class="form-check-input me-3 mt-1" type="radio" name="choice" value="{{ index }}" required>
                 <span class="fe-choice-label">{{ label }}</span>
-                <span class="flex-fill">{{ text }}</span>
+                <span class="flex-fill">{{ text }}{% if figure %}<img src="{{ figure }}" alt="{{ label }}：{{ text }}" class="img-fluid border rounded bg-white p-1 mt-2 d-block" loading="lazy">{% endif %}</span>
             </label>
             {% endfor %}
         </div>
