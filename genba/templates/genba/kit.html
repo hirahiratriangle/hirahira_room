@@ -1,0 +1,64 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}テンプレート{% endblock %}
+
+{% block genba_contents %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+    <h2 class="h5 mb-0" style="color: #2c5aa0;">現場テンプレート <span class="small text-muted fw-normal">genba-template ・ 版 {{ version }}</span></h2>
+    <a class="btn btn-primary btn-sm" href="{% url 'genba:site_create' %}"><i class="fas fa-plus me-1"></i>テンプレートから現場を作る</a>
+</div>
+<p class="small text-muted">現場ごとに、このテンプレートからリポジトリを作ります（プロトタイプでは GitHub には作らず、アプリの中の「現場」として作ります）。顧客の成果物やソースコードは置かず、置くのは自分たちの記録だけです。</p>
+
+<section class="mb-4">
+    <h3 class="h6">現場の一生</h3>
+    <div class="d-flex flex-wrap align-items-center gap-2 small">
+        {% for step in lifecycle %}<span class="badge bg-light text-dark border fs-6 fw-normal">{{ step }}</span>{% if not forloop.last %}<i class="fas fa-arrow-right text-muted"></i>{% endif %}{% endfor %}
+    </div>
+</section>
+
+<div class="row g-4 mb-4">
+    <section class="col-lg-6">
+        <h3 class="h6">docs/ のフォルダ</h3>
+        <table class="table table-sm small">
+            <tbody>{% for key, label, note in doc_sections %}<tr><td class="text-nowrap"><i class="far fa-folder me-1"></i>{{ label }}</td><td>{{ note }}</td></tr>{% endfor %}</tbody>
+        </table>
+    </section>
+    <section class="col-lg-6">
+        <h3 class="h6">Issue テンプレート</h3>
+        <table class="table table-sm small">
+            <tbody>{% for key, label, note in issue_kinds %}<tr><td class="text-nowrap"><span class="badge bg-light text-dark border">{{ label }}</span></td><td>{{ note }}</td></tr>{% endfor %}</tbody>
+        </table>
+        <h3 class="h6">ラベル</h3>
+        <table class="table table-sm small">
+            <tbody>{% for label, note in issue_labels %}<tr><td class="text-nowrap"><span class="badge {% if label == 'スコープ外' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ label }}</span></td><td>{{ note }}</td></tr>{% endfor %}</tbody>
+        </table>
+    </section>
+</div>
+
+<section class="mb-4">
+    <h3 class="h6">{{ checklist_title }}（現場を作ると、小見出しごとの作業 Issue として並ぶ）</h3>
+    {% for p in checklist_intro %}<p class="small">{{ p }}</p>{% endfor %}
+    <div class="row g-3">
+        {% for stage in checklist %}
+        <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+            <h4 class="h6 fw-bold mb-1">{{ forloop.counter }}. {{ stage.title }}</h4>
+            <p class="small text-muted">{{ stage.aim }}</p>
+            {% for section in stage.sections %}
+            <div class="small fw-bold mt-2">{{ section.title }} <span class="fw-normal text-muted">→ {{ section.target_names|join:"・" }}</span></div>
+            {% if section.note %}<div class="small text-muted">{{ section.note }}</div>{% endif %}
+            <ul class="small mb-0 ps-3">{% for item in section.items %}<li>{{ item }}</li>{% endfor %}</ul>
+            {% endfor %}
+        </div></div></div>
+        {% endfor %}
+    </div>
+</section>
+
+<section>
+    <h3 class="h6">危険信号と動き方</h3>
+    <p class="small text-muted">次のどれかに当てはまったら、その日のうちに動く。</p>
+    <table class="table table-sm small">
+        <thead><tr class="text-muted"><th>兆候</th><th>その日にやること</th></tr></thead>
+        <tbody>{% for s in danger_signs %}<tr><td class="text-nowrap">{{ s.sign }}</td><td>{{ s.action }}</td></tr>{% endfor %}</tbody>
+    </table>
+</section>
+{% endblock %}

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Document, Membership, PromiseCheck, Question, Site, Term
+from .models import ChecklistItem, Document, Membership, PromiseCheck, Question, Site, Summary, Term
 
 
 class MembershipInline(admin.TabularInline):
@@ -10,7 +10,7 @@ class MembershipInline(admin.TabularInline):
 
 @admin.register(Site)
 class SiteAdmin(admin.ModelAdmin):
-    list_display = ('name', 'repo_name', 'industry', 'started_on')
+    list_display = ('name', 'repo_name', 'industry', 'started_on', 'template_version', 'is_archived')
     search_fields = ('name', 'repo_name', 'industry')
     inlines = [MembershipInline]
 
@@ -29,11 +29,23 @@ class TermAdmin(admin.ModelAdmin):
     search_fields = ('term', 'meaning')
 
 
+class ChecklistItemInline(admin.TabularInline):
+    model = ChecklistItem
+    extra = 0
+
+
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
-    list_display = ('title', 'site', 'kind', 'author', 'is_open', 'scope_out', 'created_at')
-    list_filter = ('site', 'kind', 'is_open', 'scope_out')
+    list_display = ('title', 'site', 'kind', 'author', 'is_open', 'scope_out', 'unreadable', 'stage', 'created_at')
+    list_filter = ('site', 'kind', 'is_open', 'scope_out', 'unreadable', 'stage')
     search_fields = ('title', 'body')
+    inlines = [ChecklistItemInline]
+
+
+@admin.register(Summary)
+class SummaryAdmin(admin.ModelAdmin):
+    list_display = ('site', 'author', 'submitted_at', 'updated_at')
+    list_filter = ('site',)
 
 
 @admin.register(PromiseCheck)

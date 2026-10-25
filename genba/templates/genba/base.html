@@ -9,6 +9,8 @@
     .genba-stall { color: #b02a37; font-weight: 600; }
     .genba-alert-cell { background-color: #fff3cd; }
     .genba-pre { white-space: pre-wrap; }
+    .genba-phrase { border-left: 4px solid #2c5aa0; background: #f3f6fb; padding: .5rem .75rem; }
+    .genba-done { text-decoration: line-through; color: #6c757d; }
 </style>
 {% endblock %}
 
@@ -25,21 +27,21 @@
 
 {% block contents %}
 <div class="container px-5 py-4">
-    {% if roles %}
     <ul class="nav nav-pills genba-tabs mb-4">
         {% if 'member' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'member' %}active{% endif %}" href="{% url 'genba:member_home' %}"><i class="fas fa-user me-1"></i>メンバー</a></li>{% endif %}
         {% if 'leader' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'leader' %}active{% endif %}" href="{% url 'genba:leader_home' %}"><i class="fas fa-user-friends me-1"></i>リーダー</a></li>{% endif %}
         {% if 'management' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'management' %}active{% endif %}" href="{% url 'genba:management' %}"><i class="fas fa-chart-bar me-1"></i>マネジメント</a></li>{% endif %}
         {% if 'company' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'company' %}active{% endif %}" href="{% url 'genba:company' %}"><i class="fas fa-building me-1"></i>会社</a></li>{% endif %}
+        <li class="nav-item ms-md-auto"><a class="nav-link {% if request.resolver_match.url_name == 'kit' %}active{% endif %}" href="{% url 'genba:kit' %}"><i class="fas fa-clone me-1"></i>テンプレート</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.resolver_match.url_name == 'phrases' %}active{% endif %}" href="{% url 'genba:phrases' %}"><i class="fas fa-comment-dots me-1"></i>言い回し集</a></li>
     </ul>
-    {% endif %}
 
     {% block genba_contents %}{% endblock %}
 
     <p class="text-muted small mt-5 mb-0 border-top pt-3">
         <i class="fas fa-shield-alt me-1"></i>
-        ここに書いた内容は人事評価の材料にしません。指標は現場単位で集計し、個人の記述量や作業量は測りません。
-        単価・契約金額・顧客の成果物・個人情報は置かないでください。
+        記録で人を採点しません。本人が成長の証拠として引くのは自由ですが、他人が記録を拾って評価することはしません。
+        指標は現場単位で集計し、個人の記述量や作業量は測りません。単価・契約金額・顧客の成果物・個人情報は置かないでください。
     </p>
 </div>
 {% endblock %}

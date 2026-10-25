@@ -3,24 +3,83 @@
 {% block genba_title %}{{ site.name }}{% endblock %}
 
 {% block genba_contents %}
-<div class="mb-3">
-    <h2 class="h5 mb-1" style="color: #2c5aa0;">{{ site.name }}</h2>
-    <p class="small text-muted mb-1"><i class="fab fa-github me-1"></i>{{ site.repo_name }} ・ {{ site.industry }} ・ {{ site.started_on|date:"Y年n月j日" }}開始{% if is_leader %} ・ <span class="badge bg-primary">リーダー</span>{% endif %}</p>
-    {% if site.description %}<p class="small mb-0 genba-pre">{{ site.description }}</p>{% endif %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+        <h2 class="h5 mb-1" style="color: #2c5aa0;">{{ site.name }}{% if site.is_archived %} <span class="badge bg-secondary">Archive 済み</span>{% endif %}</h2>
+        <p class="small text-muted mb-1"><i class="fab fa-github me-1"></i>{{ site.repo_name }} ・ {{ site.industry }} ・ 入場日 {{ site.started_on|date:"Y年n月j日" }} ・ テンプレート {{ site.template_version }}{% if is_leader %} ・ <span class="badge bg-primary">リーダー</span>{% endif %}</p>
+        {% if site.description %}<p class="small mb-0 genba-pre">{{ site.description }}</p>{% endif %}
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:summary' site.pk %}"><i class="fas fa-file-alt me-1"></i>1週目のまとめ</a>
+        {% if is_leader %}
+        <form method="post" action="{% url 'genba:site_archive' site.pk %}">{% csrf_token %}
+            <button class="btn btn-outline-secondary btn-sm">{% if site.is_archived %}Archive を戻す{% else %}Archive する{% endif %}</button>
+        </form>
+        {% endif %}
+    </div>
 </div>
 
+{% if detected %}
+<div class="card border-danger mb-3"><div class="card-body py-2">
+    <div class="small fw-bold text-danger mb-1"><i class="fas fa-exclamation-triangle me-1"></i>危険信号：その日のうちに動く</div>
+    {% include 'genba/_signals.html' with detected_only=True %}
+</div></div>
+{% endif %}
+
 {% with path=request.path %}
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item"><a class="nav-link {% if tab == 'questions' %}active{% endif %}" href="{{ path }}?tab=questions">確認事項・課題 <span class="badge bg-secondary">{{ open_questions|length }}</span></a></li>
+<ul class="nav nav-tabs mb-3 small">
+    <li class="nav-item"><a class="nav-link {% if tab == 'checklist' %}active{% endif %}" href="{{ path }}?tab=checklist">チェックリスト</a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'issues' %}active{% endif %}" href="{{ path }}?tab=issues">Issue <span class="badge bg-secondary">{{ open_questions|length }}</span></a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'unreadable' %}active{% endif %}" href="{{ path }}?tab=unreadable">読めない{% if unreadable_open %} <span class="badge bg-warning text-dark">{{ unreadable_open }}</span>{% endif %}</a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'progress' %}active{% endif %}" href="{{ path }}?tab=progress">進捗表</a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'docs' %}active{% endif %}" href="{{ path }}?tab=docs">docs</a></li>
     <li class="nav-item"><a class="nav-link {% if tab == 'terms' %}active{% endif %}" href="{{ path }}?tab=terms">用語集</a></li>
-    <li class="nav-item"><a class="nav-link {% if tab == 'docs' %}active{% endif %}" href="{{ path }}?tab=docs">文書</a></li>
     <li class="nav-item"><a class="nav-link {% if tab == 'promises' %}active{% endif %}" href="{{ path }}?tab=promises">約束と実際</a></li>
     <li class="nav-item"><a class="nav-link {% if tab == 'members' %}active{% endif %}" href="{{ path }}?tab=members">メンバー</a></li>
 </ul>
 {% endwith %}
 
-{% if tab == 'questions' %}
-<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:question_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a></div>
+{% if tab == 'checklist' %}
+<p class="small text-muted">入場時チェックリスト上流編を、小見出しごとの作業 Issue として並べています。<a href="{% url 'genba:kit' %}">テンプレート</a>を改訂しても、この現場のチェックリストは変わりません。</p>
+<div class="row g-3">
+    {% for stage in stages %}
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100"><div class="card-body">
+            {% include 'genba/_progress_bar.html' %}
+            {% for q in stage.issues %}
+            <div class="mb-2">
+                <a href="{% url 'genba:issue_detail' q.pk %}" class="small fw-bold text-decoration-none {% if not q.is_open %}genba-done{% endif %}">{{ q.title }}</a>
+                <ul class="list-unstyled small mb-0 ms-2">
+                    {% for item in q.items.all %}
+                    <li class="d-flex gap-1">
+                        {% if site.is_archived %}<span>{% if item.is_done %}☑{% else %}☐{% endif %}</span>
+                        {% else %}
+                        <form method="post" action="{% url 'genba:checklist_item_toggle' item.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button class="btn btn-link p-0 small text-decoration-none" title="済み／戻す">{% if item.is_done %}☑{% else %}☐{% endif %}</button>
+                        </form>
+                        {% endif %}
+                        <span class="{% if item.is_done %}genba-done{% endif %}">{{ item.text }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% empty %}<p class="small text-muted">この段階の項目はありません</p>{% endfor %}
+        </div></div>
+    </div>
+    {% endfor %}
+</div>
+<h3 class="h6 mt-4">危険信号と動き方</h3>
+<div class="card"><div class="card-body py-2">{% include 'genba/_signals.html' with detected_only=False %}</div></div>
+
+{% elif tab == 'issues' %}
+{% if not site.is_archived %}
+<div class="d-flex flex-wrap justify-content-end gap-2 mb-2">
+    <a class="btn btn-primary btn-sm" href="{% url 'genba:issue_create' site.pk 'question' %}"><i class="fas fa-plus me-1"></i>確認事項</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:issue_create' site.pk 'problem' %}">課題（懸念）</a>
+    <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:issue_create' site.pk 'task' %}">作業</a>
+    <a class="btn btn-outline-danger btn-sm" href="{% url 'genba:issue_create' site.pk 'scope_out' %}">スコープ外を頼まれた</a>
+</div>
+{% endif %}
 <div class="table-responsive"><table class="table table-sm align-middle">
     <thead><tr class="small text-muted"><th>未解決</th><th>誰に聞くか</th><th>書いた人</th><th>経過</th><th></th></tr></thead>
     <tbody>
@@ -35,27 +94,50 @@
 </table></div>
 {% endif %}
 
-{% elif tab == 'terms' %}
-<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:term_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a></div>
-<div class="list-group">
-    {% for t in terms %}
-    <div class="list-group-item">
-        <div class="d-flex flex-wrap justify-content-between gap-2">
-            <div><strong>{{ t.term }}</strong> <span class="small text-muted">／ {{ t.author.username }}</span></div>
-            {% include 'genba/_knowledge.html' with obj=t model='term' next=request.get_full_path %}
-        </div>
-        <div class="small genba-pre">{{ t.meaning }}</div>
-        {% if t.has_gap %}<div class="small text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>一般的な意味との違い：{{ t.general_difference }}</div>{% endif %}
-    </div>
-    {% empty %}<p class="text-muted small">まだありません</p>{% endfor %}
-</div>
+{% elif tab == 'unreadable' %}
+<p class="small text-muted">どの資料のどこが、なぜ読めないか。2日経っても進まないものは、一覧を持って質問の時間をもらいます。</p>
+<div class="genba-phrase small mb-3"><i class="fas fa-comment-dots me-1"></i>使える一言：{{ phrase_unreadable }}</div>
+{% if not site.is_archived %}<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:issue_create' site.pk 'unreadable' %}"><i class="fas fa-plus me-1"></i>「読めない」を残す</a></div>{% endif %}
+<div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr class="small text-muted"><th>どの資料</th><th>どこが</th><th>なぜ</th><th>書いた人</th><th>経過</th><th></th></tr></thead>
+    <tbody>
+        {% for q, ask in unreadable %}
+        <tr class="small {% if not q.is_open %}text-muted{% endif %}">
+            <td><a href="{% url 'genba:issue_detail' q.pk %}" class="{% if not q.is_open %}genba-done{% endif %}">{{ q.source|default:q.title }}</a></td>
+            <td>{{ q.location|default:"―" }}</td>
+            <td>{{ q.get_reason_display|default:"―" }}</td>
+            <td>{{ q.author.username }}</td>
+            <td class="text-nowrap {% if ask %}genba-stall{% endif %}">{{ q.days_open }}日</td>
+            <td>{% if ask %}<span class="badge bg-warning text-dark">質問の時間をもらう</span>{% elif not q.is_open %}解決{% endif %}</td>
+        </tr>
+        {% empty %}<tr><td colspan="6" class="text-muted small">「読めない」はありません</td></tr>{% endfor %}
+    </tbody>
+</table></div>
+
+{% elif tab == 'progress' %}
+<p class="small text-muted">作業 Issue の予定と実績。初日の最初のタスクは、担当範囲を確かめる確認作業そのものです。遅れが出たら、その日のうちに原因と追いつく見込みを書きます。</p>
+{% if not site.is_archived %}<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:issue_create' site.pk 'task' %}"><i class="fas fa-plus me-1"></i>作業を追加</a></div>{% endif %}
+<div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr class="small text-muted"><th>作業</th><th>予定日</th><th>完了日</th><th>差</th><th>遅れの原因と見込み</th></tr></thead>
+    <tbody>
+        {% for q in tasks %}
+        <tr class="small {% if q.is_late %}genba-alert-cell{% endif %}">
+            <td><a href="{% url 'genba:issue_detail' q.pk %}" class="{% if not q.is_open %}genba-done{% endif %}">{{ q.title }}</a>{% if q.scope_out %} <span class="badge bg-danger">スコープ外</span>{% endif %}</td>
+            <td class="text-nowrap">{{ q.due_on|date:"n/j"|default:"―" }}</td>
+            <td class="text-nowrap">{{ q.done_on|date:"n/j"|default:"―" }}</td>
+            <td class="text-nowrap">{% if q.is_late %}<span class="text-danger">遅れ</span>{% elif q.done_on %}予定どおり{% endif %}</td>
+            <td>{{ q.delay_note|default:"" }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="5" class="text-muted small">作業はありません</td></tr>{% endfor %}
+    </tbody>
+</table></div>
 
 {% elif tab == 'docs' %}
-{% for kind, label, docs in doc_groups %}
+{% for kind, label, note, docs in doc_groups %}
 <div class="mb-4">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h3 class="h6 mb-0">{{ label }}</h3>
-        <a class="btn btn-outline-primary btn-sm py-0" href="{% url 'genba:document_create' site.pk kind %}"><i class="fas fa-pen me-1"></i>書く</a>
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <h3 class="h6 mb-0"><i class="far fa-folder me-1"></i>{{ label }} <span class="small text-muted fw-normal">― {{ note }}</span></h3>
+        {% if not site.is_archived %}<a class="btn btn-outline-primary btn-sm py-0" href="{% url 'genba:document_create' site.pk kind %}"><i class="fas fa-pen me-1"></i>書く</a>{% endif %}
     </div>
     <ul class="list-group">
         {% for d in docs %}
@@ -69,9 +151,28 @@
 </div>
 {% endfor %}
 
+{% elif tab == 'terms' %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <p class="small text-muted mb-0">分からない語もそのまま載せます。SI業界の言葉は <a href="{% url 'genba:phrases' %}#words">ワード確認表</a> も参照。</p>
+    {% if not site.is_archived %}<a class="btn btn-primary btn-sm" href="{% url 'genba:term_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a>{% endif %}
+</div>
+<div class="list-group">
+    {% for t, others in terms %}
+    <div class="list-group-item">
+        <div class="d-flex flex-wrap justify-content-between gap-2">
+            <div><strong>{{ t.term }}</strong> <span class="small text-muted">／ {{ t.author.username }}</span></div>
+            {% include 'genba/_knowledge.html' with obj=t model='term' next=request.get_full_path %}
+        </div>
+        {% if t.meaning %}<div class="small genba-pre">{{ t.meaning }}</div>{% else %}<div class="small text-muted"><i class="fas fa-question-circle me-1"></i>意味を確認中</div>{% endif %}
+        {% if t.has_gap %}<div class="small text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>一般的な意味との違い：{{ t.general_difference }}</div>{% endif %}
+        {% for o in others %}<div class="small text-muted"><i class="fas fa-exchange-alt me-1"></i>{{ o.site.industry }}の現場では：{{ o.meaning|default:"（意味なし）" }}</div>{% endfor %}
+    </div>
+    {% empty %}<p class="text-muted small">まだありません</p>{% endfor %}
+</div>
+
 {% elif tab == 'promises' %}
 <p class="small text-muted">振り返りの「約束と実際」表。食い違っている行の数がマネジメントの指標になります（個人名は出ません）。</p>
-<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:promise_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a></div>
+{% if not site.is_archived %}<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:promise_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a></div>{% endif %}
 <div class="table-responsive"><table class="table table-sm">
     <thead><tr class="small text-muted"><th>約束（営業・面談時の説明）</th><th>実際</th><th>ズレ</th></tr></thead>
     <tbody>
@@ -83,8 +184,15 @@
 
 {% elif tab == 'members' %}
 <table class="table table-sm">
-    <thead><tr class="small text-muted"><th>名前</th><th>立場</th><th>役割</th></tr></thead>
-    <tbody>{% for m in memberships %}<tr class="small"><td>{{ m.user.username }}</td><td>{{ m.get_role_display }}</td><td>{{ m.duty|default:"―" }}</td></tr>{% endfor %}</tbody>
+    <thead><tr class="small text-muted"><th>名前</th><th>立場</th><th>役割</th><th>入場日</th></tr></thead>
+    <tbody>{% for m in memberships %}<tr class="small"><td>{{ m.user.username }}</td><td>{{ m.get_role_display }}</td><td>{{ m.duty|default:"―" }}</td><td>{{ m.joined_on|date:"n/j" }}</td></tr>{% endfor %}</tbody>
 </table>
+<h3 class="h6 mt-4">1週目のまとめ</h3>
+<ul class="list-group">
+    {% for s in summaries %}
+    <li class="list-group-item small"><a href="{% url 'genba:summary' site.pk %}?user={{ s.author_id }}">{{ s.author.username }} のまとめ</a>
+        <span class="text-muted">／ {% if s.submitted_at %}{{ s.submitted_at|date:"n/j" }}に提出{% else %}書きかけ{% endif %}</span></li>
+    {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+</ul>
 {% endif %}
 {% endblock %}

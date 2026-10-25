@@ -1,0 +1,59 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}1週目のまとめ{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:site_detail' site.pk %}">{{ site.name }}</a></p>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+    <h2 class="h5 mb-0" style="color: #2c5aa0;">1週目のまとめ{% if not mine %}（{{ summary.author.username }}）{% endif %}</h2>
+    <span class="badge {% if summary.submitted_at %}bg-success{% else %}bg-secondary{% endif %}">{% if summary.submitted_at %}{{ summary.submitted_at|date:"n/j" }}に提出{% else %}書きかけ{% endif %}</span>
+</div>
+<p class="small text-muted">1週目のゴールは「担当機能と全体像を自分の言葉で説明できること」。全体像の図、担当機能の整理、用語集、未解決の質問一覧を1つの資料にし、5日目に出します。用語集・未解決の質問・読めない一覧は、この現場の記録から自動で並びます。</p>
+<div class="genba-phrase small mb-3"><i class="fas fa-comment-dots me-1"></i>使える一言：{{ phrase }}</div>
+
+{% if writable %}
+<form method="post" class="card shadow-sm mb-4"><div class="card-body">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="mb-3">
+        <label class="form-label fw-bold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}<div class="form-text">{{ field.help_text }}</div>
+    </div>
+    {% endfor %}
+    <button class="btn btn-outline-primary btn-sm" name="action" value="save">保存</button>
+    {% if summary.submitted_at %}
+    <button class="btn btn-outline-secondary btn-sm ms-1" name="action" value="withdraw">書きかけに戻す</button>
+    {% else %}
+    <button class="btn btn-primary btn-sm ms-1" name="action" value="submit">まとめを出す</button>
+    {% endif %}
+</div></form>
+{% else %}
+<div class="card mb-3"><div class="card-body small"><div class="fw-bold">全体像</div><div class="genba-pre mb-2">{{ summary.overview|default:"―" }}</div><div class="fw-bold">担当機能の整理</div><div class="genba-pre">{{ summary.functions|default:"―" }}</div></div></div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <h3 class="h6">用語集</h3>
+        <ul class="small ps-3">{% for t in terms %}<li><strong>{{ t.term }}</strong>：{{ t.meaning|default:"（確認中）"|truncatechars:50 }}</li>{% empty %}<li class="text-muted">まだありません</li>{% endfor %}</ul>
+    </div>
+    <div class="col-md-4">
+        <h3 class="h6">未解決の質問</h3>
+        <ul class="small ps-3">{% for q in open_questions %}<li><a href="{% url 'genba:issue_detail' q.pk %}">{{ q.title }}</a>{% if q.ask_to %}（{{ q.ask_to }}）{% endif %}</li>{% empty %}<li class="text-muted">ありません</li>{% endfor %}</ul>
+    </div>
+    <div class="col-md-4">
+        <h3 class="h6">読めない一覧</h3>
+        <ul class="small ps-3">{% for q in unreadable %}<li><a href="{% url 'genba:issue_detail' q.pk %}">{{ q.source|default:q.title }}</a>{% if q.location %} {{ q.location }}{% endif %}（{{ q.get_reason_display }}）</li>{% empty %}<li class="text-muted">ありません</li>{% endfor %}</ul>
+    </div>
+</div>
+
+<h3 class="h6">リーダーと確かめた結果</h3>
+<p class="small text-muted">リーダーに15分もらい「この理解で合っていますか」と確かめ、期待値との差と2週目の作業を書きます。</p>
+{% if writable %}
+<form method="post" class="card"><div class="card-body">
+    {% csrf_token %}{{ review_form.review_note }}
+    <button class="btn btn-outline-primary btn-sm mt-2" name="action" value="review">保存</button>
+</div></form>
+{% else %}
+<div class="card"><div class="card-body small genba-pre">{{ summary.review_note|default:"―" }}</div></div>
+{% endif %}
+{% endblock %}

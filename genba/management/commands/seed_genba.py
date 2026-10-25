@@ -5,6 +5,12 @@
 指定したユーザーを「受発注」現場のリーダー、「保険金請求」現場のメンバーにし、
 マネジメント・会社のグループにも入れて、4つの立場の画面をひとりで見られるようにする。
 デモの現場（リポジトリ名が genba-demo- で始まるもの）は毎回作り直す。
+
+筋書き：
+- 受発注（リーダー）：入場から10週。チェックリストはほぼ済み、まとめはリーダーと確認済み
+- 保険金請求（メンバー）：入場から6日。1週目の途中で、3日止まっている「読めない」があり、
+  まとめはまだ出していない → 危険信号が2つ出る
+- 店舗在庫（入っていない）：マネジメント・会社の画面でだけ見える
 """
 from datetime import timedelta
 
@@ -14,14 +20,18 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import CustomUser
+from genba import kit
 from genba.models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY,
-    Document, Membership, PromiseCheck, Question, Site, Term, week_start,
+    Document, Membership, PromiseCheck, Question, Site, Summary, Term, week_start,
 )
 from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
 DEMO_PREFIX = 'genba-demo-'
 DEMO_USERS = ['demo_sato', 'demo_suzuki', 'demo_tanaka', 'demo_ito']
+
+# チェックリストの段階ごとの予定日（入場日からの日数）
+STAGE_DUE = {'pre': -1, 'day1': 0, 'week1': 4, 'week2': 14}
 
 
 class Command(BaseCommand):
@@ -49,98 +59,190 @@ class Command(BaseCommand):
         for g in (GROUP_MANAGEMENT, GROUP_COMPANY):
             me.groups.add(Group.objects.get_or_create(name=g)[0])
 
-        now = timezone.now()
-        today = timezone.localdate()
+        self.now = timezone.now()
+        self.today = timezone.localdate()
+        self.seed_order(me, sato, suzuki)
+        self.seed_claims(me, tanaka)
+        self.seed_stock(ito)
+        self.stdout.write(self.style.SUCCESS(
+            f'デモの現場を3つ作りました。{me.username} でログインして /genba/ を開いてください。'))
 
-        def ago(days):
-            return now - timedelta(days=days)
+    # ---- 共通 ----
 
-        def week(n):
-            return week_start(today) - timedelta(weeks=n)
+    def ago(self, days):
+        return self.now - timedelta(days=days)
 
-        # ---- 現場1: 受発注システム刷新（自分はリーダー） ----
-        order = Site.objects.create(
-            name='受発注システム刷新', repo_name=f'{DEMO_PREFIX}order', industry='製造業',
-            description='既存の受発注システムを刷新する基本設計フェーズ。', started_on=today - timedelta(weeks=10),
+    def week(self, n):
+        return week_start(self.today) - timedelta(weeks=n)
+
+    def create_site(self, creator, **fields):
+        site = Site.objects.create(**fields)
+        kit.create_checklist(site, creator)
+        for q in site.questions.exclude(stage=''):
+            q.due_on = site.started_on + timedelta(days=STAGE_DUE[q.stage])
+            q.created_at = self.now - timedelta(days=(self.today - site.started_on).days + 1)
+            q.save()
+        return site
+
+    def check_items(self, site, stage, sections=None, items=None):
+        """チェックリストを済みにする。sections を省くと段階の全部。items で各 Issue の先頭から何項目か"""
+        for q in site.questions.filter(stage=stage).order_by('order'):
+            if sections is not None and not any(s in q.title for s in sections):
+                continue
+            targets = list(q.items.all())[:items] if items else q.items.all()
+            for item in targets:
+                item.is_done = True
+                item.save()
+            if not q.items.filter(is_done=False).exists():
+                q.is_open = False
+                q.done_on = q.due_on
+                q.closed_at = self.now
+                q.save()
+
+    def weekly(self, site, author, n, done, learned='', stuck='', next_step=''):
+        w = self.week(n)
+        Document.objects.create(site=site, author=author, kind=Document.KIND_WEEKLY, title=f'週報 {w.month}/{w.day}の週',
+                                week_of=w, done=done, learned=learned, stuck=stuck, next_step=next_step)
+
+    # ---- 現場1: 受発注システム刷新（自分はリーダー） ----
+
+    def seed_order(self, me, sato, suzuki):
+        started = self.today - timedelta(weeks=10)
+        site = self.create_site(
+            me, name='受発注システム刷新', repo_name=f'{DEMO_PREFIX}order', industry='製造業',
+            description='既存の受発注システムを刷新する基本設計フェーズ。', started_on=started,
         )
-        Membership.objects.create(site=order, user=me, role=Membership.ROLE_LEADER, duty='基本設計リード')
-        Membership.objects.create(site=order, user=sato, duty='画面設計')
-        Membership.objects.create(site=order, user=suzuki, duty='帳票・バッチ設計')
+        Membership.objects.create(site=site, user=me, role=Membership.ROLE_LEADER, duty='基本設計リード', joined_on=started)
+        Membership.objects.create(site=site, user=sato, duty='画面設計', joined_on=started)
+        Membership.objects.create(site=site, user=suzuki, duty='帳票・バッチ設計', joined_on=started + timedelta(weeks=2))
+        for stage in ('pre', 'day1', 'week1'):
+            self.check_items(site, stage)
+        self.check_items(site, 'week2', items=4)
 
-        Question.objects.create(site=order, author=sato, title='「確定」ボタン押下後の取消可否', ask_to='業務部 課長',
-                                body='確定後に取り消せるのか、赤黒で訂正するのか未定。画面遷移に影響する。', created_at=ago(12))
-        Question.objects.create(site=order, author=sato, title='得意先マスタの更新権限は誰が持つか', ask_to='情シス', created_at=ago(4))
-        Question.objects.create(site=order, author=suzuki, title='月末締めバッチの実行時刻', ask_to='運用チーム', created_at=ago(9))
-        Question.objects.create(site=order, author=suzuki, kind=Question.KIND_TASK, title='既存帳票の棚卸し（追加依頼）',
-                                scope_out=True, created_at=ago(6))
-        Question.objects.create(site=order, author=me, kind=Question.KIND_PROBLEM, title='旧システムの仕様書が最新でない', created_at=ago(15))
-        Question.objects.create(site=order, author=sato, title='消費税の端数処理', ask_to='経理', created_at=ago(20),
-                                is_open=False, closed_at=ago(17))
+        Q = Question.objects
+        Q.create(site=site, author=sato, title='「確定」ボタン押下後の取消可否', ask_to='業務部 課長',
+                 body='確定後に取り消せるのか、赤黒で訂正するのか未定。画面遷移に影響する。', created_at=self.ago(12))
+        Q.create(site=site, author=sato, title='得意先マスタの更新権限は誰が持つか', ask_to='情シス', created_at=self.ago(4))
+        Q.create(site=site, author=suzuki, title='月末締めバッチの実行時刻', ask_to='運用チーム', created_at=self.ago(9))
+        Q.create(site=site, author=suzuki, unreadable=True, title='帳票定義書の「集約区分」が読めない',
+                 source='帳票定義書 v3', location='4.2 集約区分', reason='term', ask_to='業務部', created_at=self.ago(1))
+        Q.create(site=site, author=suzuki, kind=Question.KIND_TASK, scope_out=True, title='既存帳票の棚卸し（追加依頼）',
+                 body='契約は新帳票の設計のみ。旧帳票35本の棚卸しを口頭で頼まれた。', ask_to='課長', created_at=self.ago(6))
+        Q.create(site=site, author=me, kind=Question.KIND_PROBLEM, title='旧システムの仕様書が最新でない', created_at=self.ago(15),
+                 fact='仕様書は2019年版。実際の画面と項目が5か所違う。',
+                 interpretation='改修のたびに仕様書が更新されていない可能性がある。',
+                 unconfirmed='最新の仕様をどこで管理しているか（情シスに未確認）。',
+                 impact='現行調査の工数が増え、受注画面の設計が1週遅れる見込み。')
+        Q.create(site=site, author=sato, kind=Question.KIND_TASK, title='受注画面の画面設計書（初版）',
+                 due_on=self.today - timedelta(days=3), created_at=self.ago(14),
+                 delay_note='確定後の取消可否の回答待ち。回答が来れば2日で追いつく見込み。')
+        Q.create(site=site, author=sato, title='消費税の端数処理', ask_to='経理', created_at=self.ago(20),
+                 is_open=False, closed_at=self.ago(17))
 
-        Term.objects.create(site=order, author=sato, term='出荷', meaning='倉庫から出た時点ではなく、得意先が受領した時点を指す。',
+        Term.objects.create(site=site, author=sato, term='出荷', meaning='倉庫から出た時点ではなく、得意先が受領した時点を指す。',
                             general_difference='一般には倉庫から出した時点。', visibility=VISIBILITY_COMPANY,
                             knowledge_status=KNOWLEDGE_REVIEWED)
-        Term.objects.create(site=order, author=suzuki, term='赤黒', meaning='確定済み伝票を、マイナス伝票と正しい伝票の2枚で訂正すること。',
+        Term.objects.create(site=site, author=suzuki, term='赤黒', meaning='確定済み伝票を、マイナス伝票と正しい伝票の2枚で訂正すること。',
                             knowledge_status=KNOWLEDGE_CANDIDATE)
-        Term.objects.create(site=order, author=me, term='締め', meaning='得意先ごとの請求締め日。月末とは限らない。',
-                            general_difference='社内では「月次締め」を指すことが多い。')
+        Term.objects.create(site=site, author=me, term='締め', meaning='得意先ごとの請求締め日。月末とは限らない。',
+                            general_difference='社内では「月次締め」を指すことが多い。', visibility=VISIBILITY_COMPANY,
+                            knowledge_status=KNOWLEDGE_REVIEWED)
+        Term.objects.create(site=site, author=suzuki, term='集約区分', meaning='')
 
-        Document.objects.create(site=order, author=me, kind=Document.KIND_SCOPE, title='作業範囲と約束事項',
-                                body='基本設計（画面・帳票・バッチ）まで。詳細設計以降は別契約。\nレビューは週1回、木曜。')
-        Document.objects.create(site=order, author=sato, kind=Document.KIND_MINUTES, title='第8回 設計レビュー',
-                                body='・受注画面の項目並びを合意\n・確定後の取消は次回までに業務部が回答', created_at=ago(3))
-        Document.objects.create(site=order, author=suzuki, kind=Document.KIND_MINUTES, title='第7回 設計レビュー',
-                                body='・帳票の出力形式はPDFで統一', created_at=ago(10))
-        Document.objects.create(site=order, author=me, kind=Document.KIND_DESIGN, title='伝票訂正は赤黒方式にする',
-                                body='案: 直接更新／赤黒\n決定: 赤黒\n理由: 監査で訂正履歴を追えることが求められたため。',
-                                visibility=VISIBILITY_COMPANY, knowledge_status=KNOWLEDGE_REVIEWED, created_at=ago(25))
-        Document.objects.create(site=order, author=sato, kind=Document.KIND_INTERVIEW, title='「出荷」の意味の確認',
-                                body='業務部は「出荷」を得意先受領の意味で使っている。画面ラベルを「納品」に寄せる案を相談中。',
-                                knowledge_status=KNOWLEDGE_CANDIDATE, created_at=ago(30))
+        D = Document.objects
+        D.create(site=site, author=me, kind=Document.KIND_PRE, title='参画前面談メモ',
+                 body='担当工程：基本設計（画面・帳票・バッチ）\n期待値：1週目で現状把握、2週目から受注画面の設計',
+                 created_at=self.ago(72))
+        D.create(site=site, author=sato, kind=Document.KIND_PRE, title='「出荷」の意味の確認',
+                 body='業務部は「出荷」を得意先受領の意味で使っている。画面ラベルを「納品」に寄せる案を相談中。',
+                 knowledge_status=KNOWLEDGE_CANDIDATE, created_at=self.ago(60))
+        D.create(site=site, author=me, kind=Document.KIND_CONTRACT, title='作業範囲と約束事項',
+                 body='基本設計（画面・帳票・バッチ）まで。詳細設計以降は別契約。\nレビューは週1回、木曜。', created_at=self.ago(70))
+        D.create(site=site, author=me, kind=Document.KIND_STRUCTURE, title='体制と決裁の流れ',
+                 body='PM：顧客情シス課長\n決裁者：業務部長（仕様）／情シス課長（体制）\n日々の指示：業務部 課長\n定例：木曜 14:00 設計レビュー',
+                 created_at=self.ago(69))
+        D.create(site=site, author=sato, kind=Document.KIND_BUSINESS, title='受注から請求までの業務フロー',
+                 body='受注 → 引当 → 出荷指示 → 出荷（得意先受領）→ 締め → 請求', created_at=self.ago(66))
+        D.create(site=site, author=me, kind=Document.KIND_DESIGN, title='伝票訂正は赤黒方式にする',
+                 body='案: 直接更新／赤黒\n決定: 赤黒\n理由: 監査で訂正履歴を追えることが求められたため。',
+                 visibility=VISIBILITY_COMPANY, knowledge_status=KNOWLEDGE_REVIEWED, created_at=self.ago(25))
+        D.create(site=site, author=sato, kind=Document.KIND_MINUTES, title='第8回 設計レビュー',
+                 body='・受注画面の項目並びを合意\n・確定後の取消は次回までに業務部が回答', created_at=self.ago(3))
+        D.create(site=site, author=suzuki, kind=Document.KIND_MINUTES, title='第7回 設計レビュー',
+                 body='・帳票の出力形式はPDFで統一', created_at=self.ago(10))
         for n in range(0, 10):
             if n in (2, 5):
                 continue  # 出していない週
-            Document.objects.create(
-                site=order, author=me, kind=Document.KIND_WEEKLY, title=f'週報 {week(n):%m/%d}', week_of=week(n),
-                body='今週の進捗は予定どおり。',
-                risks='確定後の取消可否の回答待ちで、受注画面の遷移が決められない。' if n <= 1 else '',
-            )
-        PromiseCheck.objects.create(site=order, author=me, promise='要件は確定済み', actual='確定後の取消など業務ルールが未定', is_gap=True)
-        PromiseCheck.objects.create(site=order, author=me, promise='帳票は20本', actual='棚卸しで35本見つかった', is_gap=True)
-        PromiseCheck.objects.create(site=order, author=me, promise='レビューは週1回', actual='週1回で回っている')
+            self.weekly(site, me, n, done='受注画面・帳票の設計を進めた。',
+                        learned='業務部の「出荷」は得意先受領の意味。' if n == 1 else '',
+                        stuck='確定後の取消可否の回答待ちで、受注画面の遷移が決められない。' if n <= 1 else '',
+                        next_step='回答を受けて受注画面の遷移を確定する。')
+        Summary.objects.create(site=site, author=sato, submitted_at=self.ago(65),
+                               overview='受注〜請求の基幹業務を刷新。利用者は業務部と倉庫。業務フローは 03_業務理解 を参照。',
+                               functions='担当：受注画面。入力＝受注明細、処理＝引当、出力＝出荷指示。つながる機能：在庫引当・請求。',
+                               review_note='担当範囲は受注・訂正まで。期待値との差は帳票の理解。2週目は帳票一覧を読む。')
+        Summary.objects.create(site=site, author=me, submitted_at=self.ago(65),
+                               overview='受注〜請求の基幹業務を刷新。帳票とバッチの全体像は 03_業務理解 を参照。',
+                               functions='担当：設計全体のリード。受注・帳票・バッチのつながりを整理。',
+                               review_note='PMと確認。期待値との差は帳票本数の把握。2週目は帳票の棚卸し範囲を契約と照らす。')
+        PromiseCheck.objects.create(site=site, author=me, promise='要件は確定済み', actual='確定後の取消など業務ルールが未定', is_gap=True)
+        PromiseCheck.objects.create(site=site, author=me, promise='帳票は20本', actual='棚卸しで35本見つかった', is_gap=True)
+        PromiseCheck.objects.create(site=site, author=me, promise='レビューは週1回', actual='週1回で回っている')
 
-        # ---- 現場2: 保険金請求の基本設計（自分はメンバー） ----
-        claims = Site.objects.create(
-            name='保険金請求 基本設計', repo_name=f'{DEMO_PREFIX}claims', industry='保険業',
-            description='保険金請求の受付から支払までの業務フローと画面の基本設計。', started_on=today - timedelta(weeks=6),
-        )
-        Membership.objects.create(site=claims, user=tanaka, role=Membership.ROLE_LEADER, duty='PM')
-        Membership.objects.create(site=claims, user=me, duty='業務フロー設計')
-        Question.objects.create(site=claims, author=me, title='査定の二段階承認は全件か', ask_to='査定部', created_at=ago(2))
-        Term.objects.create(site=claims, author=me, term='事故受付', meaning='事故の連絡を受けた時点。請求書の受付とは別。')
-        Document.objects.create(site=claims, author=tanaka, kind=Document.KIND_STRUCTURE, title='体制と会議体',
-                                body='定例: 毎週火曜 10:00\n顧客側窓口: 査定部')
-        for n in range(0, 6):
-            Document.objects.create(site=claims, author=tanaka, kind=Document.KIND_WEEKLY,
-                                    title=f'週報 {week(n):%m/%d}', week_of=week(n), body='予定どおり。')
+    # ---- 現場2: 保険金請求の基本設計（自分はメンバー。入場から6日） ----
 
-        # ---- 現場3: 店舗在庫の可視化（自分は入っていない。マネジメント・会社の画面でだけ見える） ----
-        stock = Site.objects.create(
-            name='店舗在庫の可視化', repo_name=f'{DEMO_PREFIX}stock', industry='小売業',
-            started_on=today - timedelta(weeks=20),
+    def seed_claims(self, me, tanaka):
+        started = self.today - timedelta(days=6)
+        site = self.create_site(
+            tanaka, name='保険金請求 基本設計', repo_name=f'{DEMO_PREFIX}claims', industry='保険業',
+            description='保険金請求の受付から支払までの業務フローと画面の基本設計。', started_on=started,
         )
-        Membership.objects.create(site=stock, user=ito, role=Membership.ROLE_LEADER)
-        Question.objects.create(site=stock, author=ito, kind=Question.KIND_TASK, title='旧POSのデータ移行', scope_out=True, created_at=ago(40))
-        Question.objects.create(site=stock, author=ito, kind=Question.KIND_TASK, title='店舗端末の手配', scope_out=True, created_at=ago(30))
-        Question.objects.create(site=stock, author=ito, kind=Question.KIND_TASK, title='操作マニュアル作成', scope_out=True, created_at=ago(10))
-        Term.objects.create(site=stock, author=ito, term='理論在庫', meaning='入出荷の記録から計算した在庫。棚卸しの実在庫と区別する。',
+        Membership.objects.create(site=site, user=tanaka, role=Membership.ROLE_LEADER, duty='PM',
+                                  joined_on=started - timedelta(weeks=8))
+        Membership.objects.create(site=site, user=me, duty='業務フロー設計', joined_on=started)
+        self.check_items(site, 'pre')
+        self.check_items(site, 'day1')
+        self.check_items(site, 'week1', sections=['全体像'], items=2)
+        self.check_items(site, 'week1', sections=['読めない'], items=1)
+
+        Question.objects.create(site=site, author=me, title='査定の二段階承認は全件か', ask_to='査定部', created_at=self.ago(2))
+        Question.objects.create(site=site, author=me, unreadable=True, title='支払業務説明書の「免責判定」の前提が分からない',
+                                source='支払業務説明書', location='3章 免責判定フロー', reason='premise', ask_to='査定部 担当',
+                                created_at=self.ago(3))
+        Question.objects.create(site=site, author=me, unreadable=True, title='事故受付画面の遷移図がない',
+                                source='画面一覧', location='事故受付〜請求受付', reason='figure', created_at=self.ago(1))
+        Term.objects.create(site=site, author=me, term='事故受付', meaning='事故の連絡を受けた時点。請求書の受付とは別。')
+        Term.objects.create(site=site, author=me, term='免責', meaning='')
+        Term.objects.create(site=site, author=me, term='締め', meaning='支払の締切。毎週金曜。')
+        Document.objects.create(site=site, author=tanaka, kind=Document.KIND_STRUCTURE, title='体制と会議体',
+                                body='定例: 毎週火曜 10:00\n顧客側窓口: 査定部\n決裁者: 査定部長')
+        Document.objects.create(site=site, author=me, kind=Document.KIND_PRE, title='参画前面談メモ',
+                                body='契約形態：準委任。指示は元請PMから。\n担当工程：基本設計（業務フロー）\n期待値：1週目で現状把握')
+        # 入場した週の週報（曜日によらず「前週の週報がない」にならないよう、入場週に出す）
+        joined_week = (week_start(self.today) - week_start(started)).days // 7
+        self.weekly(site, me, joined_week, done='入場。体制と資料の置き場所を確認した。',
+                    learned='決裁者は査定部長。日々の指示は元請PMから。',
+                    stuck='支払業務説明書の免責判定が読めていない。', next_step='まとめを5日目に出す。')
+        Summary.objects.create(site=site, author=me, overview='保険金の請求受付から支払まで。利用者は査定部と支払担当。')
+
+    # ---- 現場3: 店舗在庫の可視化（自分は入っていない） ----
+
+    def seed_stock(self, ito):
+        started = self.today - timedelta(weeks=20)
+        site = self.create_site(
+            ito, name='店舗在庫の可視化', repo_name=f'{DEMO_PREFIX}stock', industry='小売業', started_on=started,
+        )
+        Membership.objects.create(site=site, user=ito, role=Membership.ROLE_LEADER, joined_on=started)
+        for stage in kit.STAGE_LABELS:
+            self.check_items(site, stage)
+        for title, days in (('旧POSのデータ移行', 40), ('店舗端末の手配', 30), ('操作マニュアル作成', 10)):
+            Question.objects.create(site=site, author=ito, kind=Question.KIND_TASK, title=title, scope_out=True,
+                                    created_at=self.ago(days))
+        Term.objects.create(site=site, author=ito, term='理論在庫', meaning='入出荷の記録から計算した在庫。棚卸しの実在庫と区別する。',
                             visibility=VISIBILITY_COMPANY, knowledge_status=KNOWLEDGE_REVIEWED)
-        Document.objects.create(site=stock, author=ito, kind=Document.KIND_RETRO, title='振り返り：スコープ外作業が増えた理由',
+        Document.objects.create(site=site, author=ito, kind=Document.KIND_RETRO, title='振り返り：スコープ外作業が増えた理由',
                                 body='約束: 可視化画面のみ\n実際: 移行・端末手配・マニュアルまで依頼された\n次に面談で確認すること: 周辺作業の範囲',
-                                skill_item='要件定義：作業範囲の合意', visibility=VISIBILITY_COMPANY,
-                                knowledge_status=KNOWLEDGE_REVIEWED, created_at=ago(5))
-        Document.objects.create(site=stock, author=ito, kind=Document.KIND_WEEKLY, title='週報', week_of=week(7))
-        PromiseCheck.objects.create(site=stock, author=ito, promise='可視化画面の設計のみ', actual='移行・端末手配まで依頼', is_gap=True)
-
-        self.stdout.write(self.style.SUCCESS(
-            f'デモの現場を3つ作りました。{me.username} でログインして /genba/ を開いてください。'))
+                                skill_item='ネゴシエーション：方針と責任範囲の合意', visibility=VISIBILITY_COMPANY,
+                                knowledge_status=KNOWLEDGE_REVIEWED, created_at=self.ago(5))
+        self.weekly(site, ito, 7, done='可視化画面のレビュー。')
+        PromiseCheck.objects.create(site=site, author=ito, promise='可視化画面の設計のみ', actual='移行・端末手配まで依頼', is_gap=True)

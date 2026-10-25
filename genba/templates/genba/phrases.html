@@ -1,0 +1,48 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}言い回し集{% endblock %}
+
+{% block genba_contents %}
+<h2 class="h5 mb-3" style="color: #2c5aa0;">言い回し集</h2>
+
+<section class="mb-5">
+    <h3 class="h6">確認のための言い回し</h3>
+    <p class="small text-muted">「SI業界ワード確認表」の考え方にそろえた、そのまま使える一言。</p>
+    <div class="row g-2">
+        {% for p in phrases %}
+        <div class="col-md-6"><div class="card h-100"><div class="card-body py-2 small">
+            <div class="fw-bold text-muted">{{ p.scene }}</div><div>{{ p.phrase }}</div>
+        </div></div></div>
+        {% endfor %}
+    </div>
+</section>
+
+<section id="words">
+    <h3 class="h6">{{ word_title }}</h3>
+    {% for p in word_intro %}<p class="small {% if forloop.first %}fst-italic{% else %}text-muted{% endif %}">{{ p }}</p>{% endfor %}
+    <ul class="nav nav-pills small mb-3">
+        {% for c in categories %}<li class="nav-item"><a class="nav-link py-1" href="#cat{{ forloop.counter }}">{{ forloop.counter }}. {{ c.title }}</a></li>{% endfor %}
+    </ul>
+    {% for c in categories %}
+    <h4 class="h6 mt-4" id="cat{{ forloop.counter }}">{{ forloop.counter }}. {{ c.title }}</h4>
+    <div class="accordion" id="acc{{ forloop.counter }}">
+        {% for w in c.words %}
+        <div class="accordion-item">
+            <h5 class="accordion-header" id="h{{ forloop.parentloop.counter }}-{{ forloop.counter }}">
+                <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#w{{ forloop.parentloop.counter }}-{{ forloop.counter }}">{{ w.word }}</button>
+            </h5>
+            <div id="w{{ forloop.parentloop.counter }}-{{ forloop.counter }}" class="accordion-collapse collapse"><div class="accordion-body small">
+                <div class="mb-2"><span class="fw-bold text-muted">現場での一般的な意味</span><br>{{ w.general }}</div>
+                <div class="mb-2"><span class="fw-bold" style="color:#2c5aa0;">大切にしたいこと</span><br>{{ w.value }}</div>
+                <div class="genba-phrase">使い方の例：{{ w.example }}</div>
+            </div></div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <h4 class="h6 mt-4">全体を通じて大切にしたいこと</h4>
+    <ul class="small">{% for v in values %}<li>{{ v }}</li>{% endfor %}</ul>
+    {% for p in closing %}<p class="small {% if forloop.last %}text-muted{% endif %}">{{ p }}</p>{% endfor %}
+</section>
+{% endblock %}

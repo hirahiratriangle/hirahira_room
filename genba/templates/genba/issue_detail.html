@@ -1,0 +1,83 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}{{ q.title }}{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:site_detail' site.pk %}{% if q.is_checklist %}?tab=checklist{% elif q.unreadable %}?tab=unreadable{% endif %}">{{ site.name }}</a> ・ Issue #{{ q.pk }}</p>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+    <h2 class="h5 mb-0" style="color: #2c5aa0;">{{ q.title }}</h2>
+    {% if writable %}
+    <form method="post" action="{% url 'genba:question_toggle' q.pk %}">{% csrf_token %}
+        <button class="btn btn-sm {% if q.is_open %}btn-outline-success{% else %}btn-outline-secondary{% endif %}">{% if q.is_open %}解決した{% else %}未解決に戻す{% endif %}</button>
+    </form>
+    {% endif %}
+</div>
+<p class="small">
+    <span class="badge bg-light text-dark border">{{ q.get_kind_display }}</span>
+    {% for label in q.labels %}<span class="badge {% if label == 'スコープ外' %}bg-danger{% else %}bg-warning text-dark{% endif %}">{{ label }}</span> {% endfor %}
+    {% if q.is_checklist %}<span class="badge bg-info text-dark">チェックリスト：{{ q.get_stage_display }}</span>{% endif %}
+    <span class="text-muted">{{ q.author.username }} ・ {{ q.created_at|date:"n/j" }} ・ {% if q.is_open %}未解決 {{ q.days_open }}日{% else %}解決済み{% endif %}{% if q.ask_to %} ・ 聞く相手：{{ q.ask_to }}{% endif %}</span>
+</p>
+
+{% if needs_question %}<div class="alert alert-warning small py-2">2日経っても進んでいません。一覧を持って、質問の時間をもらいましょう。</div>{% endif %}
+{% if phrase %}<div class="genba-phrase small mb-3"><i class="fas fa-comment-dots me-1"></i>使える一言：{{ phrase }}</div>{% endif %}
+
+{% if q.body %}<div class="card mb-3"><div class="card-body small genba-pre">{{ q.body }}</div></div>{% endif %}
+
+{% if q.unreadable %}
+<dl class="row small">
+    <dt class="col-sm-3">どの資料</dt><dd class="col-sm-9">{{ q.source|default:"―" }}</dd>
+    <dt class="col-sm-3">どこが</dt><dd class="col-sm-9">{{ q.location|default:"―" }}</dd>
+    <dt class="col-sm-3">なぜ読めないか</dt><dd class="col-sm-9">{{ q.get_reason_display|default:"―" }}</dd>
+</dl>
+{% endif %}
+
+{% if q.kind == 'problem' %}
+<div class="row g-2 small mb-3">
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">事実</div><div class="genba-pre">{{ q.fact|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">自分の解釈</div><div class="genba-pre">{{ q.interpretation|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">未確認のこと</div><div class="genba-pre">{{ q.unconfirmed|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100 border-warning"><div class="card-body py-2"><div class="fw-bold">影響</div><div class="genba-pre">{{ q.impact|default:"―" }}</div></div></div></div>
+</div>
+{% endif %}
+
+{% if items %}
+<h3 class="h6">チェック項目</h3>
+<ul class="list-group mb-3">
+    {% for item in items %}
+    <li class="list-group-item small d-flex gap-2">
+        {% if writable %}
+        <form method="post" action="{% url 'genba:checklist_item_toggle' item.pk %}">{% csrf_token %}
+            <button class="btn btn-link p-0 text-decoration-none">{% if item.is_done %}☑{% else %}☐{% endif %}</button>
+        </form>
+        {% else %}<span>{% if item.is_done %}☑{% else %}☐{% endif %}</span>{% endif %}
+        <span class="{% if item.is_done %}genba-done{% endif %}">{{ item.text }}</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if q.record_targets %}
+<p class="small"><i class="fas fa-arrow-right me-1"></i>残す場所：{% for name, url in q.record_targets %}<a href="{{ url }}" class="me-2">{{ name }}</a>{% endfor %}</p>
+{% endif %}
+
+{% if progress_form %}
+<h3 class="h6 mt-4">予定と実績（進捗表）</h3>
+{% if writable %}
+<form method="post" class="card"><div class="card-body">
+    {% csrf_token %}
+    <div class="row g-2">
+        {% for field in progress_form %}
+        <div class="{% if field.name == 'delay_note' %}col-12{% else %}col-md-6{% endif %}">
+            <label class="form-label small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+            {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    <button class="btn btn-primary btn-sm mt-2">保存</button>
+</div></form>
+{% else %}
+<p class="small">予定日 {{ q.due_on|default:"―" }} ・ 完了日 {{ q.done_on|default:"―" }} {{ q.delay_note }}</p>
+{% endif %}
+{% endif %}
+{% endblock %}

@@ -2,9 +2,12 @@ from datetime import timedelta
 
 from accounts.models import CustomUser
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 
-# 公開範囲。「自分だけ」の下書きはリポジトリ（＝このアプリ）の外に置くので、ここには持たない。
+from . import kit
+
+# 公開範囲。現場チームの中は全公開。会社へは一般化レビューを通して出す（spec 005 で見直す）。
 VISIBILITY_TEAM = 'team'
 VISIBILITY_COMPANY = 'company'
 VISIBILITY_CHOICES = [
@@ -29,19 +32,21 @@ def week_start(day):
 
 
 class Site(models.Model):
-    """現場。1現場＝1リポジトリ（genba-*）"""
+    """現場。1現場＝1リポジトリ（genba-*）。テンプレートから作る。"""
 
     name = models.CharField(verbose_name='現場名', max_length=60)
     repo_name = models.CharField(
         verbose_name='リポジトリ名', max_length=100, unique=True,
-        help_text='例: genba-acme-order。GitHub 連携は未実装で、今は名前だけ持つ。',
+        help_text='例: genba-acme-order。プロトタイプでは名前だけ持つ（GitHub には作らない）。',
     )
     industry = models.CharField(
         verbose_name='業界', max_length=40,
         help_text='会社公開のとき、顧客名の代わりに表示する。',
     )
     description = models.TextField(verbose_name='概要', blank=True)
-    started_on = models.DateField(verbose_name='開始日')
+    started_on = models.DateField(verbose_name='入場日')
+    template_version = models.CharField(verbose_name='テンプレートの版', max_length=20, default=kit.TEMPLATE_VERSION)
+    is_archived = models.BooleanField(verbose_name='Archive 済み', default=False)
     created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
 
     class Meta:
@@ -63,6 +68,7 @@ class Membership(models.Model):
     user = models.ForeignKey(CustomUser, verbose_name='ユーザー', on_delete=models.CASCADE, related_name='genba_memberships')
     role = models.CharField(verbose_name='立場', max_length=10, choices=ROLE_CHOICES, default=ROLE_MEMBER)
     duty = models.CharField(verbose_name='役割', max_length=60, blank=True)
+    joined_on = models.DateField(verbose_name='入場日')
 
     class Meta:
         verbose_name = verbose_name_plural = '現場メンバー'
@@ -91,37 +97,35 @@ class KnowledgeMixin(models.Model):
 
 
 class Document(KnowledgeMixin):
-    """docs/ 配下の文書（面談メモ・設計メモ・議事録・週報・振り返りなど）"""
+    """docs/ 配下の文書。種類は docs の区分（00_参画前〜07_振り返り）"""
 
-    KIND_INTERVIEW = 'interview'
-    KIND_SCOPE = 'scope'
+    KIND_PRE = 'pre'
+    KIND_CONTRACT = 'contract'
     KIND_STRUCTURE = 'structure'
+    KIND_BUSINESS = 'business'
     KIND_DESIGN = 'design'
     KIND_MINUTES = 'minutes'
     KIND_WEEKLY = 'weekly'
     KIND_RETRO = 'retro'
-    KIND_CHOICES = [
-        (KIND_INTERVIEW, '面談メモ・言葉のズレ'),
-        (KIND_SCOPE, '作業範囲・約束事項'),
-        (KIND_STRUCTURE, '体制・会議体'),
-        (KIND_DESIGN, '設計メモ'),
-        (KIND_MINUTES, '議事録'),
-        (KIND_WEEKLY, '週報'),
-        (KIND_RETRO, '振り返り'),
-    ]
-    # 構想書の「データと公開範囲」で、会社全体に出せるもの
-    PUBLISHABLE_KINDS = {KIND_INTERVIEW, KIND_DESIGN, KIND_RETRO}
+    KIND_CHOICES = [(key, label) for key, label, _ in kit.DOC_SECTIONS]
+    # 構想書の「公開範囲」で、会社全体に一般化して出せるもの
+    PUBLISHABLE_KINDS = {KIND_PRE, KIND_DESIGN, KIND_RETRO}
 
     site = models.ForeignKey(Site, verbose_name='現場', on_delete=models.CASCADE, related_name='documents')
     author = models.ForeignKey(CustomUser, verbose_name='書いた人', on_delete=models.PROTECT, related_name='genba_documents')
-    kind = models.CharField(verbose_name='種類', max_length=10, choices=KIND_CHOICES)
+    kind = models.CharField(verbose_name='区分', max_length=10, choices=KIND_CHOICES)
     title = models.CharField(verbose_name='タイトル', max_length=100)
     body = models.TextField(verbose_name='本文', blank=True)
-    week_of = models.DateField(verbose_name='対象週', null=True, blank=True, help_text='週報のみ。週の月曜日にそろえる。')
-    risks = models.TextField(verbose_name='課題・リスク', blank=True, help_text='週報のみ。リーダー画面に出る。')
+    # 週報だけ
+    week_of = models.DateField(verbose_name='対象週', null=True, blank=True, help_text='週の月曜日にそろえる。')
+    done = models.TextField(verbose_name='やったこと', blank=True)
+    learned = models.TextField(verbose_name='分かったこと', blank=True)
+    stuck = models.TextField(verbose_name='詰まっていること', blank=True, help_text='リーダーの画面に出る。')
+    next_step = models.TextField(verbose_name='次にやること', blank=True)
+    # 振り返りだけ
     skill_item = models.CharField(
         verbose_name='スキル対応', max_length=100, blank=True,
-        help_text='振り返りのみ。基本設計スキルセットの項目。',
+        help_text='基本設計スキルセットの項目。',
     )
     created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
     updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
@@ -144,17 +148,19 @@ class Document(KnowledgeMixin):
 
 
 class Term(KnowledgeMixin):
-    """用語集の1語"""
+    """用語集の1語。分からない語は意味を空のまま載せてよい。"""
 
     site = models.ForeignKey(Site, verbose_name='現場', on_delete=models.CASCADE, related_name='terms')
     author = models.ForeignKey(CustomUser, verbose_name='書いた人', on_delete=models.PROTECT, related_name='genba_terms')
     term = models.CharField(verbose_name='用語', max_length=60)
-    meaning = models.TextField(verbose_name='この現場での意味')
+    meaning = models.TextField(verbose_name='この現場での意味', blank=True, help_text='分からなければ空のままでよい。')
     general_difference = models.TextField(
         verbose_name='一般的な意味との違い', blank=True,
         help_text='書かれていれば「用語のズレ」として数える。',
     )
     created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
+
+    is_publishable = True
 
     class Meta:
         verbose_name = verbose_name_plural = '用語'
@@ -167,16 +173,17 @@ class Term(KnowledgeMixin):
     def has_gap(self):
         return bool(self.general_difference.strip())
 
-    is_publishable = True
-
 
 class Question(models.Model):
-    """Issue（確認事項・課題・作業）"""
+    """Issue（確認事項・課題・作業）。チェックリストの項目も作業 Issue として並ぶ。"""
 
     KIND_QUESTION = 'question'
     KIND_PROBLEM = 'problem'
     KIND_TASK = 'task'
-    KIND_CHOICES = [(KIND_QUESTION, '確認事項'), (KIND_PROBLEM, '課題'), (KIND_TASK, '作業')]
+    KIND_CHOICES = [(key, label) for key, label, _ in kit.ISSUE_KINDS]
+
+    REASON_CHOICES = [('term', '用語'), ('premise', '前提'), ('figure', '図がない')]
+    STAGE_CHOICES = list(kit.STAGE_LABELS.items())
 
     site = models.ForeignKey(Site, verbose_name='現場', on_delete=models.CASCADE, related_name='questions')
     author = models.ForeignKey(CustomUser, verbose_name='書いた人', on_delete=models.PROTECT, related_name='genba_questions')
@@ -184,23 +191,125 @@ class Question(models.Model):
     title = models.CharField(verbose_name='タイトル', max_length=100)
     body = models.TextField(verbose_name='内容', blank=True)
     ask_to = models.CharField(verbose_name='誰に聞くか', max_length=60, blank=True)
+    # ラベル
     scope_out = models.BooleanField(verbose_name='スコープ外', default=False)
+    unreadable = models.BooleanField(verbose_name='読めない', default=False)
+    # 読めない：どの資料の・どこが・なぜ
+    source = models.CharField(verbose_name='どの資料', max_length=100, blank=True)
+    location = models.CharField(verbose_name='どこが', max_length=100, blank=True)
+    reason = models.CharField(verbose_name='なぜ読めないか', max_length=10, choices=REASON_CHOICES, blank=True)
+    # 課題：懸念の型
+    fact = models.TextField(verbose_name='事実', blank=True)
+    interpretation = models.TextField(verbose_name='自分の解釈', blank=True)
+    unconfirmed = models.TextField(verbose_name='未確認のこと', blank=True)
+    impact = models.TextField(verbose_name='影響', blank=True)
+    # 作業：進捗表
+    due_on = models.DateField(verbose_name='予定日', null=True, blank=True)
+    done_on = models.DateField(verbose_name='完了日', null=True, blank=True)
+    delay_note = models.TextField(verbose_name='遅れの原因と追いつく見込み', blank=True)
+    # チェックリストから作られた作業
+    stage = models.CharField(verbose_name='チェックリストの段階', max_length=10, choices=STAGE_CHOICES, blank=True)
+    record_to = models.CharField(verbose_name='残す場所', max_length=100, blank=True)
+    order = models.PositiveIntegerField(verbose_name='並び順', default=0)
+
     is_open = models.BooleanField(verbose_name='未解決', default=True)
     created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
     closed_at = models.DateTimeField(verbose_name='解決日時', null=True, blank=True)
 
     class Meta:
-        verbose_name = verbose_name_plural = '確認事項・課題'
+        verbose_name = verbose_name_plural = 'Issue'
         ordering = ['created_at']
 
     def __str__(self):
         return self.title
+
+    def get_absolute_url(self):
+        return reverse('genba:issue_detail', args=[self.pk])
 
     @property
     def days_open(self):
         """作成からの経過日数。解決済みなら解決までの日数。"""
         end = self.closed_at if not self.is_open and self.closed_at else timezone.now()
         return (end - self.created_at).days
+
+    @property
+    def is_checklist(self):
+        return bool(self.stage)
+
+    @property
+    def labels(self):
+        return [name for name, on in (('スコープ外', self.scope_out), ('読めない', self.unreadable)) if on]
+
+    @property
+    def is_late(self):
+        """予定日を過ぎて終わっていない、または予定日より遅れて終わった"""
+        if not self.due_on:
+            return False
+        return (self.done_on or timezone.localdate()) > self.due_on
+
+    def record_targets(self):
+        """チェックリストの項目から移る先 [(名前, URL)]"""
+        targets = []
+        for code in filter(None, self.record_to.split(',')):
+            targets.append((kit.RECORD_TARGETS[code], target_url(self.site_id, code)))
+        return targets
+
+
+def target_url(site_id, code):
+    """残す場所のコードから URL を作る"""
+    if code.startswith('doc:'):
+        return reverse('genba:document_create', args=[site_id, code[4:]])
+    if code in ('question', 'unreadable', 'problem', 'scope_out'):
+        return reverse('genba:issue_create', args=[site_id, code])
+    if code == 'summary':
+        return reverse('genba:summary', args=[site_id])
+    if code == 'progress':
+        return reverse('genba:site_detail', args=[site_id]) + '?tab=progress'
+    raise ValueError(code)
+
+
+class ChecklistItem(models.Model):
+    """作業 Issue の中のチェック項目"""
+
+    question = models.ForeignKey(Question, verbose_name='Issue', on_delete=models.CASCADE, related_name='items')
+    text = models.CharField(verbose_name='項目', max_length=200)
+    order = models.PositiveIntegerField(verbose_name='並び順', default=0)
+    is_done = models.BooleanField(verbose_name='済み', default=False)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'チェック項目'
+        ordering = ['order']
+
+    def __str__(self):
+        return self.text
+
+
+class Summary(models.Model):
+    """1週目のまとめ。全体像・担当機能の整理は本人が書き、用語集・未解決の質問・読めない一覧は記録から並べる。"""
+
+    site = models.ForeignKey(Site, verbose_name='現場', on_delete=models.CASCADE, related_name='summaries')
+    author = models.ForeignKey(CustomUser, verbose_name='書いた人', on_delete=models.PROTECT, related_name='genba_summaries')
+    overview = models.TextField(
+        verbose_name='全体像', blank=True,
+        help_text='システムの目的、利用者、業務の流れ。図があればリンクを書く。',
+    )
+    functions = models.TextField(
+        verbose_name='担当機能の整理', blank=True,
+        help_text='機能一覧の中の位置とつながる機能、入力・処理・出力・データ。',
+    )
+    submitted_at = models.DateTimeField(verbose_name='出した日時', null=True, blank=True)
+    review_note = models.TextField(
+        verbose_name='リーダーと確かめた結果', blank=True,
+        help_text='期待値との差と、2週目の作業。',
+    )
+    updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '1週目のまとめ'
+        constraints = [models.UniqueConstraint(fields=['site', 'author'], name='genba_unique_summary')]
+
+    def __str__(self):
+        return f'{self.site} / {self.author}'
 
 
 class PromiseCheck(models.Model):

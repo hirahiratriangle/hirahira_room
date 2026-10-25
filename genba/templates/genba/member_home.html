@@ -4,15 +4,24 @@
 
 {% block genba_contents %}
 <section class="mb-4">
-    <h2 class="h5 mb-3" style="color: #2c5aa0;">自分の現場</h2>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0" style="color: #2c5aa0;">自分の現場</h2>
+        <a class="btn btn-primary btn-sm" href="{% url 'genba:site_create' %}"><i class="fas fa-plus me-1"></i>テンプレートから現場を作る</a>
+    </div>
     <div class="row g-3">
-        {% for site in sites %}
-        <div class="col-md-4"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:site_detail' site.pk %}"><div class="card-body">
-            <h3 class="h6 fw-bold mb-1">{{ site.name }}</h3>
-            <p class="small text-muted mb-0"><i class="fab fa-github me-1"></i>{{ site.repo_name }} ・ {{ site.industry }}</p>
-        </div></a></div>
+        {% for card in site_cards %}
+        <div class="col-lg-6"><div class="card shadow-sm h-100 {% if card.signals %}border-danger{% endif %}"><div class="card-body">
+            <h3 class="h6 fw-bold mb-1"><a href="{% url 'genba:site_detail' card.site.pk %}" class="text-decoration-none">{{ card.site.name }}</a>{% if card.site.is_archived %} <span class="badge bg-secondary">Archive</span>{% endif %}</h3>
+            <p class="small text-muted mb-2"><i class="fab fa-github me-1"></i>{{ card.site.repo_name }} ・ {{ card.site.industry }} ・ 入場 {{ card.site.started_on|date:"n/j" }}</p>
+            <div class="small fw-bold mb-1">入場時チェックリスト</div>
+            {% for stage in card.stages %}{% include 'genba/_progress_bar.html' %}{% endfor %}
+            {% if card.signals %}
+            <div class="small fw-bold text-danger mt-2"><i class="fas fa-exclamation-triangle me-1"></i>危険信号：その日のうちに動く</div>
+            {% include 'genba/_signals.html' with signals=card.signals detected_only=True %}
+            {% endif %}
+        </div></div></div>
         {% empty %}
-        <p class="text-muted">まだどの現場にも入っていません。</p>
+        <p class="text-muted small">まだどの現場にも入っていません。テンプレートから現場を作ると、入場時チェックリストが並びます。</p>
         {% endfor %}
     </div>
 </section>
@@ -46,7 +55,7 @@
 </section>
 
 <section class="mb-4">
-    <h2 class="h5 mb-3" style="color: #2c5aa0;">未解決の確認事項・課題</h2>
+    <h2 class="h5 mb-3" style="color: #2c5aa0;">未解決の Issue</h2>
     <div class="table-responsive"><table class="table table-sm align-middle">
         <thead><tr class="small text-muted"><th>内容</th><th>誰に聞くか</th><th>書いた人</th><th>経過</th><th></th></tr></thead>
         <tbody>
@@ -62,7 +71,7 @@
         <dl class="small">
             {% for t in terms %}
             <dt>{{ t.term }} <span class="text-muted fw-normal">／ {{ t.site.name }}</span></dt>
-            <dd class="mb-2">{{ t.meaning }}{% if t.has_gap %}<br><span class="text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>一般的な意味との違い：{{ t.general_difference }}</span>{% endif %}</dd>
+            <dd class="mb-2">{{ t.meaning|default:"（意味を確認中）" }}{% if t.has_gap %}<br><span class="text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>一般的な意味との違い：{{ t.general_difference }}</span>{% endif %}</dd>
             {% empty %}<p class="text-muted">まだありません</p>{% endfor %}
         </dl>
     </section>

@@ -5,7 +5,7 @@
 {% block genba_contents %}
 <p class="small mb-1">
     {% if can_read_site %}<a href="{% url 'genba:site_detail' doc.site_id %}?tab=docs">{{ doc.site.name }}</a>{% else %}{{ doc.site.industry }}（会社公開）{% endif %}
-    ・ {{ doc.get_kind_display }}
+    ・ {{ doc.get_kind_display }} <span class="text-muted">― {{ section_note }}</span>
 </p>
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
     <h2 class="h5 mb-0" style="color: #2c5aa0;">{{ doc.title }}</h2>
@@ -19,10 +19,15 @@
     {% if can_read_site %} ・ {{ doc.author.username }}{% endif %}
     ・ {% if doc.week_of %}{{ doc.week_of|date:"Y年n月j日" }}の週{% else %}{{ doc.created_at|date:"Y年n月j日" }}{% endif %}
 </p>
+{% if doc.kind == 'weekly' %}
+<div class="row g-2 small mb-3">
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">やったこと</div><div class="genba-pre">{{ doc.done|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">分かったこと</div><div class="genba-pre">{{ doc.learned|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100 border-warning"><div class="card-body py-2"><div class="fw-bold">詰まっていること</div><div class="genba-pre">{{ doc.stuck|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">次にやること</div><div class="genba-pre">{{ doc.next_step|default:"―" }}</div></div></div></div>
+</div>
+{% else %}
 <div class="card shadow-sm mb-3"><div class="card-body genba-pre">{{ doc.body|default:"（本文なし）" }}</div></div>
-{% if doc.risks %}
-<h3 class="h6">課題・リスク</h3>
-<div class="card border-warning mb-3"><div class="card-body genba-pre small">{{ doc.risks }}</div></div>
 {% endif %}
 {% if doc.skill_item %}<p class="small"><i class="fas fa-tag me-1"></i>スキル対応：{{ doc.skill_item }}</p>{% endif %}
 {% endblock %}

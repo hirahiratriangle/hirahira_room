@@ -9,7 +9,7 @@
 <section class="mb-5">
     <h2 class="h5 mb-3" style="color: #2c5aa0;"><a href="{% url 'genba:site_detail' p.site.pk %}" class="text-decoration-none">{{ p.site.name }}</a></h2>
 
-    <h3 class="h6">メンバーごとの未解決の確認事項・課題</h3>
+    <h3 class="h6">メンバーごとの未解決の Issue</h3>
     {% for m in p.members %}
     <div class="card shadow-sm mb-2"><div class="card-body py-2">
         <div class="d-flex justify-content-between">
@@ -24,13 +24,13 @@
     </div></div>
     {% empty %}<p class="small text-muted">未解決の確認事項はありません</p>{% endfor %}
 
-    <h3 class="h6 mt-4">週報の課題・リスク（直近2週）</h3>
+    <h3 class="h6 mt-4">週報の「詰まっていること」（直近2週）</h3>
     {% for d in p.weekly %}
     <div class="card border-warning mb-2"><div class="card-body py-2 small">
         <div class="text-muted mb-1">{{ d.week_of|date:"n/j" }}の週 ・ {{ d.author.username }} ・ <a href="{% url 'genba:document_detail' d.pk %}">週報を開く</a></div>
-        <div class="genba-pre">{{ d.risks }}</div>
+        <div class="genba-pre">{{ d.stuck }}</div>
     </div></div>
-    {% empty %}<p class="small text-muted">課題・リスク欄が書かれた週報はありません</p>{% endfor %}
+    {% empty %}<p class="small text-muted">「詰まっていること」が書かれた週報はありません</p>{% endfor %}
 
     <h3 class="h6 mt-4">一般化の確認待ち（ナレッジ候補）</h3>
     <ul class="list-group">
