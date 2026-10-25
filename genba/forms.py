@@ -19,6 +19,7 @@ class BootstrapMixin:
 
 
 class SiteForm(BootstrapMixin, forms.ModelForm):
+    """テンプレートから現場を作る。作った人はメンバーかリーダーとして入る。"""
 
     my_role = forms.ChoiceField(label='自分の立場', choices=Membership.ROLE_CHOICES, initial=Membership.ROLE_MEMBER)
 
@@ -38,6 +39,7 @@ class SiteForm(BootstrapMixin, forms.ModelForm):
 
 
 class IssueForm(BootstrapMixin, forms.ModelForm):
+    """Issue の作成。種類（確認事項・読めない・課題・作業・スコープ外）で欄を変える。"""
 
     FIELDS = {
         'question': ['title', 'body', 'ask_to'],
@@ -79,6 +81,7 @@ class IssueForm(BootstrapMixin, forms.ModelForm):
 
 
 class TaskProgressForm(BootstrapMixin, forms.ModelForm):
+    """作業 Issue の予定と実績"""
 
     class Meta:
         model = Question
@@ -101,6 +104,7 @@ class TermForm(BootstrapMixin, forms.ModelForm):
 
 
 class DocumentForm(BootstrapMixin, forms.ModelForm):
+    """区分ごとに要る項目だけ出す"""
 
     WEEKLY_FIELDS = ['title', 'week_of', 'done', 'learned', 'stuck', 'next_step', 'goal_action']
 
@@ -140,6 +144,7 @@ class SummaryForm(BootstrapMixin, forms.ModelForm):
 
 
 class SupportForm(BootstrapMixin, forms.ModelForm):
+    """リーダーが「読めない」に説明の時間を割り当てる"""
 
     class Meta:
         model = Question
@@ -152,6 +157,7 @@ class SupportForm(BootstrapMixin, forms.ModelForm):
 
 
 class ResponseForm(BootstrapMixin, forms.ModelForm):
+    """リーダーが懸念を受け取り、返事を書く"""
 
     class Meta:
         model = Question
@@ -164,6 +170,7 @@ class ResponseForm(BootstrapMixin, forms.ModelForm):
 
 
 class FeedbackForm(BootstrapMixin, forms.ModelForm):
+    """リーダーがまとめに差と次の作業を返す"""
 
     class Meta:
         model = Summary
@@ -176,6 +183,7 @@ class FeedbackForm(BootstrapMixin, forms.ModelForm):
 
 
 class LineForm(BootstrapMixin, forms.ModelForm):
+    """裁量の線"""
 
     class Meta:
         model = Membership
@@ -191,6 +199,7 @@ class SummaryReviewForm(BootstrapMixin, forms.ModelForm):
 
 
 class GoalPickForm(forms.Form):
+    """目標を立てる1段目：スキル項目と今のレベルを選ぶ"""
 
     item = forms.ChoiceField(label='スキル項目', choices=[('', '選ぶ')] + [(n, n) for n in growth.SKILL_ITEMS],
                              widget=forms.Select(attrs={'class': 'form-select'}))
@@ -199,6 +208,7 @@ class GoalPickForm(forms.Form):
 
 
 class GoalForm(BootstrapMixin, forms.ModelForm):
+    """目標を立てる2段目：一つ上の具体記述を目標の文にする"""
 
     class Meta:
         model = Goal
@@ -218,6 +228,11 @@ class GoalForm(BootstrapMixin, forms.ModelForm):
 
 
 class ReachForm(BootstrapMixin, forms.ModelForm):
+    """到達を記入する（本人）。
+
+    書けるのは記入の段階だけ。確認の依頼はフォームの欄ではなく、ビューで押されたボタン（action）で決める。
+    """
+
     complexity = forms.MultipleChoiceField(
         label='複雑性（当てはまるもの）', required=False, widget=forms.CheckboxSelectMultiple,
         choices=[(str(i), f'{i}. {text}') for i, text in enumerate(growth.data.COMPLEXITY, 1)],
@@ -235,6 +250,7 @@ class ReachForm(BootstrapMixin, forms.ModelForm):
 
     def save(self, commit=True):
         goal = super().save(commit=False)
+        # 複雑性はチェックした番号をカンマ区切りで持つ（並びは番号順にそろえる）
         goal.complexity = ','.join(sorted(self.cleaned_data['complexity'], key=int))
         if commit:
             goal.save()
@@ -242,6 +258,11 @@ class ReachForm(BootstrapMixin, forms.ModelForm):
 
 
 class ApprovalForm(BootstrapMixin, forms.ModelForm):
+    """到達を承認する（マネジメント）。レベルと評価A〜Eを確定し、次の目標を示す。
+
+    ひとり現場のときだけ「元請・顧客の声」の欄を出す。
+    """
+
     class Meta:
         model = Goal
         fields = ['approved_level', 'approved_grade', 'next_text', 'approval_comment', 'customer_voice']
@@ -252,7 +273,9 @@ class ApprovalForm(BootstrapMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         goal = self.instance
+        # 承認ではレベルと評価を必ず決める（モデルでは空を許している：承認前の到達もあるため）
         self.fields['approved_level'].required = self.fields['approved_grade'].required = True
+        # 初めて承認するときは、本人が書いたレベルと、そこから求めた評価の目安を初期値にする
         if not goal.approved_level:
             self.initial['approved_level'] = goal.reached_level
             self.initial['approved_grade'] = growth.ae_grade(goal.reached_level, goal.mentored)
@@ -274,6 +297,7 @@ class PromiseCheckForm(BootstrapMixin, forms.ModelForm):
 
 
 def publish_form_for(model):
+    """一般化した版を書くフォーム（文書・用語のどちらにも使う）"""
     target_model = model
 
     class PublishForm(BootstrapMixin, forms.ModelForm):

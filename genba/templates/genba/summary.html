@@ -8,7 +8,6 @@
     <h2 class="h5 mb-0" style="color: #2c5aa0;">1週目のまとめ{% if not mine %}（{{ summary.author.username }}）{% endif %}</h2>
     <span class="badge {% if summary.submitted_at %}bg-success{% else %}bg-secondary{% endif %}">{% if summary.submitted_at %}{{ summary.submitted_at|date:"n/j" }}に提出{% else %}書きかけ{% endif %}</span>
 </div>
-<p class="small text-muted">1週目のゴールは「担当機能と全体像を自分の言葉で説明できること」。全体像の図、担当機能の整理、用語集、未解決の質問一覧を1つの資料にし、5日目に出します。用語集・未解決の質問・読めない一覧は、この現場の記録から自動で並びます。</p>
 <div class="genba-phrase small mb-3"><i class="fas fa-comment-dots me-1"></i>使える一言：{{ phrase }}</div>
 
 {% if writable %}
@@ -17,7 +16,7 @@
     {% for field in form %}
     <div class="mb-3">
         <label class="form-label fw-bold" for="{{ field.id_for_label }}">{{ field.label }}</label>
-        {{ field }}<div class="form-text">{{ field.help_text }}</div>
+        {{ field }}
     </div>
     {% endfor %}
     <button class="btn btn-outline-primary btn-sm" name="action" value="save">保存</button>
@@ -47,7 +46,6 @@
 </div>
 
 <h3 class="h6">リーダーからの返し</h3>
-<p class="small text-muted">スキルの具体記述に沿って、差と次の作業を返します。点数は付けません。</p>
 {% if goals %}
 <div class="row g-2 mb-2">
     {% for g, levels in goals %}
@@ -62,7 +60,7 @@
 {% if can_feedback %}
 <form method="post" class="card border-primary mb-4"><div class="card-body">
     {% csrf_token %}<input type="hidden" name="action" value="feedback"><input type="hidden" name="user" value="{{ summary.author_id }}">
-    {{ feedback_form.feedback }}<div class="form-text">{{ feedback_form.feedback.help_text }}</div>
+    {{ feedback_form.feedback }}
     {% for e in feedback_form.feedback.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
     <button class="btn btn-primary btn-sm mt-2">返す</button>
 </div></form>
@@ -71,7 +69,6 @@
 {% else %}<p class="small text-muted mb-4">まだ返しはありません。</p>{% endif %}
 
 <h3 class="h6">リーダーと確かめた結果（本人のメモ）</h3>
-<p class="small text-muted">リーダーに15分もらい「この理解で合っていますか」と確かめ、期待値との差と2週目の作業を書きます。</p>
 {% if writable %}
 <form method="post" class="card"><div class="card-body">
     {% csrf_token %}{{ review_form.review_note }}

@@ -3,7 +3,6 @@
 {% block genba_title %}リーダー{% endblock %}
 
 {% block genba_contents %}
-<p class="small text-muted">作業量ではなく、詰まりを早く見つけます。止まっている日数は、本人の能力より現場の意思決定の遅さを示すことが多いので、まず「誰に・何を聞けば進むか」をフォローします。</p>
 
 {% for p in panels %}
 <section class="mb-5">
@@ -27,7 +26,6 @@
                         {% if m.questions %}<span class="{% if m.max_days >= stall_days %}genba-stall{% else %}text-muted{% endif %}">最長 {{ m.max_days }}日</span>{% endif %}
                     </span>
                 </div>
-                {% if m.weekly_missing %}<div class="small text-muted">「問題ない」と受け取らず、進捗と理解を聞きにいく。{% if m.weeks_missing >= escalate_weeks %}<span class="text-danger">{{ m.weeks_missing }}週続いているので、マネジメントの指標にも人数が出ています（名前は出ません）。</span>{% endif %}</div>{% endif %}
                 <ul class="small mb-0 ps-3">
                     {% for q in m.questions %}
                     <li><span class="{% if q.days_open >= stall_days %}genba-stall{% endif %}">{{ q.days_open }}日</span> ・ <a href="{% url 'genba:issue_detail' q.pk %}">{{ q.title }}</a>{% if q.ask_to %} <span class="text-muted">（{{ q.ask_to }}）</span>{% endif %}{% for label in q.labels %} <span class="badge bg-light text-dark border">{{ label }}</span>{% endfor %}</li>

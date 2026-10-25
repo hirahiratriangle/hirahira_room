@@ -55,7 +55,6 @@
 {% endwith %}
 
 {% if tab == 'checklist' %}
-<p class="small text-muted">あなたの入場時チェックリストです（現場に入った人ごとに並びます）。入場時チェックリスト上流編を、小見出しごとの作業 Issue として並べています。<a href="{% url 'genba:kit' %}">テンプレート</a>を改訂しても、この現場のチェックリストは変わりません。</p>
 <div class="row g-3">
     {% for stage in stages %}
     <div class="col-lg-6">
@@ -110,7 +109,6 @@
 {% endif %}
 
 {% elif tab == 'unreadable' %}
-<p class="small text-muted">どの資料のどこが、なぜ読めないか。2日経っても進まないものは、一覧を持って質問の時間をもらいます。</p>
 <div class="genba-phrase small mb-3"><i class="fas fa-comment-dots me-1"></i>使える一言：{{ phrase_unreadable }}</div>
 {% if not site.is_archived %}<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:issue_create' site.pk 'unreadable' %}"><i class="fas fa-plus me-1"></i>「読めない」を残す</a></div>{% endif %}
 <div class="table-responsive"><table class="table table-sm align-middle">
@@ -130,7 +128,6 @@
 </table></div>
 
 {% elif tab == 'progress' %}
-<p class="small text-muted">作業 Issue の予定と実績。初日の最初のタスクは、担当範囲を確かめる確認作業そのものです。遅れが出たら、その日のうちに原因と追いつく見込みを書きます。</p>
 {% if not site.is_archived %}<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:issue_create' site.pk 'task' %}"><i class="fas fa-plus me-1"></i>作業を追加</a></div>{% endif %}
 <div class="table-responsive"><table class="table table-sm align-middle">
     <thead><tr class="small text-muted"><th>作業</th><th>予定日</th><th>完了日</th><th>差</th><th>遅れの原因と見込み</th></tr></thead>
@@ -168,7 +165,7 @@
 
 {% elif tab == 'terms' %}
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-    <p class="small text-muted mb-0">分からない語もそのまま載せます。SI業界の言葉は <a href="{% url 'genba:phrases' %}#words">ワード確認表</a> も参照。</p>
+    <span></span>
     {% if not site.is_archived %}<a class="btn btn-primary btn-sm" href="{% url 'genba:term_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a>{% endif %}
 </div>
 <div class="list-group">
@@ -186,7 +183,6 @@
 </div>
 
 {% elif tab == 'promises' %}
-<p class="small text-muted">振り返りの「約束と実際」表。食い違っている行の数がマネジメントの指標になります（個人名は出ません）。</p>
 {% if not site.is_archived %}<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:promise_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a></div>{% endif %}
 <div class="table-responsive"><table class="table table-sm">
     <thead><tr class="small text-muted"><th>約束（営業・面談時の説明）</th><th>実際</th><th>ズレ</th></tr></thead>
@@ -198,7 +194,6 @@
 </table></div>
 
 {% elif tab == 'structure' %}
-<p class="small text-muted">実際の指示者・決裁者が体制図と違うときに記録します（危険信号「日々の指示者が体制図と違う」）。件数がマネジメントの指標になります（個人名は出ません）。</p>
 {% if not site.is_archived %}<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:structure_gap_create' site.pk %}"><i class="fas fa-plus me-1"></i>体制のズレを記録</a></div>{% endif %}
 <div class="table-responsive"><table class="table table-sm">
     <thead><tr class="small text-muted"><th>どちらが違うか</th><th>体制図では</th><th>実際は</th><th>実際の決裁の流れ</th></tr></thead>

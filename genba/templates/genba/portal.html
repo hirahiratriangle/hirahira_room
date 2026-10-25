@@ -34,8 +34,7 @@
     </div>
     {% else %}
     <div class="alert alert-info">
-        まだどの現場にも入っていません。<a href="{% url 'genba:site_create' %}">テンプレートから現場を作る</a>か、
-        デモデータ（<code>python manage.py seed_genba --user {{ user.username }}</code>）を入れてください。
+        まだどの現場にも入っていません。<a href="{% url 'genba:site_create' %}">テンプレートから現場を作る</a>
     </div>
     {% endif %}
     <div class="row g-3 mt-1">

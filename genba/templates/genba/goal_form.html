@@ -5,13 +5,11 @@
 {% block genba_contents %}
 <p class="small mb-1"><a href="{% url 'genba:growth' site.pk %}">{{ site.name }} ／ 自分の成長</a></p>
 <h2 class="h5 mb-2" style="color: #2c5aa0;">目標を立てる</h2>
-{% for u in usage %}<p class="small text-muted mb-1">{{ u }}</p>{% endfor %}
 
 <form method="get" class="card my-3"><div class="card-body row g-2 align-items-end">
     <div class="col-md-6"><label class="form-label small">{{ pick.item.label }}</label>{{ pick.item }}</div>
     <div class="col-md-3"><label class="form-label small">{{ pick.level.label }}</label>{{ pick.level }}</div>
     <div class="col-md-3"><button class="btn btn-outline-primary w-100">一つ上の記述を出す</button></div>
-    <div class="col-12 small text-muted">どの項目が問われそうかは、<a href="{% url 'genba:skillset' %}" target="_blank">スキルセット</a>の「典型的な場面」で選びます。</div>
 </div></form>
 
 {% if item %}

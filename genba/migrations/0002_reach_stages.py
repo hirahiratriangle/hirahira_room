@@ -6,6 +6,11 @@ from django.db import migrations, models
 
 
 def copy_agreements(apps, schema_editor):
+    """これまでの「課長との合意」を、新しい3段階に移す。
+
+    合意を依頼したもの → 確認を依頼した。合意したもの → 確認も承認も済み（承認したレベルは本人の到達、
+    評価は growth.ae_grade と同じ目安で求める）。コメントは承認のコメントに移す。
+    """
     Goal = apps.get_model('genba', 'Goal')
     for g in Goal.objects.filter(agreement_requested_at__isnull=False):
         g.submitted_at = g.agreement_requested_at

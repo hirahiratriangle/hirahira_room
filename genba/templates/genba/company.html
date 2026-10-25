@@ -57,7 +57,7 @@
                 {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
             </ul>
             <h3 class="h6"><i class="fas fa-sync me-1"></i>テンプレートの改訂の提案</h3>
-            <p class="small text-muted">チェックリスト・言い回し集・成長の物差しを、現場ごとの教訓で育てます。<a href="{% url 'genba:kit_proposal_create' %}">提案する</a></p>
+            <p class="small"><a href="{% url 'genba:kit_proposal_create' %}">提案する</a></p>
             <ul class="list-group">
                 {% for p in proposals %}
                 <li class="list-group-item small">
