@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
 from . import views
@@ -43,3 +44,7 @@ urlpatterns = [
     path('knowledge/<str:model>/<int:pk>/publish/', views.KnowledgePublishView.as_view(), name='knowledge_publish'),
     path('knowledge/<str:model>/<int:pk>/<str:action>/', views.KnowledgeActionView.as_view(), name='knowledge_action'),
 ]
+
+# デモ：genba はログインせずに使える（未ログインの人はゲストユーザーになる。views.GuestMixin）
+for pattern in urlpatterns:
+    login_not_required(pattern.callback)

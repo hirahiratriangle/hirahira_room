@@ -16,7 +16,7 @@ from .models import (
     ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site,
     StructureGap, Summary, Term, week_start,
 )
-from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
+from .roles import GROUP_COMPANY, GROUP_MANAGEMENT, GUEST_USERNAME
 from .signals import signals_for, weeks_missing_in_row
 
 
@@ -136,6 +136,22 @@ class AccessTests(GenbaTestBase):
         res = self.client.get(reverse('genba:phrases'))
         self.assertContains(res, 'SI業界ワード確認表')
         self.assertContains(res, '清濁併せ呑む')
+
+    def test_anonymous_uses_guest_with_all_roles(self):
+        # デモ：ログインしていなくてもログイン画面へは送られず、ゲストとして4つの立場を試せる
+        for name in ('portal', 'kit', 'phrases', 'skillset', 'member_home', 'management', 'company'):
+            self.assertEqual(self.client.get(reverse(f'genba:{name}')).status_code, 200, name)
+        res = self.client.post(reverse('genba:site_create'), {
+            'name': 'ゲストの現場', 'repo_name': 'genba-guest', 'industry': '物流業',
+            'started_on': self.today.isoformat(), 'description': '', 'my_role': 'leader',
+        })
+        site = Site.objects.get(repo_name='genba-guest')
+        self.assertRedirects(res, reverse('genba:site_detail', args=[site.pk]) + '?tab=checklist')
+        guest = CustomUser.objects.get(username=GUEST_USERNAME)
+        self.assertTrue(Membership.objects.filter(site=site, user=guest, role=Membership.ROLE_LEADER).exists())
+        self.assertEqual(self.client.get(reverse('genba:leader_home')).status_code, 200)
+        # ゲストが入っていない現場の原文は、これまでどおり読めない
+        self.assertEqual(self.client.get(reverse('genba:site_detail', args=[self.site.pk])).status_code, 403)
 
     def test_team_document_hidden_from_outsider_public_one_visible(self):
         doc = Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='顧客名入りの設計',

@@ -3,10 +3,28 @@
 メンバー・リーダーは現場ごと（Membership）、マネジメント・会社は現場をまたぐので
 Django のグループで割り当てる。
 """
+from django.contrib.auth.models import Group
+
+from accounts.models import CustomUser
+
 from .models import Membership, Site
 
 GROUP_MANAGEMENT = 'genba_management'
 GROUP_COMPANY = 'genba_company'
+GUEST_USERNAME = 'genba_guest'
+
+
+def guest_user():
+    """デモ：ログインしていない人が共通で使うユーザー。マネジメント・会社の立場も持たせ、
+    4つの立場の画面をログインせずに試せるようにする"""
+    user, created = CustomUser.objects.get_or_create(
+        username=GUEST_USERNAME, defaults={'email': f'{GUEST_USERNAME}@example.com'})
+    if created:
+        user.set_unusable_password()
+        user.save()
+        for name in (GROUP_MANAGEMENT, GROUP_COMPANY):
+            user.groups.add(Group.objects.get_or_create(name=name)[0])
+    return user
 
 
 def member_sites(user):

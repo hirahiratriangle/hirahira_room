@@ -2,7 +2,6 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
@@ -27,7 +26,18 @@ from .models import (
 )
 
 
-class GenbaMixin(LoginRequiredMixin):
+class GuestMixin:
+    """デモ：ログインしていない人は共通のゲストユーザーとして扱う（ログイン画面へは送らない）。
+    dispatch より前の setup で入れ替えるので、各ビューの dispatch の判定にも効く。
+    LoginRequiredMiddleware からは urls.py で外している"""
+
+    def setup(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            request.user = roles.guest_user()
+        super().setup(request, *args, **kwargs)
+
+
+class GenbaMixin(GuestMixin):
     """ナビに出す立場の一覧をテンプレートへ渡す"""
     role_name = ''
 
@@ -51,8 +61,6 @@ class SiteMixin(GenbaMixin):
     writable = False
 
     def dispatch(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return self.handle_no_permission()
         self.site = get_object_or_404(Site, pk=kwargs['site_pk'])
         if self.writable:
             check_writable(request.user, self.site)
@@ -262,7 +270,7 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
         return context
 
 
-class SiteArchiveView(LoginRequiredMixin, View):
+class SiteArchiveView(GuestMixin, View):
     """現場の一生の最後。Archive した現場は読むだけになる（リーダーだけが切り替える）"""
 
     def post(self, request, site_pk):
@@ -408,7 +416,7 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
         return self.render_to_response(self.get_context_data(**{f'{name}_form': form}))
 
 
-class QuestionToggleView(LoginRequiredMixin, View):
+class QuestionToggleView(GuestMixin, View):
     """Issue を解決済みにする／未解決に戻す（同じ現場の人なら誰でも）"""
 
     def post(self, request, pk):
@@ -422,7 +430,7 @@ class QuestionToggleView(LoginRequiredMixin, View):
         return redirect(request.POST.get('next') or question.get_absolute_url())
 
 
-class ChecklistItemToggleView(LoginRequiredMixin, View):
+class ChecklistItemToggleView(GuestMixin, View):
     """チェック項目を済みにする／戻す。全部済めば作業 Issue も閉じる。"""
 
     def post(self, request, pk):
@@ -664,7 +672,7 @@ class DocumentUpdateView(GenbaMixin, generic.UpdateView):
         return context
 
 
-class KnowledgeActionView(LoginRequiredMixin, View):
+class KnowledgeActionView(GuestMixin, View):
     """公開レビュー：現場チームの誰かが候補にする／候補から外す。リーダーが公開をやめる。
     本人に公開範囲を選ばせない（憲章 III）。公開はリーダーが一般化した版を書いて行う（KnowledgePublishView）。"""
 
@@ -998,7 +1006,7 @@ class CompanyView(GenbaMixin, generic.TemplateView):
     role_name = 'company'
 
     def dispatch(self, request, *args, **kwargs):
-        if request.user.is_authenticated and not roles.is_company(request.user):
+        if not roles.is_company(request.user):
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
 
