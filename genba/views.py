@@ -14,14 +14,16 @@ from django.views import View, generic
 
 from . import growth, kit, kit_data, roles, signals, skillset_data
 from .forms import (
-    DocumentForm, FeedbackForm, GoalForm, GoalPickForm, IssueForm, LineForm, PromiseCheckForm, ReachForm,
+    DocumentForm, FeedbackForm, GoalForm, GoalPickForm, InterviewQuestionForm, IssueForm, KitProposalForm, LineForm,
+    PromiseCheckForm, ReachForm, publish_form_for,
     ResponseForm, SearchForm, SiteForm, StructureGapForm, SummaryForm, SummaryReviewForm, SupportForm, TaskProgressForm,
     TermForm,
 )
 from .metrics import DEFINITIONS, THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
 from .models import (
-    KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Goal, GoalEvidence, Membership, Question, Site, Summary, Term, week_start,
+    KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
+    ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, Question, Site, Summary,
+    Term, week_start,
 )
 
 
@@ -74,14 +76,16 @@ def published_terms():
 
 
 def search_knowledge(user, q):
-    """自分の現場の全文と、会社公開された記録から探す"""
+    """自分の現場の原文と、他の現場の一般化して公開された版から探す"""
     sites = roles.member_sites(user)
-    doc_q = Q(title__icontains=q) | Q(body__icontains=q)
-    term_q = Q(term__icontains=q) | Q(meaning__icontains=q) | Q(general_difference__icontains=q)
-    docs = Document.objects.filter(doc_q).filter(
-        Q(site__in=sites) | Q(visibility=VISIBILITY_COMPANY)).select_related('site').distinct()[:30]
-    terms = Term.objects.filter(term_q).filter(
-        Q(site__in=sites) | Q(visibility=VISIBILITY_COMPANY)).select_related('site').distinct()[:30]
+    public_q = Q(visibility=VISIBILITY_COMPANY) & (Q(public_title__icontains=q) | Q(public_body__icontains=q))
+    docs = Document.objects.filter(
+        (Q(site__in=sites) & (Q(title__icontains=q) | Q(body__icontains=q))) | (~Q(site__in=sites) & public_q)
+    ).select_related('site').distinct()[:30]
+    terms = Term.objects.filter(
+        (Q(site__in=sites) & (Q(term__icontains=q) | Q(meaning__icontains=q) | Q(general_difference__icontains=q)))
+        | (~Q(site__in=sites) & public_q)
+    ).select_related('site').distinct()[:30]
     return docs, terms
 
 
@@ -136,6 +140,7 @@ class KitView(GenbaMixin, generic.TemplateView):
             issue_labels=kit.ISSUE_LABELS, lifecycle=kit.LIFECYCLE, checklist=kit.checklist(),
             checklist_title=kit_data.CHECKLIST_TITLE, checklist_intro=kit_data.CHECKLIST_INTRO,
             danger_signs=kit_data.DANGER_SIGNS,
+            proposals=KitProposal.objects.select_related('author'),
         )
         return context
 
@@ -242,8 +247,8 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
         terms = list(site.terms.select_related('author'))
         others = defaultdict(list)
         names = {t.term for t in terms}
-        for t in published_terms().exclude(site=site).filter(term__in=names):
-            others[t.term].append(t)
+        for t in published_terms().exclude(site=site).filter(public_title__in=names):
+            others[t.public_title].append(t)
         context['terms'] = [(t, others.get(t.term, [])) for t in terms]
         context['promise_checks'] = site.promise_checks.all()
         context['structure_gaps'] = site.structure_gaps.select_related('author')
@@ -660,8 +665,8 @@ class DocumentUpdateView(GenbaMixin, generic.UpdateView):
 
 
 class KnowledgeActionView(LoginRequiredMixin, View):
-    """公開レビューの流れ: 候補にする → リーダーが一般化を確認 → 本人が会社公開に切り替える。
-    （誰が最終判断を持つかは spec 005 で見直す）"""
+    """公開レビュー：現場チームの誰かが候補にする／候補から外す。リーダーが公開をやめる。
+    本人に公開範囲を選ばせない（憲章 III）。公開はリーダーが一般化した版を書いて行う（KnowledgePublishView）。"""
 
     MODELS = {'doc': Document, 'term': Term}
 
@@ -670,31 +675,69 @@ class KnowledgeActionView(LoginRequiredMixin, View):
             raise Http404
         obj = get_object_or_404(self.MODELS[model], pk=pk)
         user = request.user
-        is_author = obj.author_id == user.pk
-        status, public = obj.knowledge_status, obj.is_public
-
-        if not obj.is_publishable or obj.site.is_archived:
+        status = obj.knowledge_status
+        check_writable(user, obj.site)
+        if not obj.is_publishable:
             raise PermissionDenied
-        if action == 'candidate' and is_author and status == KNOWLEDGE_NONE:
+        if action == 'candidate' and status == KNOWLEDGE_NONE:
             obj.knowledge_status = KNOWLEDGE_CANDIDATE
-            msg = 'ナレッジ候補にしました。リーダーが一般化を確認します。'
-        elif action == 'review' and roles.is_leader(user, obj.site) and status == KNOWLEDGE_CANDIDATE:
-            obj.knowledge_status = KNOWLEDGE_REVIEWED
-            msg = '一般化を確認しました。'
-        elif action == 'publish' and is_author and status == KNOWLEDGE_REVIEWED and not public:
-            obj.visibility = VISIBILITY_COMPANY
-            msg = '会社全体に公開しました。'
-        elif action == 'unpublish' and is_author and public:
-            obj.visibility = VISIBILITY_TEAM
-            msg = '公開をやめ、現場チームだけに戻しました。'
-        elif action == 'withdraw' and is_author and status != KNOWLEDGE_NONE and not public:
+            msg = 'ナレッジ候補にしました。リーダーが一般化して会社に公開します。'
+        elif action == 'withdraw' and status == KNOWLEDGE_CANDIDATE:
             obj.knowledge_status = KNOWLEDGE_NONE
             msg = 'ナレッジ候補から外しました。'
+        elif action == 'unpublish' and status == KNOWLEDGE_PUBLISHED and roles.is_leader(user, obj.site):
+            obj.knowledge_status, obj.visibility = KNOWLEDGE_CANDIDATE, VISIBILITY_TEAM
+            msg = '会社への公開をやめ、ナレッジ候補に戻しました。'
         else:
             raise PermissionDenied
         obj.save()
         messages.success(request, msg)
         return redirect(request.POST.get('next') or reverse('genba:site_detail', args=[obj.site_id]))
+
+
+class KnowledgePublishView(GenbaMixin, generic.UpdateView):
+    """リーダーが一般化した版を書いて会社に公開する。会社に見えるのは一般化した版だけ。"""
+    template_name = 'genba/knowledge_publish.html'
+    role_name = 'leader'
+
+    def get_form_class(self):
+        return publish_form_for(type(self.object))
+
+    def get_object(self, queryset=None):
+        model = KnowledgeActionView.MODELS.get(self.kwargs['model'])
+        if model is None:
+            raise Http404
+        obj = get_object_or_404(model, pk=self.kwargs['pk'])
+        if not obj.is_publishable or not roles.is_leader(self.request.user, obj.site) or obj.site.is_archived:
+            raise PermissionDenied
+        if obj.knowledge_status == KNOWLEDGE_NONE:
+            raise PermissionDenied
+        return obj
+
+    def get_initial(self):
+        obj = self.object
+        if obj.public_title or obj.public_body:
+            return {}
+        if isinstance(obj, Term):
+            return {'public_title': obj.term, 'public_body': obj.meaning}
+        return {'public_title': obj.title, 'public_body': obj.body}
+
+    def form_valid(self, form):
+        obj = form.save(commit=False)
+        obj.knowledge_status, obj.visibility = KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY
+        obj.published_by, obj.published_at = self.request.user, timezone.now()
+        obj.save()
+        messages.success(self.request, '一般化した版を会社に公開しました。原文は現場チームの中に残ります。')
+        return redirect(reverse('genba:site_detail', args=[obj.site_id]) + ('?tab=terms' if isinstance(obj, Term) else '?tab=docs'))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        obj = self.object
+        context['is_term'] = isinstance(obj, Term)
+        context['site'] = obj.site
+        context['original_title'] = obj.term if isinstance(obj, Term) else obj.title
+        context['original_body'] = obj.meaning if isinstance(obj, Term) else obj.body
+        return context
 
 
 # ---------------------------------------------------------------------------
@@ -950,13 +993,14 @@ class GoalAgreementView(GenbaMixin, generic.DetailView):
 # ---------------------------------------------------------------------------
 
 class CompanyView(GenbaMixin, generic.TemplateView):
+    """会社：一般化して公開された記録（ナレッジ資産）と、合意した到達の匿名の集計（組織の力）"""
     template_name = 'genba/company.html'
     role_name = 'company'
 
-    def get(self, request, *args, **kwargs):
-        if not roles.is_company(request.user):
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not roles.is_company(request.user):
             raise PermissionDenied
-        return super().get(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -965,19 +1009,75 @@ class CompanyView(GenbaMixin, generic.TemplateView):
         form = SearchForm(self.request.GET or None)
         if form.is_valid() and form.cleaned_data['q']:
             q = form.cleaned_data['q']
-            docs = docs.filter(Q(title__icontains=q) | Q(body__icontains=q))
-            terms = terms.filter(Q(term__icontains=q) | Q(meaning__icontains=q) | Q(general_difference__icontains=q))
+            docs = docs.filter(Q(public_title__icontains=q) | Q(public_body__icontains=q))
+            terms = terms.filter(Q(public_title__icontains=q) | Q(public_body__icontains=q))
             context['query'] = q
         context['search_form'] = form
         terms_by_industry = defaultdict(list)
-        for t in terms.order_by('site__industry', 'term'):
+        for t in terms.order_by('site__industry', 'public_title'):
             terms_by_industry[t.site.industry].append(t)
         context['terms_by_industry'] = dict(terms_by_industry)
         context['designs'] = docs.filter(kind=Document.KIND_DESIGN)
         context['retros'] = docs.filter(kind=Document.KIND_RETRO)
         context['interviews'] = docs.filter(kind=Document.KIND_PRE)
-        skills = defaultdict(int)
-        for item in docs.filter(kind=Document.KIND_RETRO).exclude(skill_item='').values_list('skill_item', flat=True):
-            skills[item] += 1
-        context['skills'] = sorted(skills.items(), key=lambda kv: -kv[1])
+        context['questions'] = InterviewQuestion.objects.select_related('source__site')
+        context['question_form'] = kwargs.get('question_form') or InterviewQuestionForm()
+        context['proposals'] = KitProposal.objects.select_related('author', 'decided_by')
+        # 組織の力（合意した到達だけ、匿名）
+        reaches = growth.agreed_reaches()
+        distribution = growth.skill_distribution(reaches)
+        context['distribution'] = distribution
+        context['reach_people'] = len({g.author_id for g in reaches})
+        context['itss'] = growth.itss_distribution(reaches)
+        context['complexity'] = growth.complexity_experience(reaches)
+        context['thin_items'] = growth.thin_items(distribution)
+        # アサインの希望（本人が出したものだけ）
+        context['next_goals'] = (Goal.objects.filter(share_next=True).exclude(next_text='')
+                                 .select_related('author').order_by('-shared_at'))
+        context.update(growth_links=kit.GROWTH_LINKS, growth_loop=kit.GROWTH_LOOP, growth_note=kit.GROWTH_NOTE,
+                       role_growth=kit.ROLE_GROWTH, role_growth_note=kit.ROLE_GROWTH_NOTE)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """質問リストに足す／改訂の提案を採用・見送る"""
+        action = request.POST.get('action')
+        if action == 'question':
+            form = InterviewQuestionForm(request.POST)
+            if not form.is_valid():
+                return self.render_to_response(self.get_context_data(question_form=form))
+            q = form.save(commit=False)
+            q.author = request.user
+            q.save()
+            messages.success(request, '営業・面談の質問リストに足しました。')
+        elif action in ('adopted', 'declined'):
+            proposal = get_object_or_404(KitProposal, pk=request.POST.get('proposal'))
+            proposal.status, proposal.decided_by = action, request.user
+            proposal.save()
+            messages.success(request, f'「{proposal.title}」を{proposal.get_status_display()}にしました。')
+        else:
+            raise Http404
+        return redirect('genba:company')
+
+
+class KitProposalCreateView(GenbaMixin, generic.CreateView):
+    """テンプレート・言い回し集・スキルセットの改訂を提案する（誰でも）"""
+    form_class = KitProposalForm
+    template_name = 'genba/form.html'
+
+    def get_initial(self):
+        return {'target': self.request.GET.get('target', 'checklist')}
+
+    def form_valid(self, form):
+        form.instance.author = self.request.user
+        messages.success(self.request, '改訂を提案しました。会社の立場で採用するかを決めます。')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('genba:kit')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['heading'] = '改訂を提案する'
+        context['lead'] = '現場ごとの教訓で、入場時チェックリスト・言い回し集・成長の物差しを育てます。採用したものは次の版で反映します。'
+        context['cancel_url'] = reverse('genba:kit')
         return context

@@ -10,6 +10,7 @@ urlpatterns = [
     path('kit/', views.KitView.as_view(), name='kit'),
     path('kit/phrases/', views.PhrasesView.as_view(), name='phrases'),
     path('kit/skills/', views.SkillsetView.as_view(), name='skillset'),
+    path('kit/proposals/create/', views.KitProposalCreateView.as_view(), name='kit_proposal_create'),
     # 立場ごとのホーム
     path('member/', views.MemberHomeView.as_view(), name='member_home'),
     path('leader/', views.LeaderHomeView.as_view(), name='leader_home'),
@@ -38,6 +39,7 @@ urlpatterns = [
     # 文書
     path('docs/<int:pk>/', views.DocumentDetailView.as_view(), name='document_detail'),
     path('docs/<int:pk>/update/', views.DocumentUpdateView.as_view(), name='document_update'),
-    # 公開レビュー（candidate / review / publish / unpublish / withdraw）
+    # 公開レビュー（候補にする・外す、一般化して公開、公開をやめる）
+    path('knowledge/<str:model>/<int:pk>/publish/', views.KnowledgePublishView.as_view(), name='knowledge_publish'),
     path('knowledge/<str:model>/<int:pk>/<str:action>/', views.KnowledgeActionView.as_view(), name='knowledge_action'),
 ]

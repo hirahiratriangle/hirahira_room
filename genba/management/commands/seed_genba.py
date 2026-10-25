@@ -24,8 +24,9 @@ from django.utils import timezone
 from accounts.models import CustomUser
 from genba import kit
 from genba.models import (
-    KNOWLEDGE_CANDIDATE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY,
-    Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term, week_start,
+    KNOWLEDGE_CANDIDATE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY,
+    Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site, StructureGap,
+    Summary, Term, week_start,
 )
 from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
@@ -71,6 +72,11 @@ class Command(BaseCommand):
             f'デモの現場を3つ作りました。{me.username} でログインして /genba/ を開いてください。'))
 
     # ---- 共通 ----
+
+    def published(self, leader, title, body):
+        """リーダーが一般化した版を書いて会社に公開した状態"""
+        return dict(visibility=VISIBILITY_COMPANY, knowledge_status=KNOWLEDGE_PUBLISHED, public_title=title,
+                    public_body=body, published_by=leader, published_at=self.now - timedelta(days=3))
 
     def ago(self, days):
         return self.now - timedelta(days=days)
@@ -145,13 +151,14 @@ class Command(BaseCommand):
                  is_open=False, closed_at=self.ago(17))
 
         Term.objects.create(site=site, author=sato, term='出荷', meaning='倉庫から出た時点ではなく、得意先が受領した時点を指す。',
-                            general_difference='一般には倉庫から出した時点。', visibility=VISIBILITY_COMPANY,
-                            knowledge_status=KNOWLEDGE_REVIEWED)
+                            general_difference='一般には倉庫から出した時点。',
+                            **self.published(me, '出荷', '倉庫から出た時点ではなく、得意先が受領した時点を指すことがある。'
+                                                        '一般には倉庫から出した時点なので、画面のラベルで確かめる。'))
         Term.objects.create(site=site, author=suzuki, term='赤黒', meaning='確定済み伝票を、マイナス伝票と正しい伝票の2枚で訂正すること。',
                             knowledge_status=KNOWLEDGE_CANDIDATE)
         Term.objects.create(site=site, author=me, term='締め', meaning='得意先ごとの請求締め日。月末とは限らない。',
-                            general_difference='社内では「月次締め」を指すことが多い。', visibility=VISIBILITY_COMPANY,
-                            knowledge_status=KNOWLEDGE_REVIEWED)
+                            general_difference='社内では「月次締め」を指すことが多い。',
+                            **self.published(me, '締め', '得意先ごとの請求締め日。月末とは限らない（社内の「月次締め」と区別する）。'))
         Term.objects.create(site=site, author=suzuki, term='集約区分', meaning='')
 
         D = Document.objects
@@ -170,7 +177,10 @@ class Command(BaseCommand):
                  body='受注 → 引当 → 出荷指示 → 出荷（得意先受領）→ 締め → 請求', created_at=self.ago(66))
         D.create(site=site, author=me, kind=Document.KIND_DESIGN, title='伝票訂正は赤黒方式にする',
                  body='案: 直接更新／赤黒\n決定: 赤黒\n理由: 監査で訂正履歴を追えることが求められたため。',
-                 visibility=VISIBILITY_COMPANY, knowledge_status=KNOWLEDGE_REVIEWED, created_at=self.ago(25))
+                 created_at=self.ago(25),
+                 **self.published(me, '確定済み伝票の訂正は赤黒方式にする',
+                                  '案: 直接更新／赤黒\n決定: 赤黒（マイナス伝票と正しい伝票の2枚で訂正）\n'
+                                  '理由: 監査で訂正履歴を追えることが求められたため。受発注系で同じ判断が要る。'))
         D.create(site=site, author=sato, kind=Document.KIND_MINUTES, title='第8回 設計レビュー',
                  body='・受注画面の項目並びを合意\n・確定後の取消は次回までに業務部が回答', created_at=self.ago(3))
         D.create(site=site, author=suzuki, kind=Document.KIND_MINUTES, title='第7回 設計レビュー',
@@ -227,7 +237,9 @@ class Command(BaseCommand):
             reached_level=4, mentored=True, role='leader', team_size=3, complexity='1,4',
             explanation='3人の設計チームの課題とリスクを週次で棚卸しし、レビュー計画に組み込んだ。仕様書が最新でない課題は、影響と見込みを添えて上げた。',
             agreement_requested_at=self.ago(4), agreed_on=self.today - timedelta(days=2), agreed_by=self.kacho,
-            agreement_comment='チームの課題管理が回っていた。次はレベル4の「デザイン」も視野に。')
+            agreement_comment='チームの課題管理が回っていた。次はレベル4の「デザイン」も視野に。',
+            next_text='10人以上の開発チームのコスト・スケジュール・リスクを管理し、他を指導する',
+            share_next=True, shared_at=self.ago(1))
         problem = site.questions.get(title='旧システムの仕様書が最新でない')
         GoalEvidence.objects.create(goal=goal, record_type='issue', record_id=problem.pk, title=f'課題：{problem.title}')
         sato_goal = Goal.objects.create(
@@ -238,6 +250,10 @@ class Command(BaseCommand):
             agreement_requested_at=self.ago(1))
         flow = site.documents.get(title='受注から請求までの業務フロー')
         GoalEvidence.objects.create(goal=sato_goal, record_type='doc', record_id=flow.pk, title=f'03_業務理解：{flow.title}')
+        Goal.objects.create(site=site, author=suzuki, skill_item='デザイン', current_level=2,
+                            target_text='画面・帳票・テーブル・IFを、影響範囲を含めて独力で設計する', reached_level=3, role='member',
+                            team_size=3, complexity='1', explanation='帳票20本の出力設計を、画面項目との対応を含めて独力で設計した。',
+                            agreement_requested_at=self.ago(30), agreed_on=self.today - timedelta(days=28), agreed_by=self.kacho)
 
     # ---- 現場2: 保険金請求の基本設計（自分はメンバー。入場から6日） ----
 
@@ -285,6 +301,11 @@ class Command(BaseCommand):
                                 interpretation='担当者の都合で回答が遅れやすい。',
                                 unconfirmed='査定部に代わりの窓口を立てられるか。',
                                 impact='業務フローの確認が止まると、基本設計の初版が遅れる。')
+        Goal.objects.create(site=site, author=tanaka, skill_item='プロジェクトマネジメント', current_level=4,
+                            target_text='10人以上の開発チームのコスト・スケジュール・リスクを管理し、他を指導する', reached_level=4,
+                            role='leader', team_size=6, complexity='1,4,5',
+                            explanation='6人の設計チームのスケジュールと課題を管理した（レベル5には規模が届かない）。',
+                            agreement_requested_at=self.ago(40), agreed_on=self.today - timedelta(days=38), agreed_by=self.kacho)
 
     # ---- 現場3: 店舗在庫の可視化（自分は入っていない） ----
 
@@ -300,12 +321,34 @@ class Command(BaseCommand):
             Question.objects.create(site=site, author=ito, kind=Question.KIND_TASK, title=title, scope_out=True,
                                     created_at=self.ago(days))
         Term.objects.create(site=site, author=ito, term='理論在庫', meaning='入出荷の記録から計算した在庫。棚卸しの実在庫と区別する。',
-                            visibility=VISIBILITY_COMPANY, knowledge_status=KNOWLEDGE_REVIEWED)
-        Document.objects.create(site=site, author=ito, kind=Document.KIND_RETRO, title='振り返り：スコープ外作業が増えた理由',
+                            **self.published(ito, '理論在庫', '入出荷の記録から計算した在庫。棚卸しの実在庫と区別する。'))
+        retro = Document.objects.create(site=site, author=ito, kind=Document.KIND_RETRO, title='振り返り：スコープ外作業が増えた理由',
                                 body='約束: 可視化画面のみ\n実際: 移行・端末手配・マニュアルまで依頼された\n次に面談で確認すること: 周辺作業の範囲',
-                                skill_item='ネゴシエーション：方針と責任範囲の合意', visibility=VISIBILITY_COMPANY,
-                                knowledge_status=KNOWLEDGE_REVIEWED, created_at=self.ago(5))
+                                skill_item='ネゴシエーション：方針と責任範囲の合意', created_at=self.ago(5),
+                                **self.published(ito, 'スコープ外の作業が増えた理由（店舗系の可視化）',
+                                                 '約束: 可視化画面の設計のみ\n実際: データ移行・端末手配・操作マニュアルまで依頼された\n'
+                                                 '次に面談で確かめること: 周辺作業（移行・端末・マニュアル）の範囲と、誰が決めるか'))
+        InterviewQuestion.objects.create(question='データ移行・端末手配・マニュアル作成は作業範囲に入るか。入らないなら誰が担うか',
+                                         industry='小売業', source=retro, author=self.kacho)
+        InterviewQuestion.objects.create(question='仕様の決裁者は誰か。日々の指示は誰から来るか（体制図と同じか）',
+                                         author=self.kacho)
         self.weekly(site, ito, 7, done='可視化画面のレビュー。')
+        Goal.objects.create(site=site, author=ito, skill_item='ネゴシエーション', current_level=3,
+                            target_text='チームを代表して仕様変更・責任範囲を交渉する', reached_level=4, role='leader',
+                            team_size=4, complexity='3,8', explanation='スコープ外の依頼について、元請と範囲を交渉した。',
+                            agreement_requested_at=self.ago(10), agreed_on=self.today - timedelta(days=9), agreed_by=self.kacho)
+        Goal.objects.create(site=site, author=ito, skill_item='業務分析', current_level=2,
+                            target_text='顧客ヒアリングや現行システム解析で、担当範囲の要件を自分で確定させる', reached_level=3,
+                            role='leader', team_size=4, explanation='店舗担当者へのヒアリングで在庫の要件を確定した。',
+                            agreement_requested_at=self.ago(10), agreed_on=self.today - timedelta(days=9), agreed_by=self.kacho)
+        KitProposal.objects.create(target='checklist', title='入場前に「周辺作業の範囲」を確かめる項目を足す',
+                                   proposal='「契約・商流」に「データ移行・端末手配・マニュアル作成が作業範囲に入るか」を足す',
+                                   reason='店舗系の現場で、周辺作業がスコープ外のまま依頼され続けた', author=ito,
+                                   created_at=self.ago(4))
+        KitProposal.objects.create(target='phrases', title='直接の依頼を元請に戻す一言',
+                                   proposal='「ご依頼は承りました。範囲の確認のため、元請のPMを通していただけますか。」',
+                                   reason='店舗担当者から直接作業を頼まれることが続いた', author=ito, status='adopted',
+                                   decided_by=self.kacho, created_at=self.ago(20))
         PromiseCheck.objects.create(site=site, author=ito, promise='可視化画面の設計のみ', actual='移行・端末手配まで依頼', is_gap=True)
         StructureGap.objects.create(site=site, author=ito, role_kind='approver', on_chart='顧客の店舗運営部長',
                                     actual='元請のPM', note='仕様の決裁を元請PMが代わりに出している。', created_at=self.ago(60))

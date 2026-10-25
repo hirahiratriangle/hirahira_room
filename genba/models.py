@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from . import kit
 
-# 公開範囲。現場チームの中は全公開。会社へは一般化レビューを通して出す（spec 005 で見直す）。
+# 公開範囲。現場チームの中は全公開。会社へは一般化レビューを通して出す（本人に範囲を選ばせない）。
 VISIBILITY_TEAM = 'team'
 VISIBILITY_COMPANY = 'company'
 VISIBILITY_CHOICES = [
@@ -15,14 +15,14 @@ VISIBILITY_CHOICES = [
     (VISIBILITY_COMPANY, '会社全体'),
 ]
 
-# 会社公開までの流れ: 本人が候補にする → リーダーが一般化を確認 → 本人が公開に切り替える
+# 会社公開までの流れ: 現場チームの誰かが候補にする → リーダーが一般化した版を書いて公開する
 KNOWLEDGE_NONE = 'none'
 KNOWLEDGE_CANDIDATE = 'candidate'
-KNOWLEDGE_REVIEWED = 'reviewed'
+KNOWLEDGE_PUBLISHED = 'published'
 KNOWLEDGE_CHOICES = [
     (KNOWLEDGE_NONE, '―'),
     (KNOWLEDGE_CANDIDATE, 'ナレッジ候補'),
-    (KNOWLEDGE_REVIEWED, '一般化確認済み'),
+    (KNOWLEDGE_PUBLISHED, '会社公開'),
 ]
 
 
@@ -83,7 +83,7 @@ class Membership(models.Model):
 
 
 class KnowledgeMixin(models.Model):
-    """会社公開できる記録に共通の項目"""
+    """会社公開できる記録に共通の項目。会社に見えるのは一般化した版（public_*）だけ。"""
 
     visibility = models.CharField(
         verbose_name='公開範囲', max_length=10, choices=VISIBILITY_CHOICES, default=VISIBILITY_TEAM,
@@ -91,6 +91,11 @@ class KnowledgeMixin(models.Model):
     knowledge_status = models.CharField(
         verbose_name='公開レビュー', max_length=10, choices=KNOWLEDGE_CHOICES, default=KNOWLEDGE_NONE,
     )
+    public_title = models.CharField(verbose_name='一般化した題', max_length=100, blank=True)
+    public_body = models.TextField(verbose_name='一般化した本文', blank=True)
+    published_by = models.ForeignKey(CustomUser, verbose_name='公開したリーダー', on_delete=models.PROTECT,
+                                     null=True, blank=True, related_name='+')
+    published_at = models.DateTimeField(verbose_name='公開した日時', null=True, blank=True)
 
     class Meta:
         abstract = True
@@ -402,6 +407,10 @@ class Goal(models.Model):
     agreed_by = models.ForeignKey(CustomUser, verbose_name='合意した人（マネジメント）', on_delete=models.PROTECT,
                                   null=True, blank=True, related_name='genba_agreed_goals')
     agreement_comment = models.TextField(verbose_name='マネジメントからのコメント', blank=True)
+    # 次の現場へ（一つ上の列を次の目標に。本人が出したときだけ会社のアサインに使う）
+    next_text = models.TextField(verbose_name='次の目標（一つ上の列）', blank=True)
+    share_next = models.BooleanField(verbose_name='アサインの希望として会社に出す', default=False)
+    shared_at = models.DateTimeField(verbose_name='会社に出した日時', null=True, blank=True)
     created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
     updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
 
@@ -432,7 +441,7 @@ class Goal(models.Model):
 class GoalEvidence(models.Model):
     """到達の証拠に選んだ本人の記録"""
 
-    TYPE_CHOICES = [('doc', '文書'), ('term', '用語'), ('issue', 'Issue'), ('summary', 'まとめ')]
+    TYPE_CHOICES = [('doc', '文書'), ('term', '用語'), ('issue', 'Issue'), ('summary', 'まとめ'), ('feedback', 'まとめへの返し')]
 
     goal = models.ForeignKey(Goal, verbose_name='目標', on_delete=models.CASCADE, related_name='evidence')
     record_type = models.CharField(verbose_name='記録の種類', max_length=10, choices=TYPE_CHOICES)
@@ -445,3 +454,45 @@ class GoalEvidence(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class KitProposal(models.Model):
+    """テンプレート・言い回し集・スキルセットの改訂の提案（誰でも出せ、会社の立場が決める）"""
+
+    TARGET_CHOICES = [('checklist', '入場時チェックリスト'), ('phrases', '言い回し集'), ('skillset', '成長の物差し（スキルセット）')]
+    STATUS_CHOICES = [('open', '提案中'), ('adopted', '採用（次の版で反映）'), ('declined', '見送り')]
+
+    target = models.CharField(verbose_name='対象', max_length=10, choices=TARGET_CHOICES)
+    title = models.CharField(verbose_name='題', max_length=100)
+    proposal = models.TextField(verbose_name='提案（足す・直す内容）')
+    reason = models.TextField(verbose_name='理由（現場での教訓）', blank=True)
+    author = models.ForeignKey(CustomUser, verbose_name='提案した人', on_delete=models.PROTECT, related_name='+')
+    status = models.CharField(verbose_name='状態', max_length=10, choices=STATUS_CHOICES, default='open')
+    decided_by = models.ForeignKey(CustomUser, verbose_name='決めた人', on_delete=models.PROTECT,
+                                   null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '改訂の提案'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class InterviewQuestion(models.Model):
+    """営業・面談の質問リスト：振り返りの「約束と実際」から、入場前に確かめる項目を増やす"""
+
+    question = models.CharField(verbose_name='入場前に確かめる質問', max_length=200)
+    industry = models.CharField(verbose_name='業界（任意）', max_length=40, blank=True)
+    source = models.ForeignKey(Document, verbose_name='元になった振り返り', on_delete=models.SET_NULL,
+                               null=True, blank=True, related_name='+')
+    author = models.ForeignKey(CustomUser, verbose_name='足した人', on_delete=models.PROTECT, related_name='+')
+    created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '営業・面談の質問リスト'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return self.question

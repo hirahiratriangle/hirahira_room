@@ -12,9 +12,9 @@ from accounts.models import CustomUser
 from . import growth, kit, kit_data, skillset_data
 from .metrics import site_metrics, weekly_rate
 from .models import (
-    KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term,
-    week_start,
+    KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
+    ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site,
+    StructureGap, Summary, Term, week_start,
 )
 from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
 from .signals import signals_for, weeks_missing_in_row
@@ -138,17 +138,22 @@ class AccessTests(GenbaTestBase):
         self.assertContains(res, '清濁併せ呑む')
 
     def test_team_document_hidden_from_outsider_public_one_visible(self):
-        doc = Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='設計')
+        doc = Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='顧客名入りの設計',
+                                      body='原文の本文')
         self.client.force_login(self.outsider)
         url = reverse('genba:document_detail', args=[doc.pk])
         self.assertEqual(self.client.get(url).status_code, 403)
-        doc.visibility = VISIBILITY_COMPANY
+        doc.visibility, doc.knowledge_status = VISIBILITY_COMPANY, KNOWLEDGE_PUBLISHED
+        doc.public_title, doc.public_body = '一般化した設計', '一般化した本文'
         doc.save()
         res = self.client.get(url)
         self.assertEqual(res.status_code, 200)
-        # 会社公開では顧客（現場）名ではなく業界を出す
+        # 会社公開では一般化した版と業界だけを出す（原文・現場名・書いた人は出さない）
         self.assertContains(res, '製造業')
+        self.assertContains(res, '一般化した本文')
         self.assertNotContains(res, '現場A')
+        self.assertNotContains(res, '原文の本文')
+        self.assertNotContains(res, '顧客名入り')
 
     def test_role_homes_require_role(self):
         self.client.force_login(self.member)
@@ -169,7 +174,8 @@ class AccessTests(GenbaTestBase):
         self.assertNotContains(res, 'member')
 
     def test_company_sees_only_published(self):
-        Term.objects.create(site=self.site, author=self.member, term='公開語', meaning='x', visibility=VISIBILITY_COMPANY)
+        Term.objects.create(site=self.site, author=self.member, term='公開語', meaning='x', visibility=VISIBILITY_COMPANY,
+                            knowledge_status=KNOWLEDGE_PUBLISHED, public_title='公開語', public_body='一般化した意味')
         Term.objects.create(site=self.site, author=self.member, term='非公開語', meaning='y')
         self.add_group(self.outsider, GROUP_COMPANY)
         self.client.force_login(self.outsider)
@@ -247,9 +253,12 @@ class RecordTests(GenbaTestBase):
         self.client.force_login(self.member)
         url = reverse('genba:site_detail', args=[self.site.pk])
         self.assertNotContains(self.client.get(url, {'tab': 'terms'}), '非公開の意味')
-        hidden.visibility = VISIBILITY_COMPANY
+        hidden.visibility, hidden.knowledge_status = VISIBILITY_COMPANY, KNOWLEDGE_PUBLISHED
+        hidden.public_title, hidden.public_body = '締め', '支払の締切（一般化）'
         hidden.save()
-        self.assertContains(self.client.get(url, {'tab': 'terms'}), '保険業の現場では：非公開の意味')
+        res = self.client.get(url, {'tab': 'terms'})
+        self.assertContains(res, '保険業の現場では：支払の締切（一般化）')
+        self.assertNotContains(res, '非公開の意味')
 
     def test_weekly_report_has_four_fields_and_monday(self):
         self.client.force_login(self.member)
@@ -348,30 +357,49 @@ class KnowledgeFlowTests(GenbaTestBase):
         self.client.force_login(user)
         return self.client.post(reverse('genba:knowledge_action', args=[model, obj.pk, action]))
 
+    def publish_url(self, obj, model='doc'):
+        return reverse('genba:knowledge_publish', args=[model, obj.pk])
+
     def test_full_flow(self):
-        doc = Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='設計')
-        self.assertEqual(self.act(self.member, doc, 'candidate').status_code, 302)
+        doc = Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='原文の題', body='原文')
+        # 現場チームの誰でも候補にできる（書いた本人でなくてもよい）
+        self.assertEqual(self.act(self.leader, doc, 'candidate').status_code, 302)
         doc.refresh_from_db()
         self.assertEqual(doc.knowledge_status, KNOWLEDGE_CANDIDATE)
-        self.assertEqual(self.act(self.member, doc, 'review').status_code, 403)
-        self.act(self.leader, doc, 'review')
+        # 本人は公開できない（公開範囲を選ばせない）
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(self.publish_url(doc)).status_code, 403)
+        self.assertEqual(self.act(self.member, doc, 'publish').status_code, 403)
+        # リーダーが一般化した版を書いて公開する
+        self.client.force_login(self.leader)
+        res = self.client.get(self.publish_url(doc))
+        self.assertContains(res, '原文の題')
+        self.client.post(self.publish_url(doc), {'public_title': '一般化した題', 'public_body': '一般化した本文'})
         doc.refresh_from_db()
-        self.assertEqual(doc.knowledge_status, KNOWLEDGE_REVIEWED)
-        self.assertEqual(self.act(self.leader, doc, 'publish').status_code, 403)
-        self.act(self.member, doc, 'publish')
+        self.assertEqual((doc.knowledge_status, doc.visibility, doc.published_by), (KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, self.leader))
+        self.add_group(self.outsider, GROUP_COMPANY)
+        self.client.force_login(self.outsider)
+        res = self.client.get(reverse('genba:company'))
+        self.assertContains(res, '一般化した題')
+        self.assertNotContains(res, '原文の題')
+        # 公開をやめられるのはリーダー
+        self.assertEqual(self.act(self.member, doc, 'unpublish').status_code, 403)
+        self.act(self.leader, doc, 'unpublish')
         doc.refresh_from_db()
-        self.assertEqual(doc.visibility, VISIBILITY_COMPANY)
-        self.act(self.member, doc, 'unpublish')
-        doc.refresh_from_db()
-        self.assertEqual(doc.visibility, VISIBILITY_TEAM)
+        self.assertEqual((doc.knowledge_status, doc.visibility), (KNOWLEDGE_CANDIDATE, VISIBILITY_TEAM))
 
-    def test_cannot_publish_before_review(self):
-        term = Term.objects.create(site=self.site, author=self.member, term='x', meaning='y',
-                                   knowledge_status=KNOWLEDGE_CANDIDATE)
-        self.assertEqual(self.act(self.member, term, 'publish', 'term').status_code, 403)
+    def test_cannot_publish_without_candidate(self):
+        term = Term.objects.create(site=self.site, author=self.member, term='x', meaning='y')
+        self.client.force_login(self.leader)
+        self.assertEqual(self.client.get(self.publish_url(term, 'term')).status_code, 403)
+        self.act(self.member, term, 'candidate', 'term')
         self.act(self.member, term, 'withdraw', 'term')
         term.refresh_from_db()
         self.assertEqual(term.knowledge_status, KNOWLEDGE_NONE)
+
+    def test_outsider_cannot_mark_candidate(self):
+        doc = Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='設計')
+        self.assertEqual(self.act(self.outsider, doc, 'candidate').status_code, 403)
 
     def test_minutes_cannot_be_published(self):
         doc = Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_MINUTES, title='議事録')
@@ -786,3 +814,77 @@ class MetricsV2Tests(GenbaTestBase):
         self.assertContains(res, '契約形態と指示系統の不一致')
         self.assertNotContains(res, '秘密の懸念')
         self.assertNotContains(res, '秘密の部長')
+
+
+
+class CompanyTests(GenbaTestBase):
+    def setUp(self):
+        super().setUp()
+        self.company = CustomUser.objects.create_user('company', 'c@example.com', 'pass12345')
+        self.add_group(self.company, GROUP_COMPANY)
+
+    def goal(self, author, item, level, agreed=True, **kw):
+        return Goal.objects.create(site=self.site, author=author, skill_item=item, current_level=level - 1,
+                                   target_text='t', reached_level=level,
+                                   agreed_on=self.today if agreed else None, **kw)
+
+    def test_distribution_counts_only_agreed_latest(self):
+        self.goal(self.member, 'デザイン', 3)
+        g = self.goal(self.member, 'デザイン', 4)
+        g.agreed_on = self.today + timedelta(days=1)
+        g.save()
+        self.goal(self.leader, 'デザイン', 3, agreed=False)
+        self.goal(self.leader, '業務分析', 4, role='leader', team_size=3, complexity='1,2')
+        rows = {r['item']: r['counts'] for r in growth.skill_distribution()}
+        self.assertEqual(rows['デザイン'], [0, 0, 1, 0])  # 同じ人の同じ項目は最新の1件。合意していないものは数えない
+        self.assertEqual(rows['業務分析'], [0, 0, 1, 0])
+        self.assertEqual(dict(growth.itss_distribution())[4], 1)
+        self.assertEqual({i: n for i, _, n in growth.complexity_experience()}[1], 1)
+        self.assertIn('テクノロジ', growth.thin_items(growth.skill_distribution()))
+
+    def test_company_page_has_no_names_in_distribution(self):
+        self.goal(self.member, 'デザイン', 3)
+        self.client.force_login(self.company)
+        res = self.client.get(reverse('genba:company'))
+        self.assertContains(res, '組織のスキル分布')
+        self.assertNotContains(res, 'member')
+
+    def test_assignment_wish_only_when_shared(self):
+        g = self.goal(self.member, 'デザイン', 3)
+        self.client.force_login(self.member)
+        url = reverse('genba:goal_reach', args=[g.pk])
+        self.client.post(url, {'reached_level': 3, 'next_text': '次はチームに方針を示す'})
+        self.client.force_login(self.company)
+        self.assertNotContains(self.client.get(reverse('genba:company')), '次はチームに方針を示す')
+        self.client.force_login(self.member)
+        self.client.post(url, {'reached_level': 3, 'next_text': '次はチームに方針を示す', 'share_next': 'on'})
+        g.refresh_from_db()
+        self.assertIsNotNone(g.shared_at)
+        self.client.force_login(self.company)
+        self.assertContains(self.client.get(reverse('genba:company')), '次はチームに方針を示す')
+
+    def test_kit_proposal_by_anyone_decided_by_company(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('genba:kit_proposal_create'), {
+            'target': 'checklist', 'title': '項目を足す', 'proposal': '周辺作業の範囲', 'reason': ''})
+        p = KitProposal.objects.get()
+        self.assertEqual(self.client.post(reverse('genba:company'), {'action': 'adopted', 'proposal': p.pk}).status_code, 403)
+        self.client.force_login(self.company)
+        self.client.post(reverse('genba:company'), {'action': 'adopted', 'proposal': p.pk})
+        p.refresh_from_db()
+        self.assertEqual((p.status, p.decided_by), ('adopted', self.company))
+        self.assertContains(self.client.get(reverse('genba:kit')), '項目を足す')
+
+    def test_interview_question_by_company(self):
+        self.client.force_login(self.company)
+        self.client.post(reverse('genba:company'), {'action': 'question', 'question': '周辺作業は範囲に入るか', 'industry': ''})
+        self.assertTrue(InterviewQuestion.objects.filter(question='周辺作業は範囲に入るか').exists())
+
+    def test_leader_feedback_is_evidence(self):
+        Summary.objects.create(site=self.site, author=self.member, submitted_at=timezone.now(), feedback='差',
+                               feedback_by=self.leader, feedback_at=timezone.now())
+        g = Goal.objects.create(site=self.site, author=self.leader, skill_item='リーダーシップ', current_level=3,
+                                target_text='t')
+        rows = growth.candidates(g)
+        self.assertEqual(rows[0]['type'], 'feedback')
+        self.assertTrue(rows[0]['matches'])

@@ -59,6 +59,11 @@
         {% elif object.agreement_comment %}<div class="alert alert-warning small py-2 mb-2">差し戻されました。コメント：{{ object.agreement_comment }}</div>{% endif %}
         <div class="form-check small mb-3">{{ form.request_agreement }} <label class="form-check-label" for="{{ form.request_agreement.id_for_label }}">{{ form.request_agreement.label }}</label>
             <div class="text-muted">依頼すると、この到達の説明と選んだ証拠の名前だけがマネジメントに見えます。合意したあとで中身を変えると、合意はやり直しになります。組織のスキル分布には、合意した到達だけを匿名で使います。</div></div>
+        <h3 class="h6">6. 次の現場へ</h3>
+        <p class="small text-muted">一つ上の列を次の目標にします。{% for n, text in levels %}{% if n == object.reached_level|add:1 %}レベル{{ n }}の記述：「{{ text }}」{% endif %}{% endfor %}</p>
+        <div class="small mb-2"><label class="form-label">{{ form.next_text.label }}</label>{{ form.next_text }}</div>
+        <div class="form-check small mb-3">{{ form.share_next }} <label class="form-check-label" for="{{ form.share_next.id_for_label }}">{{ form.share_next.label }}</label>
+            <div class="text-muted">出すと、次の目標の文だけが会社の画面に「アサインの希望」として並び、目標に合う現場を選ぶ材料になります。</div></div>
         {% if writable %}<button class="btn btn-primary">保存</button>{% endif %}
     </div>
 </div>

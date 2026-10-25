@@ -4,7 +4,9 @@
 目安はあくまで目安で、本人が説明に使う。他人が記録で採点するためには使わない（憲章 V）。
 """
 from . import skillset_data as data
-from .models import Document, Question, Summary, Term
+from collections import Counter, defaultdict
+
+from .models import Document, Goal, Question, Summary, Term
 
 SKILL_ITEMS = [i['name'] for i in data.SKILL_ITEMS]
 
@@ -20,6 +22,7 @@ AUTO_SKILLS = {
     ('issue', 'scope_out'): ('ネゴシエーション', '方針と責任範囲の合意'),
     ('issue', 'schedule'): ('プロジェクトマネジメント', '担当機能の設計スケジュール管理'),
     ('summary', None): ('知的資産管理活用', '理解の資料化と再利用'),
+    ('feedback', None): ('リーダーシップ', '後進の指導'),
 }
 
 ROLE_LABELS = {'member': 'メンバー', 'leader': 'リーダー', 'owner': '責任者'}
@@ -54,7 +57,16 @@ def _issue_key(q):
     return None
 
 
+class FeedbackGiven:
+    """リーダーがまとめに返した記録（リーダーの証拠：後進の指導）"""
+
+    def __init__(self, summary):
+        self.summary, self.pk = summary, summary.pk
+
+
 def record_type(record):
+    if isinstance(record, FeedbackGiven):
+        return 'feedback'
     return {Document: 'doc', Term: 'term', Question: 'issue', Summary: 'summary'}[type(record)]
 
 
@@ -79,6 +91,8 @@ def record_title(record):
     if rtype == 'issue':
         labels = '・'.join(record.labels) or record.get_kind_display()
         return f'{labels}：{record.title}'
+    if rtype == 'feedback':
+        return f'まとめへの返し：{record.summary.author.username} さん'
     return '1週目のまとめ'
 
 
@@ -89,6 +103,7 @@ def own_records(user, site):
         *site.terms.filter(author=user),
         *site.questions.filter(author=user, stage='').exclude(kind=Question.KIND_TASK, due_on__isnull=True),
         *site.summaries.filter(author=user).exclude(submitted_at__isnull=True),
+        *(FeedbackGiven(s) for s in site.summaries.filter(feedback_by=user).select_related('author')),
     ]
     return records
 
@@ -154,3 +169,52 @@ def paste_text(goal, evidence_titles):
         lines.append(f'ITSSレベル{level}相当（立場：{ROLE_LABELS[goal.role]}、ピーク時要員：{goal.team_size or "―"}人、'
                      f'複雑性：{nums}）')
     return '\n'.join(lines)
+
+
+def agreed_reaches():
+    """合意した到達を、本人×項目ごとに最新の1件にする（組織のスキル分布に使う。名前は外に出さない）"""
+    latest = {}
+    for g in Goal.objects.filter(agreed_on__isnull=False, reached_level__isnull=False).order_by('agreed_on', 'pk'):
+        latest[(g.author_id, g.skill_item)] = g
+    return list(latest.values())
+
+
+def skill_distribution(reaches=None):
+    """ITSS 11項目 × レベル2〜5 の人数 [{'item', 'counts': {2: n, ...}, 'level3_up'}]"""
+    reaches = agreed_reaches() if reaches is None else reaches
+    counts = defaultdict(Counter)
+    for g in reaches:
+        counts[g.skill_item][g.reached_level] += 1
+    return [
+        {'item': item, 'counts': [counts[item][n] for n in (2, 3, 4, 5)],
+         'level3_up': sum(v for n, v in counts[item].items() if n >= 3)}
+        for item in SKILL_ITEMS
+    ]
+
+
+def itss_distribution(reaches=None):
+    """ITSS レベル相当の目安ごとの人数（本人ごとに一番高いもの）"""
+    reaches = agreed_reaches() if reaches is None else reaches
+    best = {}
+    for g in reaches:
+        level = itss_equivalent(g.role, g.team_size, len(g.complexity_numbers))
+        if level:
+            best[g.author_id] = max(best.get(g.author_id, 0), level)
+    c = Counter(best.values())
+    return [(n, c[n]) for n in (3, 4, 5)]
+
+
+def complexity_experience(reaches=None):
+    """経験した複雑性の項目ごとの人数"""
+    reaches = agreed_reaches() if reaches is None else reaches
+    people = defaultdict(set)
+    for g in reaches:
+        for n in g.complexity_numbers:
+            people[n].add(g.author_id)
+    return [(i, text, len(people[i])) for i, text in enumerate(data.COMPLEXITY, 1)]
+
+
+def thin_items(distribution):
+    """レベル3以上の人数が一番少ない項目（育成への再投資の候補）"""
+    low = min(row['level3_up'] for row in distribution)
+    return [row['item'] for row in distribution if row['level3_up'] == low]

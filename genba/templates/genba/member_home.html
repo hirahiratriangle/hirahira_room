@@ -39,7 +39,7 @@
             <h3 class="h6">文書</h3>
             <ul class="list-group">
                 {% for d in found_docs %}
-                <li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a>
+                <li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{% if d.site in sites %}{{ d.title }}{% else %}{{ d.public_title }}{% endif %}</a>
                     <span class="text-muted">／ {{ d.get_kind_display }} ・ {% if d.site in sites %}{{ d.site.name }}{% else %}{{ d.site.industry }}（会社公開）{% endif %}</span></li>
                 {% empty %}<li class="list-group-item small text-muted">見つかりませんでした</li>{% endfor %}
             </ul>
@@ -48,7 +48,7 @@
             <h3 class="h6">用語</h3>
             <ul class="list-group">
                 {% for t in found_terms %}
-                <li class="list-group-item small"><strong>{{ t.term }}</strong>：{{ t.meaning|truncatechars:60 }}
+                <li class="list-group-item small">{% if t.site in sites %}<strong>{{ t.term }}</strong>：{{ t.meaning|truncatechars:60 }}{% else %}<strong>{{ t.public_title }}</strong>：{{ t.public_body|truncatechars:60 }}{% endif %}
                     <span class="text-muted">／ {% if t.site in sites %}{{ t.site.name }}{% else %}{{ t.site.industry }}（会社公開）{% endif %}</span></li>
                 {% empty %}<li class="list-group-item small text-muted">見つかりませんでした</li>{% endfor %}
             </ul>

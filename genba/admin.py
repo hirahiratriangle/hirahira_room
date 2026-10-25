@@ -1,7 +1,8 @@
 from django.contrib import admin
 
 from .models import (
-    ChecklistItem, Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term,
+    ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site,
+    StructureGap, Summary, Term,
 )
 
 
@@ -72,3 +73,14 @@ class GoalAdmin(admin.ModelAdmin):
 class StructureGapAdmin(admin.ModelAdmin):
     list_display = ('site', 'role_kind', 'on_chart', 'actual', 'created_at')
     list_filter = ('site', 'role_kind')
+
+
+@admin.register(KitProposal)
+class KitProposalAdmin(admin.ModelAdmin):
+    list_display = ('title', 'target', 'status', 'author', 'created_at')
+    list_filter = ('target', 'status')
+
+
+@admin.register(InterviewQuestion)
+class InterviewQuestionAdmin(admin.ModelAdmin):
+    list_display = ('question', 'industry', 'created_at')

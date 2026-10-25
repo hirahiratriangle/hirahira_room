@@ -3,7 +3,7 @@
 {% block genba_title %}言い回し集{% endblock %}
 
 {% block genba_contents %}
-<h2 class="h5 mb-3" style="color: #2c5aa0;">言い回し集</h2>
+<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0" style="color: #2c5aa0;">言い回し集</h2><a class="btn btn-outline-primary btn-sm" href="{% url 'genba:kit_proposal_create' %}?target=phrases">一言を提案する</a></div>
 
 <section class="mb-5">
     <h3 class="h6">確認のための言い回し</h3>

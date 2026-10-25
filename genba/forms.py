@@ -2,7 +2,9 @@ from django import forms
 from django.utils import timezone
 
 from . import growth
-from .models import Document, Goal, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term
+from .models import (
+    Document, Goal, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term,
+)
 
 
 class BootstrapMixin:
@@ -237,8 +239,8 @@ class ReachForm(BootstrapMixin, forms.ModelForm):
 
     class Meta:
         model = Goal
-        fields = ['reached_level', 'explanation', 'mentored', 'role', 'team_size']
-        widgets = {'explanation': forms.Textarea(attrs={'rows': 4})}
+        fields = ['reached_level', 'explanation', 'mentored', 'role', 'team_size', 'next_text', 'share_next']
+        widgets = {'explanation': forms.Textarea(attrs={'rows': 4}), 'next_text': forms.Textarea(attrs={'rows': 2})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -256,6 +258,10 @@ class ReachForm(BootstrapMixin, forms.ModelForm):
             goal.agreement_requested_at, goal.agreed_on, goal.agreed_by = None, None, None
         elif not goal.agreement_requested_at:
             goal.agreement_requested_at = timezone.now()
+        if not goal.share_next or not goal.next_text.strip():
+            goal.share_next, goal.shared_at = False, None
+        elif not goal.shared_at:
+            goal.shared_at = timezone.now()
         if commit:
             goal.save()
         return goal
@@ -272,6 +278,48 @@ class PromiseCheckForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = PromiseCheck
         fields = ['promise', 'actual', 'is_gap']
+
+
+def publish_form_for(model):
+    """一般化した版を書くフォーム（文書・用語のどちらにも使う）"""
+    target_model = model
+
+    class PublishForm(BootstrapMixin, forms.ModelForm):
+        class Meta:
+            model = target_model
+            fields = ['public_title', 'public_body']
+            widgets = {'public_body': forms.Textarea(attrs={'rows': 8})}
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.fields['public_title'].required = True
+            self.fields['public_body'].required = True
+            if model is Term:
+                self.fields['public_title'].label = '用語（一般化）'
+                self.fields['public_body'].label = '意味（一般化）'
+
+    return PublishForm
+
+
+class KitProposalForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = KitProposal
+        fields = ['target', 'title', 'proposal', 'reason']
+        widgets = {'proposal': forms.Textarea(attrs={'rows': 4}), 'reason': forms.Textarea(attrs={'rows': 3})}
+
+
+class InterviewQuestionForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = InterviewQuestion
+        fields = ['question', 'industry', 'source']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['source'].queryset = Document.objects.filter(kind=Document.KIND_RETRO, visibility='company')
+        self.fields['source'].label_from_instance = lambda d: f'{d.public_title}（{d.site.industry}）'
+        self.fields['source'].empty_label = '元になった振り返り（任意）'
+        self.fields['question'].widget.attrs['placeholder'] = '入場前に確かめる質問'
+        self.fields['industry'].widget.attrs['placeholder'] = '業界（任意）'
 
 
 class SearchForm(forms.Form):

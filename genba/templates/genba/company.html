@@ -3,47 +3,135 @@
 {% block genba_title %}会社{% endblock %}
 
 {% block genba_contents %}
-<h2 class="h5 mb-2" style="color: #2c5aa0;">ナレッジ資産</h2>
-<p class="small text-muted">書いた本人が会社公開に切り替えた記録だけを表示します。顧客名の代わりに業界を出します。</p>
-<form method="get" class="d-flex gap-2 mb-4">{{ search_form.q }}<button class="btn btn-primary text-nowrap">検索</button>{% if query %}<a href="{% url 'genba:company' %}" class="btn btn-outline-secondary text-nowrap">クリア</a>{% endif %}</form>
+<ul class="nav nav-tabs small mb-3">
+    <li class="nav-item"><a class="nav-link" href="#assets">ナレッジ資産</a></li>
+    <li class="nav-item"><a class="nav-link" href="#power">組織の力とアサイン</a></li>
+    <li class="nav-item"><a class="nav-link" href="#growth">成長のつながり</a></li>
+</ul>
 
-<div class="row g-4">
-    <section class="col-lg-6">
-        <h3 class="h6"><i class="fas fa-book me-1"></i>横断の用語集（業界別）</h3>
-        {% for industry, terms in terms_by_industry.items %}
-        <div class="mb-3">
-            <div class="small fw-bold text-muted">{{ industry }}</div>
-            <dl class="small mb-0">
-                {% for t in terms %}<dt>{{ t.term }}</dt><dd class="mb-1">{{ t.meaning }}{% if t.has_gap %}<br><span class="text-warning-emphasis">一般的な意味との違い：{{ t.general_difference }}</span>{% endif %}</dd>{% endfor %}
-            </dl>
+<section id="assets" class="mb-5">
+    <h2 class="h5 mb-2" style="color: #2c5aa0;">ナレッジ資産：現場をまたいで再利用できる記録</h2>
+    <p class="small text-muted">リーダーが一般化して公開した版だけを表示します。顧客名の代わりに業界を出し、原文・現場名・個人名は出しません。</p>
+    <div class="d-flex flex-wrap align-items-center gap-2 small mb-3">
+        <span class="badge bg-light text-dark border fw-normal">メンバーが「ナレッジ候補」を付ける</span><i class="fas fa-arrow-right text-muted"></i>
+        <span class="badge bg-light text-dark border fw-normal">リーダーが一般化を確認</span><i class="fas fa-arrow-right text-muted"></i>
+        <span class="badge bg-light text-dark border fw-normal">一般化して会社に公開</span>
+    </div>
+    <form method="get" class="d-flex gap-2 mb-4">{{ search_form.q }}<button class="btn btn-primary text-nowrap">検索</button>{% if query %}<a href="{% url 'genba:company' %}" class="btn btn-outline-secondary text-nowrap">クリア</a>{% endif %}</form>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <h3 class="h6"><i class="fas fa-book me-1"></i>業界別の用語辞書</h3>
+            {% for industry, terms in terms_by_industry.items %}
+            <div class="mb-3"><div class="small fw-bold text-muted">{{ industry }}</div>
+                <dl class="small mb-0">{% for t in terms %}<dt>{{ t.public_title }}</dt><dd class="mb-1 genba-pre">{{ t.public_body }}</dd>{% endfor %}</dl>
+            </div>
+            {% empty %}<p class="small text-muted">公開された用語はまだありません</p>{% endfor %}
+
+            <h3 class="h6 mt-3"><i class="fas fa-question me-1"></i>営業・面談の質問リスト</h3>
+            <p class="small text-muted">振り返りの「約束と実際」から、入場前に確かめる質問を増やします。</p>
+            <ol class="small">{% for q in questions %}<li>{{ q.question }}{% if q.industry %} <span class="text-muted">（{{ q.industry }}）</span>{% endif %}{% if q.source %} <a href="{% url 'genba:document_detail' q.source.pk %}" class="text-muted">元の振り返り</a>{% endif %}</li>{% empty %}<li class="text-muted list-unstyled">まだありません</li>{% endfor %}</ol>
+            <form method="post" class="card"><div class="card-body py-2">
+                {% csrf_token %}<input type="hidden" name="action" value="question">
+                <div class="row g-2">
+                    <div class="col-12">{{ question_form.question }}{% for e in question_form.question.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+                    <div class="col-md-4">{{ question_form.industry }}</div>
+                    <div class="col-md-5">{{ question_form.source }}</div>
+                    <div class="col-md-3"><button class="btn btn-outline-primary btn-sm w-100">足す</button></div>
+                </div>
+            </div></form>
         </div>
-        {% empty %}<p class="small text-muted">公開された用語はまだありません</p>{% endfor %}
-    </section>
 
-    <section class="col-lg-6">
-        <h3 class="h6"><i class="fas fa-drafting-compass me-1"></i>設計判断の先例</h3>
-        <ul class="list-group mb-4">
-            {% for d in designs %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a> <span class="text-muted">／ {{ d.site.industry }}</span></li>
-            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
-        </ul>
+        <div class="col-lg-6">
+            <h3 class="h6"><i class="fas fa-drafting-compass me-1"></i>設計判断の先例</h3>
+            <ul class="list-group mb-3">
+                {% for d in designs %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.public_title }}</a> <span class="text-muted">／ {{ d.site.industry }}</span></li>
+                {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+            </ul>
+            <h3 class="h6"><i class="fas fa-redo me-1"></i>振り返り（約束と実際）</h3>
+            <ul class="list-group mb-3">
+                {% for d in retros %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.public_title }}</a> <span class="text-muted">／ {{ d.site.industry }}</span></li>
+                {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+            </ul>
+            <h3 class="h6"><i class="fas fa-comments me-1"></i>面談メモ・言葉のズレ</h3>
+            <ul class="list-group mb-3">
+                {% for d in interviews %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.public_title }}</a> <span class="text-muted">／ {{ d.site.industry }}</span></li>
+                {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+            </ul>
+            <h3 class="h6"><i class="fas fa-sync me-1"></i>テンプレートの改訂の提案</h3>
+            <p class="small text-muted">チェックリスト・言い回し集・成長の物差しを、現場ごとの教訓で育てます。<a href="{% url 'genba:kit_proposal_create' %}">提案する</a></p>
+            <ul class="list-group">
+                {% for p in proposals %}
+                <li class="list-group-item small">
+                    <div class="d-flex flex-wrap justify-content-between gap-2">
+                        <span><span class="badge bg-light text-dark border">{{ p.get_target_display }}</span> <strong>{{ p.title }}</strong></span>
+                        {% if p.status == 'open' %}
+                        <form method="post" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="proposal" value="{{ p.pk }}">
+                            <button class="btn btn-outline-success btn-sm py-0" name="action" value="adopted">採用</button>
+                            <button class="btn btn-outline-secondary btn-sm py-0" name="action" value="declined">見送り</button></form>
+                        {% else %}<span class="badge {% if p.status == 'adopted' %}bg-success{% else %}bg-secondary{% endif %}">{{ p.get_status_display }}</span>{% endif %}
+                    </div>
+                    <div class="genba-pre">{{ p.proposal }}</div>{% if p.reason %}<div class="text-muted">理由：{{ p.reason }}</div>{% endif %}
+                </li>
+                {% empty %}<li class="list-group-item small text-muted">提案はありません</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+</section>
 
-        <h3 class="h6"><i class="fas fa-redo me-1"></i>振り返り</h3>
-        <ul class="list-group mb-4">
-            {% for d in retros %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a> <span class="text-muted">／ {{ d.site.industry }}{% if d.skill_item %} ・ {{ d.skill_item }}{% endif %}</span></li>
-            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
-        </ul>
+<section id="power" class="mb-5">
+    <h2 class="h5 mb-2" style="color: #2c5aa0;">組織の力とアサイン：個人の到達を、組織の力と次のアサインに変える</h2>
+    <p class="small text-muted">「記録で人を採点しない」は変えません。集計に使うのは、本人と課長が合意した到達だけ（{{ reach_people }}人分）で、名前は出しません。</p>
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <h3 class="h6">1. 組織のスキル分布（ITSS 11項目 × レベルの人数）</h3>
+            <div class="table-responsive"><table class="table table-sm small">
+                <thead class="text-muted"><tr><th>スキル項目</th><th>レベル2</th><th>レベル3</th><th>レベル4</th><th>レベル5</th></tr></thead>
+                <tbody>{% for row in distribution %}<tr class="{% if row.item in thin_items %}genba-alert-cell{% endif %}"><td>{{ row.item }}</td>{% for n in row.counts %}<td>{% if n %}{{ n }}人{% else %}<span class="text-muted">―</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+            </table></div>
+            <h3 class="h6">4. 育成への再投資（薄い項目）</h3>
+            <p class="small">レベル3以上の人が一番少ない項目：<strong>{{ thin_items|join:"、" }}</strong>。ナレッジ・チェックリスト・勉強会で補う候補です。</p>
+        </div>
+        <div class="col-lg-5">
+            <h3 class="h6">2. 次に狙う案件を決める</h3>
+            <table class="table table-sm small mb-2">
+                <thead class="text-muted"><tr><th>ITSSレベル相当の目安</th><th>人数</th><th>担える立場</th></tr></thead>
+                <tbody>{% for level, n in itss %}<tr><td>レベル{{ level }}相当</td><td>{{ n }}人</td><td>{% if level == 3 %}要員として参画{% elif level == 4 %}チームリーダー枠（3人以上）{% else %}開発チーム責任者枠{% endif %}</td></tr>{% endfor %}</tbody>
+            </table>
+            <div class="small text-muted mb-1">経験した複雑性（人数）</div>
+            <ul class="small ps-3">{% for i, text, n in complexity %}<li class="{% if not n %}text-muted{% endif %}">{{ i }}. {{ text }}：{{ n }}人</li>{% endfor %}</ul>
+        </div>
+    </div>
+    <h3 class="h6">3. 目標に合う現場へアサイン（本人が出したアサインの希望）</h3>
+    <p class="small text-muted">到達のあとで、本人が次の目標（一つ上の列）を書き、「アサインの希望として会社に出す」としたものだけが並びます。</p>
+    <ul class="list-group">
+        {% for g in next_goals %}<li class="list-group-item small"><strong>{{ g.author.username }}</strong>　{{ g.skill_item }}：{{ g.next_text }} <span class="text-muted">（{{ g.shared_at|date:"n/j" }}）</span></li>
+        {% empty %}<li class="list-group-item small text-muted">アサインの希望はありません</li>{% endfor %}
+    </ul>
+</section>
 
-        <h3 class="h6"><i class="fas fa-comments me-1"></i>面談メモ・言葉のズレ</h3>
-        <ul class="list-group mb-4">
-            {% for d in interviews %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a> <span class="text-muted">／ {{ d.site.industry }}</span></li>
-            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
-        </ul>
+<section id="growth">
+    <h2 class="h5 mb-2" style="color: #2c5aa0;">成長のつながり：個人の成長と会社の成長を、同じ物差しでつなぐ</h2>
+    <table class="table table-sm small">
+        <thead class="text-muted"><tr><th>ITSSの達成度</th><th>個人の成長</th><th>会社の成長</th></tr></thead>
+        <tbody>{% for a, b, c in growth_links %}<tr><td class="text-nowrap fw-bold">{{ a }}</td><td>{{ b }}</td><td>{{ c }}</td></tr>{% endfor %}</tbody>
+    </table>
+    <div class="d-flex flex-wrap align-items-center gap-2 small mb-2">
+        {% for step in growth_loop %}<span class="badge bg-light text-dark border fw-normal">{{ step }}</span>{% if not forloop.last %}<i class="fas fa-arrow-right text-muted"></i>{% else %}<i class="fas fa-redo text-muted"></i>{% endif %}{% endfor %}
+    </div>
+    <p class="small text-muted">{{ growth_note }}</p>
 
-        <h3 class="h6"><i class="fas fa-tags me-1"></i>スキル対応（基本設計スキルセット）</h3>
-        <ul class="list-group">
-            {% for item, n in skills %}<li class="list-group-item small d-flex justify-content-between"><span>{{ item }}</span><span class="badge bg-secondary">{{ n }}件</span></li>
-            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
-        </ul>
-    </section>
-</div>
+    <h3 class="h6 mt-3">立場ごとに、成長の視点が違う</h3>
+    <div class="row g-2">
+        {% for role, aim, level, evidence in role_growth %}
+        <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-body small">
+            <div class="fw-bold" style="color:#2c5aa0;">{{ role }}</div>
+            <div class="fw-bold mb-1">{{ aim }}</div>
+            <div><span class="text-muted">目安：</span>{{ level }}</div>
+            <div><span class="text-muted">証拠：</span>{{ evidence }}</div>
+        </div></div></div>
+        {% endfor %}
+    </div>
+    <p class="small text-muted mt-2">{{ role_growth_note }}</p>
+</section>
 {% endblock %}

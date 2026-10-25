@@ -180,7 +180,7 @@
         </div>
         {% if t.meaning %}<div class="small genba-pre">{{ t.meaning }}</div>{% else %}<div class="small text-muted"><i class="fas fa-question-circle me-1"></i>意味を確認中</div>{% endif %}
         {% if t.has_gap %}<div class="small text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>一般的な意味との違い：{{ t.general_difference }}</div>{% endif %}
-        {% for o in others %}<div class="small text-muted"><i class="fas fa-exchange-alt me-1"></i>{{ o.site.industry }}の現場では：{{ o.meaning|default:"（意味なし）" }}</div>{% endfor %}
+        {% for o in others %}<div class="small text-muted"><i class="fas fa-exchange-alt me-1"></i>{{ o.site.industry }}の現場では：{{ o.public_body|default:"（意味なし）" }}</div>{% endfor %}
     </div>
     {% empty %}<p class="text-muted small">まだありません</p>{% endfor %}
 </div>
