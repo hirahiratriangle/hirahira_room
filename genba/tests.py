@@ -449,11 +449,26 @@ class MetricsTests(GenbaTestBase):
 
 
 class SeedCommandTests(TestCase):
+    def test_old_demo_user_leaves_role_groups(self):
+        CustomUser.objects.create_user('me', 'me@example.com', 'pass12345')
+        kacho = CustomUser.objects.create_user('demo_kacho', 'k@example.com', 'pass12345')
+        kacho.groups.add(Group.objects.get_or_create(name=GROUP_MANAGEMENT)[0])
+        call_command('seed_genba', '--user', 'me', stdout=StringIO())
+        self.assertFalse(kacho.groups.exists())
+
     def test_seed_twice(self):
         user = CustomUser.objects.create_user('me', 'me@example.com', 'pass12345')
         for _ in range(2):
             call_command('seed_genba', '--user', 'me', stdout=StringIO())
-        self.assertEqual(Site.objects.count(), 3)
+        self.assertEqual(Site.objects.count(), 4)
+        counts = {s.repo_name: (s.memberships.filter(role=Membership.ROLE_LEADER).count(),
+                                s.memberships.filter(role=Membership.ROLE_MEMBER).count()) for s in Site.objects.all()}
+        self.assertEqual(counts, {'genba-demo-order': (1, 2), 'genba-demo-logistics': (0, 1),
+                                  'genba-demo-claims': (1, 4), 'genba-demo-stock': (0, 1)})
+        solo = Goal.objects.filter(site__repo_name__in=['genba-demo-logistics', 'genba-demo-stock'])
+        self.assertTrue(all(g.is_solo for g in solo))
+        self.assertEqual(list(CustomUser.objects.filter(groups__name=GROUP_MANAGEMENT)), [user])
+        self.assertEqual(list(CustomUser.objects.filter(groups__name=GROUP_COMPANY)), [user])
         self.client.force_login(user)
         for name in ('portal', 'kit', 'phrases', 'skillset', 'member_home', 'leader_home', 'management', 'company'):
             self.assertEqual(self.client.get(reverse(f'genba:{name}')).status_code, 200, name)

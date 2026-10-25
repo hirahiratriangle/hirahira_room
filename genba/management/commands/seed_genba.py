@@ -2,17 +2,36 @@
 
     python manage.py seed_genba --user <ユーザー名>
 
-指定したユーザーを「受発注」現場のリーダー、「保険金請求」現場のメンバーにし、
-マネジメント・会社のグループにも入れて、4つの立場の画面をひとりで見られるようにする。
-デモの現場（リポジトリ名が genba-demo- で始まるもの）は毎回作り直す。
+指定したユーザー（本番では未ログインの人が使う genba_guest）に4つの立場を兼ねさせ、
+ひとりで全部の画面を見られるようにする。人数は指定したユーザーを含めて次のとおり。
+
+| チーム | リーダー | メンバー |
+|---|---|---|
+| 1 受発注 | 指定したユーザー | demo_sato・demo_suzuki（受発注システム刷新）、demo_takahashi（ひとり現場）＝3人 |
+| 2 保険金請求 | demo_tanaka | 指定したユーザー・demo_ito・demo_watanabe・demo_yamamoto（保険金請求 基本設計）、
+|  |  | demo_nakamura（ひとり現場）＝5人 |
+| マネジメント | 指定したユーザー（1人） | |
+| 会社 | 指定したユーザー（1人） | |
+
+それぞれのチームに、ひとり現場（自社のリーダーが現場にいない）に入っている人を1人ずつ置く。
+ひとり現場は、その人だけがメンバーとして入っている現場として作る。確認するリーダーがいないので、
+到達はマネジメントが確認と承認を行う（構想書スライド22）。
+
+デモの現場（リポジトリ名が genba-demo- で始まるもの）と、デモのユーザーが出した改訂の提案・質問リストは
+毎回作り直す。前の版の seed で作ったデモのユーザー（demo_kacho など）は、立場のグループから外す
+（マネジメント・会社が指定したユーザー1人になるように）。
 
 筋書き：
 - 受発注（リーダー）：入場から10週。チェックリストはほぼ済み、まとめはリーダーと確認済み。
-  目標（プロジェクトマネジメント レベル3→4）の到達を課長（demo_kacho）が承認済み。
-  demo_sato の到達の確認がリーダーの画面に届いている
-- 保険金請求（メンバー）：入場から6日。1週目の途中で、3日止まっている「読めない」があり、
-  まとめはまだ出していない → 危険信号が2つ出る。目標（デザイン レベル3→4）を立てている
-- 店舗在庫（入っていない）：マネジメント・会社の画面でだけ見える
+  demo_sato の到達の確認がリーダーの画面に届いている。demo_suzuki の到達は承認済み。
+  自分の目標（プロジェクトマネジメント レベル3→4）は記入中（マネジメントが自分1人なので、自分では承認しない）
+- 物流の出荷バッチ改修（ひとり現場・demo_takahashi）：到達はマネジメントが元請の声を聞き取って承認済み
+- 保険金請求（メンバー）：現場は12週目、自分は入場から6日。1週目の途中で、3日止まっている「読めない」があり、
+  まとめはまだ出していない → 危険信号が2つ出る。目標（デザイン レベル3→4）を立てている。
+  demo_watanabe の到達はリーダーが確認済みで、マネジメントの承認待ちに届いている。
+  公開された振り返り・用語、質問リスト、改訂の提案も、この現場から出す
+- 店舗在庫の可視化（ひとり現場・demo_nakamura）：到達の確認を依頼していて、マネジメントの画面に
+  「確認して承認する」で届いている。スコープ外の作業と体制のズレが運営指標に出る
 """
 from datetime import timedelta
 
@@ -31,14 +50,15 @@ from genba.models import (
 from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
 DEMO_PREFIX = 'genba-demo-'
-DEMO_USERS = ['demo_sato', 'demo_suzuki', 'demo_tanaka', 'demo_ito', 'demo_kacho']
+DEMO_USERS = ['demo_sato', 'demo_suzuki', 'demo_takahashi',
+              'demo_tanaka', 'demo_ito', 'demo_watanabe', 'demo_yamamoto', 'demo_nakamura']
 
 # チェックリストの段階ごとの予定日（入場日からの日数）
 STAGE_DUE = {'pre': -1, 'day1': 0, 'week1': 4, 'week2': 14}
 
 
 class Command(BaseCommand):
-    help = 'genba のデモデータ（3現場）を作り直す'
+    help = 'genba のデモデータ（チームの現場2つ・ひとり現場2つ）を作り直す'
 
     def add_arguments(self, parser):
         parser.add_argument('--user', required=True, help='4つの立場を割り当てるユーザー名')
@@ -51,6 +71,10 @@ class Command(BaseCommand):
             raise CommandError(f'ユーザー {options["user"]} がいません')
 
         Site.objects.filter(repo_name__startswith=DEMO_PREFIX).delete()
+        # 現場に属さない記録（改訂の提案・質問リスト）は、デモのユーザーが出したものだけ消す。
+        # 本物の利用者が出したものは残す。作り直すたびに重ならないように
+        KitProposal.objects.filter(author__username__startswith='demo_').delete()
+        InterviewQuestion.objects.filter(author__username__startswith='demo_').delete()
         users = {}
         for name in DEMO_USERS:
             u, created = CustomUser.objects.get_or_create(username=name, defaults={'email': f'{name}@example.com'})
@@ -58,18 +82,22 @@ class Command(BaseCommand):
                 u.set_unusable_password()
                 u.save()
             users[name] = u
-        sato, suzuki, tanaka, ito, self.kacho = (users[n] for n in DEMO_USERS)
-        for g in (GROUP_MANAGEMENT, GROUP_COMPANY):
-            me.groups.add(Group.objects.get_or_create(name=g)[0])
-        self.kacho.groups.add(Group.objects.get(name=GROUP_MANAGEMENT))
+        self.me = me
+        groups = [Group.objects.get_or_create(name=g)[0] for g in (GROUP_MANAGEMENT, GROUP_COMPANY)]
+        me.groups.add(*groups)
+        # マネジメント・会社は指定したユーザー1人だけにする。前の版のデモのユーザー（demo_kacho など）が
+        # グループに残っていたら外す（デモのユーザーは誰もこの2つの立場を持たない）
+        for u in CustomUser.objects.filter(username__startswith='demo_', groups__in=groups).distinct():
+            u.groups.remove(*groups)
 
         self.now = timezone.now()
         self.today = timezone.localdate()
-        self.seed_order(me, sato, suzuki)
-        self.seed_claims(me, tanaka)
-        self.seed_stock(ito)
+        self.seed_order(me, users['demo_sato'], users['demo_suzuki'])
+        self.seed_logistics(users['demo_takahashi'])
+        self.seed_claims(me, *(users[n] for n in ('demo_tanaka', 'demo_ito', 'demo_watanabe', 'demo_yamamoto')))
+        self.seed_stock(users['demo_nakamura'])
         self.stdout.write(self.style.SUCCESS(
-            f'デモの現場を3つ作りました。{me.username} でログインして /genba/ を開いてください。'))
+            f'デモの現場を4つ（うちひとり現場2つ）作りました（{me.username} が4つの立場を兼ねます）。'))
 
     # ---- 共通 ----
 
@@ -79,8 +107,12 @@ class Command(BaseCommand):
                     public_body=body, published_by=leader, published_at=self.now - timedelta(days=3))
 
     def approved(self, level, grade, confirmed_by, days=2, comment='', customer_voice=''):
+        """記入・確認・承認が済んだ到達の欄。承認するのはマネジメント（指定したユーザー）。
+
+        days 日前に承認、その前日に確認、さらに前日に確認を依頼した、という順に日付を並べる。
+        """
         return dict(submitted_at=self.ago(days + 2), confirmed_at=self.ago(days + 1), confirmed_by=confirmed_by,
-                    customer_voice=customer_voice, approved_on=self.today - timedelta(days=days), approved_by=self.kacho,
+                    customer_voice=customer_voice, approved_on=self.today - timedelta(days=days), approved_by=self.me,
                     approved_level=level, approved_grade=grade, approval_comment=comment)
 
     def ago(self, days):
@@ -241,9 +273,7 @@ class Command(BaseCommand):
             preparation='マスタースケジュールの読み方と、課題管理表の運用を確認しておく。', created_at=self.ago(71),
             reached_level=4, mentored=True, role='leader', team_size=3, complexity='1,4',
             explanation='3人の設計チームの課題とリスクを週次で棚卸しし、レビュー計画に組み込んだ。仕様書が最新でない課題は、影響と見込みを添えて上げた。',
-            next_text='10人以上の開発チームのコスト・スケジュール・リスクを管理し、他を指導する',
-            **self.approved(4, 'A', confirmed_by=self.kacho,
-                            comment='チームの課題管理が回っていた。次はレベル4の「デザイン」も視野に。'))
+            next_text='10人以上の開発チームのコスト・スケジュール・リスクを管理し、他を指導する')
         problem = site.questions.get(title='旧システムの仕様書が最新でない')
         GoalEvidence.objects.create(goal=goal, record_type='issue', record_id=problem.pk, title=f'課題：{problem.title}')
         sato_goal = Goal.objects.create(
@@ -259,18 +289,24 @@ class Command(BaseCommand):
                             team_size=3, complexity='1', explanation='帳票20本の出力設計を、画面項目との対応を含めて独力で設計した。',
                             **self.approved(3, 'B', confirmed_by=me, days=28))
 
-    # ---- 現場2: 保険金請求の基本設計（自分はメンバー。入場から6日） ----
+    # ---- 現場2: 保険金請求の基本設計（自分はメンバー。現場は12週目、自分は入場から6日） ----
 
-    def seed_claims(self, me, tanaka):
-        started = self.today - timedelta(days=6)
+    def seed_claims(self, me, tanaka, ito, watanabe, yamamoto):
+        started = self.today - timedelta(weeks=12)
         site = Site.objects.create(
             name='保険金請求 基本設計', repo_name=f'{DEMO_PREFIX}claims', industry='保険業',
             description='保険金請求の受付から支払までの業務フローと画面の基本設計。', started_on=started,
         )
+        others = (ito, watanabe, yamamoto)
         self.join(site, tanaka, Membership.ROLE_LEADER, duty='PM')
-        self.join(site, me, duty='業務フロー設計')
-        for stage in kit.STAGE_LABELS:
-            self.check_items(site, tanaka, stage)
+        for user, duty in zip(others, ('交渉・要件調整', '画面設計', '帳票設計')):
+            self.join(site, user, duty=duty)
+        # 自分だけ後から入場した（危険信号は入場日から数えるので、1週目の途中の筋書きになる）
+        joined = self.today - timedelta(days=6)
+        self.join(site, me, duty='業務フロー設計', joined_on=joined)
+        for user in (tanaka, *others):
+            for stage in kit.STAGE_LABELS:
+                self.check_items(site, user, stage)
         self.check_items(site, me, 'pre')
         self.check_items(site, me, 'day1')
         self.check_items(site, me, 'week1', sections=['全体像'], items=2)
@@ -289,77 +325,133 @@ class Command(BaseCommand):
         Term.objects.create(site=site, author=me, term='事故受付', meaning='事故の連絡を受けた時点。請求書の受付とは別。')
         Term.objects.create(site=site, author=me, term='免責', meaning='')
         Term.objects.create(site=site, author=me, term='締め', meaning='支払の締切。毎週金曜。')
+        Term.objects.create(site=site, author=yamamoto, term='支払査定', meaning='請求内容と約款を照らして、支払額を決めること。',
+                            **self.published(tanaka, '支払査定', '請求内容と約款を照らして、支払額を決めること。'))
         Document.objects.create(site=site, author=tanaka, kind=Document.KIND_STRUCTURE, title='体制と会議体',
                                 body='定例: 毎週火曜 10:00\n顧客側窓口: 査定部\n決裁者: 査定部長')
         Document.objects.create(site=site, author=me, kind=Document.KIND_PRE, title='参画前面談メモ',
                                 body='契約形態：準委任。指示は元請PMから。\n担当工程：基本設計（業務フロー）\n期待値：1週目で現状把握')
         # 入場した週の週報（曜日によらず「前週の週報がない」にならないよう、入場週に出す）
-        joined_week = (week_start(self.today) - week_start(started)).days // 7
+        joined_week = (week_start(self.today) - week_start(joined)).days // 7
         self.weekly(site, me, joined_week, done='入場。体制と資料の置き場所を確認した。',
                     learned='決裁者は査定部長。日々の指示は元請PMから。',
                     stuck='支払業務説明書の免責判定が読めていない。', next_step='まとめを5日目に出す。')
         Summary.objects.create(site=site, author=me, overview='保険金の請求受付から支払まで。利用者は査定部と支払担当。')
+        # 前から入っているメンバーの週報（チームの週次共有に並ぶ。demo_yamamoto は先週出していない）
+        for user in others:
+            for n in range(0, 4):
+                if user == yamamoto and n == 1:
+                    continue
+                self.weekly(site, user, n, done='担当範囲の設計を進めた。', next_step='レビュー指摘を反映する。')
         # リーダーの懸念：メンバーにはフィードバックとして見える
         Question.objects.create(site=site, author=tanaka, kind=Question.KIND_PROBLEM, title='査定部の窓口が一人に集中している',
                                 created_at=self.ago(2), fact='確認事項の回答がすべて査定部の担当者1人に集まっている。',
                                 interpretation='担当者の都合で回答が遅れやすい。',
                                 unconfirmed='査定部に代わりの窓口を立てられるか。',
                                 impact='業務フローの確認が止まると、基本設計の初版が遅れる。')
+        # スコープ外・約束と実際・体制のズレ（マネジメントの運営指標に出る）
+        for title, days in (('旧システムのデータ移行', 40), ('操作マニュアル作成', 10)):
+            Question.objects.create(site=site, author=ito, kind=Question.KIND_TASK, title=title, scope_out=True,
+                                    created_at=self.ago(days))
+        PromiseCheck.objects.create(site=site, author=ito, promise='画面と業務フローの設計のみ', actual='移行・マニュアルまで依頼',
+                                    is_gap=True)
+        StructureGap.objects.create(site=site, author=ito, role_kind='approver', on_chart='査定部長',
+                                    actual='元請のPM', note='仕様の決裁を元請PMが代わりに出している。', created_at=self.ago(60))
+        # 一般化して公開した振り返り（会社のナレッジ資産）と、そこから足した質問リスト
+        retro = Document.objects.create(site=site, author=ito, kind=Document.KIND_RETRO, title='振り返り：スコープ外作業が増えた理由',
+                                        body='約束: 画面と業務フローの設計のみ\n実際: 移行・マニュアルまで依頼された\n'
+                                             '次に面談で確認すること: 周辺作業の範囲',
+                                        skill_item='ネゴシエーション：方針と責任範囲の合意', created_at=self.ago(5),
+                                        **self.published(tanaka, 'スコープ外の作業が増えた理由（保険系の基本設計）',
+                                                         '約束: 画面と業務フローの設計のみ\n実際: データ移行・操作マニュアルまで依頼された\n'
+                                                         '次に面談で確かめること: 周辺作業（移行・マニュアル）の範囲と、誰が決めるか'))
+        InterviewQuestion.objects.create(question='データ移行・マニュアル作成は作業範囲に入るか。入らないなら誰が担うか',
+                                         industry='保険業', source=retro, author=ito)
+        InterviewQuestion.objects.create(question='仕様の決裁者は誰か。日々の指示は誰から来るか（体制図と同じか）',
+                                         author=tanaka)
+        KitProposal.objects.create(target='checklist', title='入場前に「周辺作業の範囲」を確かめる項目を足す',
+                                   proposal='「契約・商流」に「データ移行・マニュアル作成が作業範囲に入るか」を足す',
+                                   reason='周辺作業がスコープ外のまま依頼され続けた', author=ito, created_at=self.ago(4))
+        KitProposal.objects.create(target='phrases', title='直接の依頼を元請に戻す一言',
+                                   proposal='「ご依頼は承りました。範囲の確認のため、元請のPMを通していただけますか。」',
+                                   reason='顧客の担当者から直接作業を頼まれることが続いた', author=ito, status='adopted',
+                                   decided_by=me, created_at=self.ago(20))
+
+        # 到達：承認済み（台帳に載る）・承認待ち（マネジメントの画面に届く）
+        # リーダー本人の到達は、確認できる他のリーダーがいないので、マネジメントが確認も行った
         Goal.objects.create(site=site, author=tanaka, skill_item='プロジェクトマネジメント', current_level=4,
                             target_text='10人以上の開発チームのコスト・スケジュール・リスクを管理し、他を指導する', reached_level=4,
                             role='leader', team_size=6, complexity='1,4,5',
                             explanation='6人の設計チームのスケジュールと課題を管理した（レベル5には規模が届かない）。',
-                            **self.approved(4, 'A', confirmed_by=self.kacho, days=38))
+                            **self.approved(4, 'A', confirmed_by=me, days=38))
+        Goal.objects.create(site=site, author=ito, skill_item='ネゴシエーション', current_level=3,
+                            target_text='チームを代表して仕様変更・責任範囲を交渉する', reached_level=4, role='leader',
+                            team_size=6, complexity='3,8', explanation='スコープ外の依頼について、元請と範囲を交渉した。',
+                            next_text='複数社にまたがる仕様変更と責任範囲の交渉を主導する',
+                            **self.approved(4, 'A', confirmed_by=tanaka, days=9,
+                                            comment='範囲の交渉を根拠を示して進めた。'))
+        Goal.objects.create(site=site, author=yamamoto, skill_item='デザイン', current_level=2,
+                            target_text='画面・帳票・テーブル・IFを、影響範囲を含めて独力で設計する', reached_level=3,
+                            role='member', team_size=6, complexity='1',
+                            explanation='支払通知書など帳票12本を、画面項目との対応を含めて独力で設計した。',
+                            next_text='画面標準・データモデル・IF方針をチームに示し、レビューで整合させる',
+                            **self.approved(3, 'B', confirmed_by=tanaka, days=14))
+        Goal.objects.create(site=site, author=watanabe, skill_item='業務分析', current_level=2,
+                            target_text='顧客ヒアリングや現行システム解析で、担当範囲の要件を自分で確定させる', reached_level=3,
+                            role='member', team_size=6,
+                            explanation='査定部へのヒアリングで、事故受付画面の要件を確定した。',
+                            submitted_at=self.ago(3), confirmed_at=self.ago(2), confirmed_by=tanaka,
+                            confirm_comment='ヒアリングの記録と画面要件の対応を確かめた。')
 
-    # ---- 現場3: 店舗在庫の可視化（自分は入っていない） ----
+    # ---- ひとり現場1: 物流の出荷バッチ改修（demo_takahashi。チーム1の一人） ----
 
-    def seed_stock(self, ito):
+    def seed_logistics(self, takahashi):
+        started = self.today - timedelta(weeks=8)
+        site = Site.objects.create(
+            name='出荷バッチ改修', repo_name=f'{DEMO_PREFIX}logistics', industry='物流業',
+            description='倉庫の出荷指示バッチを、締め時刻の変更に合わせて改修する。', started_on=started,
+        )
+        # ひとり現場：本人だけがメンバーとして入る（自社のリーダーはいない）
+        self.join(site, takahashi, duty='バッチ設計')
+        for stage in kit.STAGE_LABELS:
+            self.check_items(site, takahashi, stage)
+        for n in range(0, 6):
+            self.weekly(site, takahashi, n, done='出荷指示バッチの処理順を整理した。', next_step='締め時刻の変更の影響を確かめる。')
+        Question.objects.create(site=site, author=takahashi, title='夜間バッチと締め処理の実行順', ask_to='元請PM',
+                                created_at=self.ago(5))
+        Document.objects.create(site=site, author=takahashi, kind=Document.KIND_DESIGN, title='締め時刻の変更は設定値で持つ',
+                                body='案: プログラムに埋め込む／設定値で持つ\n決定: 設定値\n理由: 倉庫ごとに締め時刻が違うため。',
+                                created_at=self.ago(20))
+        # ひとり現場の到達：マネジメントが元請・顧客の声を聞き取って、確認と承認を行った
+        Goal.objects.create(site=site, author=takahashi, skill_item='ソフトウェアエンジニアリング', current_level=2,
+                            target_text='担当機能の影響範囲を自分で分析し、設計に反映する', reached_level=3,
+                            role='member', team_size=1, complexity='2',
+                            explanation='締め時刻の変更が出荷指示・在庫引当・帳票に及ぶ範囲を洗い出し、元請PMに説明して改修範囲を合意した。',
+                            next_text='方式の選択肢を比べ、チームに設計方針として示す',
+                            **self.approved(3, 'B', confirmed_by=self.me, days=12,
+                                            customer_voice='元請PM：影響範囲の説明が具体的で、改修範囲をすぐ決められた。'))
+
+    # ---- ひとり現場2: 店舗在庫の可視化（demo_nakamura。チーム2の一人） ----
+
+    def seed_stock(self, nakamura):
         started = self.today - timedelta(weeks=20)
         site = Site.objects.create(
             name='店舗在庫の可視化', repo_name=f'{DEMO_PREFIX}stock', industry='小売業', started_on=started,
         )
-        self.join(site, ito, Membership.ROLE_LEADER)
+        # ひとり現場：本人だけがメンバーとして入る（自社のリーダーはいない）
+        self.join(site, nakamura, duty='可視化画面の設計')
         for stage in kit.STAGE_LABELS:
-            self.check_items(site, ito, stage)
-        for title, days in (('旧POSのデータ移行', 40), ('店舗端末の手配', 30), ('操作マニュアル作成', 10)):
-            Question.objects.create(site=site, author=ito, kind=Question.KIND_TASK, title=title, scope_out=True,
+            self.check_items(site, nakamura, stage)
+        for title, days in (('旧POSのデータ移行', 40), ('店舗端末の手配', 30)):
+            Question.objects.create(site=site, author=nakamura, kind=Question.KIND_TASK, title=title, scope_out=True,
                                     created_at=self.ago(days))
-        Term.objects.create(site=site, author=ito, term='理論在庫', meaning='入出荷の記録から計算した在庫。棚卸しの実在庫と区別する。',
-                            **self.published(ito, '理論在庫', '入出荷の記録から計算した在庫。棚卸しの実在庫と区別する。'))
-        retro = Document.objects.create(site=site, author=ito, kind=Document.KIND_RETRO, title='振り返り：スコープ外作業が増えた理由',
-                                body='約束: 可視化画面のみ\n実際: 移行・端末手配・マニュアルまで依頼された\n次に面談で確認すること: 周辺作業の範囲',
-                                skill_item='ネゴシエーション：方針と責任範囲の合意', created_at=self.ago(5),
-                                **self.published(ito, 'スコープ外の作業が増えた理由（店舗系の可視化）',
-                                                 '約束: 可視化画面の設計のみ\n実際: データ移行・端末手配・操作マニュアルまで依頼された\n'
-                                                 '次に面談で確かめること: 周辺作業（移行・端末・マニュアル）の範囲と、誰が決めるか'))
-        InterviewQuestion.objects.create(question='データ移行・端末手配・マニュアル作成は作業範囲に入るか。入らないなら誰が担うか',
-                                         industry='小売業', source=retro, author=self.kacho)
-        InterviewQuestion.objects.create(question='仕様の決裁者は誰か。日々の指示は誰から来るか（体制図と同じか）',
-                                         author=self.kacho)
-        self.weekly(site, ito, 7, done='可視化画面のレビュー。')
-        Goal.objects.create(site=site, author=ito, skill_item='ネゴシエーション', current_level=3,
-                            target_text='チームを代表して仕様変更・責任範囲を交渉する', reached_level=4, role='leader',
-                            team_size=4, complexity='3,8', explanation='スコープ外の依頼について、元請と範囲を交渉した。',
-                            next_text='複数社にまたがる仕様変更と責任範囲の交渉を主導する',
-                            **self.approved(4, 'A', confirmed_by=self.kacho, days=9,
-                                            customer_voice='元請PM：周辺作業の範囲を、根拠を示して整理してくれた。'))
-        Goal.objects.create(site=site, author=ito, skill_item='業務分析', current_level=2,
-                            target_text='顧客ヒアリングや現行システム解析で、担当範囲の要件を自分で確定させる', reached_level=3,
-                            role='leader', team_size=4, explanation='店舗担当者へのヒアリングで在庫の要件を確定した。',
-                            submitted_at=self.ago(3))
-        KitProposal.objects.create(target='checklist', title='入場前に「周辺作業の範囲」を確かめる項目を足す',
-                                   proposal='「契約・商流」に「データ移行・端末手配・マニュアル作成が作業範囲に入るか」を足す',
-                                   reason='店舗系の現場で、周辺作業がスコープ外のまま依頼され続けた', author=ito,
-                                   created_at=self.ago(4))
-        KitProposal.objects.create(target='phrases', title='直接の依頼を元請に戻す一言',
-                                   proposal='「ご依頼は承りました。範囲の確認のため、元請のPMを通していただけますか。」',
-                                   reason='店舗担当者から直接作業を頼まれることが続いた', author=ito, status='adopted',
-                                   decided_by=self.kacho, created_at=self.ago(20))
-        PromiseCheck.objects.create(site=site, author=ito, promise='可視化画面の設計のみ', actual='移行・端末手配まで依頼', is_gap=True)
-        StructureGap.objects.create(site=site, author=ito, role_kind='approver', on_chart='顧客の店舗運営部長',
-                                    actual='元請のPM', note='仕様の決裁を元請PMが代わりに出している。', created_at=self.ago(60))
-        StructureGap.objects.create(site=site, author=ito, role_kind='instructor', on_chart='元請のPM',
+        StructureGap.objects.create(site=site, author=nakamura, role_kind='instructor', on_chart='元請のPM',
                                     actual='顧客の店舗担当者', note='店舗担当者から直接作業を頼まれる。', created_at=self.ago(30))
-        for title, days in (('移行の範囲が決まらない', 20), ('店舗担当者からの直接の依頼が続く', 8)):
-            Question.objects.create(site=site, author=ito, kind=Question.KIND_PROBLEM, title=title, created_at=self.ago(days),
-                                    fact=title, impact='可視化画面の設計が後回しになる。')
+        self.weekly(site, nakamura, 0, done='可視化画面のレビュー。', stuck='移行の範囲が決まらない。')
+        Term.objects.create(site=site, author=nakamura, term='理論在庫', meaning='入出荷の記録から計算した在庫。棚卸しの実在庫と区別する。')
+        # 確認を依頼したところ。確認するリーダーがいないので、マネジメントの承認待ちに「確認して承認する」で届く
+        Goal.objects.create(site=site, author=nakamura, skill_item='業務分析', current_level=2,
+                            target_text='顧客ヒアリングや現行システム解析で、担当範囲の要件を自分で確定させる', reached_level=3,
+                            role='member', team_size=1,
+                            explanation='店舗担当者へのヒアリングで在庫の要件を確定した。元請PMに要件一覧を説明し、範囲を合意した。',
+                            submitted_at=self.ago(3))
