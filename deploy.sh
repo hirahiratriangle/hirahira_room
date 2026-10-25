@@ -96,7 +96,7 @@ while :; do
 done
 
 # 起動を待つ。ログイン画面が 200 を返せば動いている（最大10分）
-URL="https://hirahira-room.azurewebsites.net/accounts/login/"
+URL="https://hirahira-room.net/accounts/login/"
 i=0
 until [ "$(curl -s -o /dev/null -m 30 -w '%{http_code}' "$URL")" = "200" ]; do
     i=$((i + 1))

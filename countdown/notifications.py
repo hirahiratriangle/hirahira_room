@@ -11,6 +11,7 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 from django.db import IntegrityError, transaction
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
 
 from .models import CountEvent, ReminderLog
@@ -63,6 +64,7 @@ def build_message(user, events, today):
         'rows': rows,
         'today': today,
         'site_name': getattr(settings, 'SITE_DISPLAY_NAME', 'HirahiraRoom'),
+        'events_url': settings.SITE_URL.rstrip('/') + reverse('countdown:event_list'),
     }
     subject = render_to_string(
         'countdown/email/reminder_subject.txt', context).strip()

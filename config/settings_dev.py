@@ -101,5 +101,6 @@ else:
 
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# 問題メールのリンクは手元のサーバーへ向ける
-FE_SITE_URL = os.environ.get('FE_SITE_URL', 'http://127.0.0.1:8000')
+# メールのリンクは手元のサーバーへ向ける
+SITE_URL = os.environ.get('SITE_URL', 'http://127.0.0.1:8000')
+FE_SITE_URL = os.environ.get('FE_SITE_URL', SITE_URL)

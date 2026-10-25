@@ -15,7 +15,11 @@ MIDDLEWARE.insert(idx + 1, "whitenoise.middleware.WhiteNoiseMiddleware")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 ALLOWED_HOSTS = ['*']
-CSRF_TRUSTED_ORIGINS = ['https://hirahira-room.azurewebsites.net']
+CSRF_TRUSTED_ORIGINS = [
+    'https://hirahira-room.net',
+    'https://www.hirahira-room.net',
+    'https://hirahira-room.azurewebsites.net',
+]
 
 # Azure App Service 用の設定
 if 'WEBSITE_HOSTNAME' in os.environ:

@@ -88,7 +88,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings COUNTDOWN_REMINDER_TOKEN="＜生成した値＞"
 # 3. GitHub の Settings → Secrets and variables → Actions に登録する
 #    COUNTDOWN_REMINDER_TOKEN = 同じ値
-#    COUNTDOWN_REMINDER_URL   = https://hirahira-room.azurewebsites.net/countdown/tasks/send-reminders/
+#    COUNTDOWN_REMINDER_URL   = https://hirahira-room.net/countdown/tasks/send-reminders/
 # 4. Actions タブの「カウントダウンのリマインド送信」→ Run workflow で疎通確認
 
 # 基本情報の問題メール（毎日0:00、GitHub Actions の fe-mails.yml から起動）
@@ -98,7 +98,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings FE_MAIL_TOKEN="＜生成した値＞"
 # 3. GitHub の Settings → Secrets and variables → Actions に登録する
 #    FE_MAIL_TOKEN = 同じ値
-#    FE_MAIL_URL   = https://hirahira-room.azurewebsites.net/fe/tasks/send-mails/
+#    FE_MAIL_URL   = https://hirahira-room.net/fe/tasks/send-mails/
 # 4. Actions タブの「基本情報の問題メール送信」→ Run workflow で疎通確認
 # ※ 手元で送るとき: python manage.py send_fe_mails --settings=config.settings_dev
 

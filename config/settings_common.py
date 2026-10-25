@@ -157,6 +157,10 @@ ACCOUNT_LOGOUT_REDIRECT_URL = 'account_login'  # ログアウト後のリダイ�
 # ==================================
 SITE_DISPLAY_NAME = 'HirahiraRoom'
 
+# メールに書くリンクの頭。メールの送信はリクエストの外から起きるので、設定で持つ。
+# 独自ドメイン（App Service ドメインで取得）。azurewebsites.net のアドレスも引き続き使える。
+SITE_URL = os.environ.get('SITE_URL', 'https://hirahira-room.net')
+
 # 差出人の既定値。本番では settings.py が Gmail アドレスを埋めて上書きする。
 DEFAULT_FROM_EMAIL = f'{SITE_DISPLAY_NAME} <no-reply@hirahira-room.local>'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
@@ -176,8 +180,8 @@ COUNTDOWN_REMINDER_TOKEN = os.environ.get('COUNTDOWN_REMINDER_TOKEN', '')
 # 毎日0時の送信を起こす呼び出し（/fe/tasks/send-mails/）の共有トークン。
 # 未設定なら入口は 503 を返し、何も送らない。GitHub の Secrets の FE_MAIL_TOKEN と同じ値。
 FE_MAIL_TOKEN = os.environ.get('FE_MAIL_TOKEN', '')
-# メールに書くリンクの頭。送信はリクエストの外から起きるので、設定で持つ。
-FE_SITE_URL = os.environ.get('FE_SITE_URL', 'https://hirahira-room.azurewebsites.net')
+# メールに書くリンクの頭（既定は SITE_URL）
+FE_SITE_URL = os.environ.get('FE_SITE_URL', SITE_URL)
 # 確認のメールのリンクの有効期限（秒）
 FE_MAIL_CONFIRM_MAX_AGE = 60 * 60
 # 確認・解除のメールを、同じ ID から続けて送らせない間隔（秒）

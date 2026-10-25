@@ -11,6 +11,6 @@
 {% endfor %}──────────────────────────────
 
 一覧はこちらから確認できます。
-https://hirahira-room.azurewebsites.net/countdown/events/
+{{ events_url }}
 
 通知を止めたい場合は、一覧画面から対象の予定を編集し、「メールで知らせる」のチェックを外してください。
