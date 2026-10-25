@@ -1,0 +1,75 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}到達を説明する{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:growth' site.pk %}">{{ site.name }} ／ 自分の成長</a></p>
+<h2 class="h5 mb-1" style="color: #2c5aa0;">到達を説明する</h2>
+<p class="small mb-1">{{ object.skill_item }}{% if object.concrete_skill %} ／ {{ object.concrete_skill }}{% endif %} ・ 目標（レベル{{ object.target_level }}）：<strong>{{ object.target_text }}</strong></p>
+<p class="small text-muted"><i class="fas fa-lock me-1"></i>この画面は本人だけが見ます（合意を依頼したときだけ、到達の説明をマネジメントが読みます）。記録を証拠として引くのは本人だけで、他人が記録で採点することはしません。</p>
+
+<form method="post">{% csrf_token %}
+<div class="row g-3">
+    <div class="col-lg-6">
+        <h3 class="h6">1. 証拠を選ぶ（自分の記録）</h3>
+        <p class="small text-muted">この項目に自動で付いた記録が上に並びます。付いていない記録も選べます。</p>
+        <div class="list-group mb-3" style="max-height: 360px; overflow-y: auto;">
+            {% for r in candidates %}
+            <label class="list-group-item small d-flex gap-2">
+                <input class="form-check-input mt-1" type="checkbox" name="evidence" value="{{ r.key }}" {% if r.chosen %}checked{% endif %} {% if not writable %}disabled{% endif %}>
+                <span>{{ r.title }}{% if r.skill %}<br><span class="{% if r.matches %}text-primary{% else %}text-muted{% endif %}"><i class="fas fa-tag me-1"></i>{{ r.skill.0 }} ／ {{ r.skill.1 }}</span>{% endif %}</span>
+            </label>
+            {% empty %}<div class="list-group-item small text-muted">まだ記録がありません</div>{% endfor %}
+        </div>
+
+        <h3 class="h6">2. 具体記述に当てはめる</h3>
+        <table class="table table-sm small mb-2">
+            <tbody>{% for n, text in levels %}<tr class="{% if n == object.reached_level %}table-success{% elif n == object.target_level %}table-primary{% endif %}"><th class="text-nowrap">レベル{{ n }}</th><td>{{ text|default:"—" }}</td></tr>{% endfor %}</tbody>
+        </table>
+        <div class="row g-2 small">
+            <div class="col-6"><label class="form-label">{{ form.reached_level.label }}</label>{{ form.reached_level }}</div>
+            <div class="col-6 d-flex align-items-end"><div class="form-check">{{ form.mentored }} <label class="form-check-label" for="{{ form.mentored.id_for_label }}">{{ form.mentored.label }}</label></div></div>
+            <div class="col-12"><label class="form-label">{{ form.explanation.label }}</label>{{ form.explanation }}</div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <h3 class="h6">3. ITSSレベル相当を説明する</h3>
+        <p class="small text-muted">ITSSレベルはスキルではなく達成度で決まる。立場・サイズ・複雑性を書き出して照らし合わせる。</p>
+        <div class="row g-2 small">
+            <div class="col-6"><label class="form-label">{{ form.role.label }}</label>{{ form.role }}</div>
+            <div class="col-6"><label class="form-label">{{ form.team_size.label }}</label>{{ form.team_size }}</div>
+            <div class="col-12"><label class="form-label">{{ form.complexity.label }}</label>
+                {% for cb in form.complexity %}<div class="form-check">{{ cb.tag }} <label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label></div>{% endfor %}
+            </div>
+        </div>
+
+        <h3 class="h6 mt-3">4. 目安</h3>
+        <table class="table table-sm small">
+            <tbody>
+                <tr><th class="text-nowrap">スキルシートの評価</th><td>{% if grade %}<strong>{{ grade }}</strong>（レベル3の記述ならB、後進指導が加わればA、レベル2ならC）{% else %}当てはまるレベルを選ぶと出ます{% endif %}</td></tr>
+                <tr><th class="text-nowrap">ITSSレベル相当</th><td>{% if itss %}<strong>レベル{{ itss }}相当</strong>（立場・サイズ・複雑性だけで見た目安。成功回数などの条件は<a href="{% url 'genba:skillset' %}">ITSSのレベル</a>の表で確かめる）{% else %}立場を選ぶと出ます{% endif %}</td></tr>
+            </tbody>
+        </table>
+        <p class="small text-muted">{{ ae_note }}</p>
+
+        <h3 class="h6">5. マネジメント（課長）と合意する</h3>
+        {% if object.agreed_on %}<div class="alert alert-success small py-2 mb-2">{{ object.agreed_on|date:"n/j" }} に {{ object.agreed_by.username }} さんと合意しました。{% if object.agreement_comment %}<br>コメント：{{ object.agreement_comment }}{% endif %}</div>
+        {% elif object.agreement_requested_at %}<div class="alert alert-info small py-2 mb-2">{{ object.agreement_requested_at|date:"n/j" }} に合意を依頼しました。マネジメントの返事待ちです。</div>
+        {% elif object.agreement_comment %}<div class="alert alert-warning small py-2 mb-2">差し戻されました。コメント：{{ object.agreement_comment }}</div>{% endif %}
+        <div class="form-check small mb-3">{{ form.request_agreement }} <label class="form-check-label" for="{{ form.request_agreement.id_for_label }}">{{ form.request_agreement.label }}</label>
+            <div class="text-muted">依頼すると、この到達の説明と選んだ証拠の名前だけがマネジメントに見えます。合意したあとで中身を変えると、合意はやり直しになります。組織のスキル分布には、合意した到達だけを匿名で使います。</div></div>
+        <h3 class="h6">6. 次の現場へ</h3>
+        <p class="small text-muted">一つ上の列を次の目標にします。{% for n, text in levels %}{% if n == object.reached_level|add:1 %}レベル{{ n }}の記述：「{{ text }}」{% endif %}{% endfor %}</p>
+        <div class="small mb-2"><label class="form-label">{{ form.next_text.label }}</label>{{ form.next_text }}</div>
+        <div class="form-check small mb-3">{{ form.share_next }} <label class="form-check-label" for="{{ form.share_next.id_for_label }}">{{ form.share_next.label }}</label>
+            <div class="text-muted">出すと、次の目標の文だけが会社の画面に「アサインの希望」として並び、目標に合う現場を選ぶ材料になります。</div></div>
+        {% if writable %}<button class="btn btn-primary">保存</button>{% endif %}
+    </div>
+</div>
+</form>
+
+<h3 class="h6 mt-4">課会資料・スキルシートに貼る文章</h3>
+<pre class="card card-body small genba-pre mb-1">{{ paste }}</pre>
+<p class="small text-muted">{% for c in cautions %}{% if forloop.first %}{{ c }}{% endif %}{% endfor %}</p>
+{% endblock %}

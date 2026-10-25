@@ -1,0 +1,4 @@
+
+<div class="small d-flex justify-content-between"><span>{{ stage.label }}</span><span class="text-muted">{{ stage.done }}/{{ stage.total }}</span></div>
+<div class="progress mb-2" style="height: 6px;"><div class="progress-bar {% if stage.total and stage.done == stage.total %}bg-success{% endif %}" style="width: {% widthratio stage.done stage.total 100 %}%"></div></div>
+

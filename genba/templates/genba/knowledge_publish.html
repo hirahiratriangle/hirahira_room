@@ -1,0 +1,35 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}一般化して公開{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:site_detail' site.pk %}">{{ site.name }}</a></p>
+<h2 class="h5 mb-2" style="color: #2c5aa0;">一般化して会社に公開する</h2>
+<p class="small text-muted">会社に見えるのは、ここで書く一般化した版と業界名（{{ site.industry }}）だけです。原文は現場チームの中に残ります。</p>
+<ul class="small mb-3">
+    <li>顧客名を業界名に置き換える</li>
+    <li>顧客固有の業務名・システム名を一般化する</li>
+    <li>個人が特定できる記述を外す</li>
+</ul>
+<div class="row g-3">
+    <div class="col-lg-6">
+        <h3 class="h6">原文（現場チームだけ）</h3>
+        <div class="card"><div class="card-body small">
+            <div class="fw-bold mb-1">{{ original_title }}</div>
+            <div class="genba-pre">{{ original_body|default:"（本文なし）" }}</div>
+        </div></div>
+    </div>
+    <div class="col-lg-6">
+        <h3 class="h6">一般化した版（会社に公開）</h3>
+        <form method="post" class="card border-primary"><div class="card-body">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="mb-3"><label class="form-label small" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+                {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+            {% endfor %}
+            <button class="btn btn-primary btn-sm">一般化した版を公開する</button>
+            <a class="btn btn-outline-secondary btn-sm ms-1" href="{% url 'genba:site_detail' site.pk %}">戻る</a>
+        </div></form>
+    </div>
+</div>
+{% endblock %}

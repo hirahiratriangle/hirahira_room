@@ -1,0 +1,29 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}週次共有の一覧{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:site_detail' site.pk %}">{{ site.name }}</a></p>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <h2 class="h5 mb-0" style="color: #2c5aa0;">週次共有の一覧：{{ week|date:"n/j" }}の週</h2>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary btn-sm" href="?week={{ prev_week|date:'Y-m-d' }}">‹ 前の週</a>
+        <a class="btn btn-outline-secondary btn-sm" href="?week={{ next_week|date:'Y-m-d' }}">次の週 ›</a>
+    </div>
+</div>
+<p class="small text-muted">週に1回の短い共有を、チームで横に並べます。</p>
+<div class="table-responsive"><table class="table table-sm small align-top">
+    <thead class="text-muted"><tr><th>メンバー</th><th>やったこと</th><th>分かったこと</th><th>詰まっていること</th><th>次にやること</th></tr></thead>
+    <tbody>
+        {% for m, d in rows %}
+        <tr>
+            <td class="text-nowrap"><strong>{{ m.user.username }}</strong>{% if d %}<br><a href="{% url 'genba:document_detail' d.pk %}">週報</a>{% endif %}</td>
+            {% if d %}
+            <td class="genba-pre">{{ d.done }}</td><td class="genba-pre">{{ d.learned }}</td>
+            <td class="genba-pre {% if d.stuck %}genba-alert-cell{% endif %}">{{ d.stuck }}</td><td class="genba-pre">{{ d.next_step }}</td>
+            {% else %}<td colspan="4" class="text-muted">この週の週報はありません</td>{% endif %}
+        </tr>
+        {% empty %}<tr><td colspan="5" class="text-muted">この週にいたメンバーはいません</td></tr>{% endfor %}
+    </tbody>
+</table></div>
+{% endblock %}

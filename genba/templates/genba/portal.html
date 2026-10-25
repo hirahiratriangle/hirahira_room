@@ -1,0 +1,68 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}入口{% endblock %}
+
+{% block genba_contents %}
+<section class="mb-5">
+    <h2 class="h5 mb-3" style="color: #2c5aa0;">あなたの立場</h2>
+    {% if roles %}
+    <div class="row g-3">
+        {% if 'member' in roles %}
+        <div class="col-md-6"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:member_home' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-user me-2"></i>メンバー：現場で迷わず働くための支援kit</h3>
+            <p class="small text-muted mb-0">入場時チェックリスト、読めない一覧、1週目のまとめ、用語集、言い回し集、危険信号</p>
+        </div></a></div>
+        {% endif %}
+        {% if 'leader' in roles %}
+        <div class="col-md-6"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:leader_home' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-user-friends me-2"></i>リーダー：メンバーの状況把握とフォロー</h3>
+            <p class="small text-muted mb-0">メンバーごとの未解決確認事項と滞留日数、週報の課題・リスク欄</p>
+        </div></a></div>
+        {% endif %}
+        {% if 'management' in roles %}
+        <div class="col-md-6"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:management' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-chart-bar me-2"></i>マネジメント：現場運営の指標</h3>
+            <p class="small text-muted mb-0">現場ごとの健全度、約束と実際のズレ（現場単位の集計値のみ）</p>
+        </div></a></div>
+        {% endif %}
+        {% if 'company' in roles %}
+        <div class="col-md-6"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:company' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-building me-2"></i>会社：ナレッジ資産</h3>
+            <p class="small text-muted mb-0">会社公開された用語・設計判断・振り返りの蓄積と再利用</p>
+        </div></a></div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        まだどの現場にも入っていません。<a href="{% url 'genba:site_create' %}">テンプレートから現場を作る</a>か、
+        デモデータ（<code>python manage.py seed_genba --user {{ user.username }}</code>）を入れてください。
+    </div>
+    {% endif %}
+    <div class="row g-3 mt-1">
+        <div class="col-md-6"><a class="card h-100 text-decoration-none" href="{% url 'genba:kit' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-clone me-2"></i>現場テンプレート</h3>
+            <p class="small text-muted mb-0">docs のフォルダ、Issue テンプレートとラベル、入場時チェックリスト、危険信号</p>
+        </div></a></div>
+        <div class="col-md-6"><a class="card h-100 text-decoration-none" href="{% url 'genba:phrases' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-comment-dots me-2"></i>言い回し集</h3>
+            <p class="small text-muted mb-0">確認のための言い回し、SI業界ワード確認表</p>
+        </div></a></div>
+        <div class="col-md-6"><a class="card h-100 text-decoration-none" href="{% url 'genba:skillset' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-layer-group me-2"></i>基本設計スキルセット</h3>
+            <p class="small text-muted mb-0">ITSS 11項目、具体スキルと典型的な場面、レベル別の具体記述</p>
+        </div></a></div>
+    </div>
+</section>
+
+<section>
+    <h2 class="h5 mb-3" style="color: #2c5aa0;">設計原則</h2>
+    <ol class="small">
+        <li><strong>メンバーの道具が先。</strong>管理・指標・資産化は、メンバーが書いた記録の副産物として得る。</li>
+        <li><strong>人ではなく現場を測る。</strong>指標の単位は現場とし、個人の記述量や作業量は測らない。</li>
+        <li><strong>公開を前提に書く。</strong>現場チーム内は全公開。会社へは一般化レビューを通して出す。</li>
+        <li><strong>上の立場ほど集計で見る。</strong>原文を読むのは同じ現場のメンバーとリーダーまで。</li>
+        <li><strong>記録で人を採点しない。</strong>本人が成長の証拠として引くのは自由。他人が記録を拾って評価はしない。</li>
+        <li><strong>顧客情報と金額は置かない。</strong>成果物・個人情報・単価は扱わない。金額は基幹システムで。</li>
+    </ol>
+</section>
+{% endblock %}

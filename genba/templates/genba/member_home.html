@@ -1,0 +1,104 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}メンバー{% endblock %}
+
+{% block genba_contents %}
+<section class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0" style="color: #2c5aa0;">自分の現場</h2>
+        <a class="btn btn-primary btn-sm" href="{% url 'genba:site_create' %}"><i class="fas fa-plus me-1"></i>テンプレートから現場を作る</a>
+    </div>
+    <div class="row g-3">
+        {% for card in site_cards %}
+        <div class="col-lg-6"><div class="card shadow-sm h-100 {% if card.signals %}border-danger{% endif %}"><div class="card-body">
+            <h3 class="h6 fw-bold mb-1"><a href="{% url 'genba:site_detail' card.site.pk %}" class="text-decoration-none">{{ card.site.name }}</a>{% if card.site.is_archived %} <span class="badge bg-secondary">Archive</span>{% endif %}</h3>
+            <p class="small text-muted mb-2"><i class="fab fa-github me-1"></i>{{ card.site.repo_name }} ・ {{ card.site.industry }} ・ 入場 {{ card.site.started_on|date:"n/j" }}</p>
+            <div class="small fw-bold mb-1">入場時チェックリスト</div>
+            {% for stage in card.stages %}{% include 'genba/_progress_bar.html' %}{% endfor %}
+            <div class="small fw-bold mt-2 mb-1">目標 <a href="{% url 'genba:growth' card.site.pk %}" class="fw-normal ms-1">自分の成長 ›</a></div>
+            {% for g in card.goals %}<div class="small">{{ g.skill_item }}（レベル{{ g.target_level }}）：{{ g.target_text|truncatechars:60 }}</div>
+            {% empty %}<div class="small text-muted">まだ目標がありません</div>{% endfor %}
+            {% if card.signals %}
+            <div class="small fw-bold text-danger mt-2"><i class="fas fa-exclamation-triangle me-1"></i>危険信号：その日のうちに動く</div>
+            {% include 'genba/_signals.html' with signals=card.signals detected_only=True %}
+            {% endif %}
+        </div></div></div>
+        {% empty %}
+        <p class="text-muted small">まだどの現場にも入っていません。テンプレートから現場を作ると、入場時チェックリストが並びます。</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="mb-4">
+    <h2 class="h5 mb-3" style="color: #2c5aa0;"><i class="fas fa-search me-2"></i>過去の現場の類似ナレッジ</h2>
+    <form method="get" class="d-flex gap-2 mb-3">{{ search_form.q }}<button class="btn btn-primary text-nowrap">検索</button></form>
+    {% if query %}
+    <p class="small text-muted">「{{ query }}」― 自分の現場の全文と、会社公開された記録から</p>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <h3 class="h6">文書</h3>
+            <ul class="list-group">
+                {% for d in found_docs %}
+                <li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{% if d.site in sites %}{{ d.title }}{% else %}{{ d.public_title }}{% endif %}</a>
+                    <span class="text-muted">／ {{ d.get_kind_display }} ・ {% if d.site in sites %}{{ d.site.name }}{% else %}{{ d.site.industry }}（会社公開）{% endif %}</span></li>
+                {% empty %}<li class="list-group-item small text-muted">見つかりませんでした</li>{% endfor %}
+            </ul>
+        </div>
+        <div class="col-md-6">
+            <h3 class="h6">用語</h3>
+            <ul class="list-group">
+                {% for t in found_terms %}
+                <li class="list-group-item small">{% if t.site in sites %}<strong>{{ t.term }}</strong>：{{ t.meaning|truncatechars:60 }}{% else %}<strong>{{ t.public_title }}</strong>：{{ t.public_body|truncatechars:60 }}{% endif %}
+                    <span class="text-muted">／ {% if t.site in sites %}{{ t.site.name }}{% else %}{{ t.site.industry }}（会社公開）{% endif %}</span></li>
+                {% empty %}<li class="list-group-item small text-muted">見つかりませんでした</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+</section>
+
+{% if leader_concerns %}
+<section class="mb-4">
+    <h2 class="h5 mb-3" style="color: #2c5aa0;">リーダーからの懸念（フィードバック）</h2>
+    <ul class="list-group">
+        {% for q in leader_concerns %}
+        <li class="list-group-item small d-flex flex-wrap justify-content-between gap-2">
+            <span><a href="{% url 'genba:issue_detail' q.pk %}">{{ q.title }}</a> <span class="text-muted">／ {{ q.site.name }} ・ {{ q.author.username }}</span><br><span class="text-muted">影響：{{ q.impact|default:"―" }}</span></span>
+            {% if q.received_at %}<span class="badge bg-success align-self-start">受け取り済み</span>{% else %}<a class="btn btn-outline-primary btn-sm py-0 align-self-start" href="{% url 'genba:issue_detail' q.pk %}#response">受け取る</a>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="mb-4">
+    <h2 class="h5 mb-3" style="color: #2c5aa0;">未解決の Issue</h2>
+    <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr class="small text-muted"><th>内容</th><th>誰に聞くか</th><th>書いた人</th><th>経過</th><th></th></tr></thead>
+        <tbody>
+            {% for q in open_questions %}{% include 'genba/_question_row.html' with show_site=True %}
+            {% empty %}<tr><td colspan="5" class="text-muted small">未解決のものはありません</td></tr>{% endfor %}
+        </tbody>
+    </table></div>
+</section>
+
+<div class="row g-4">
+    <section class="col-md-6">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">用語集</h2>
+        <dl class="small">
+            {% for t in terms %}
+            <dt>{{ t.term }} <span class="text-muted fw-normal">／ {{ t.site.name }}</span></dt>
+            <dd class="mb-2">{{ t.meaning|default:"（意味を確認中）" }}{% if t.has_gap %}<br><span class="text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>一般的な意味との違い：{{ t.general_difference }}</span>{% endif %}</dd>
+            {% empty %}<p class="text-muted">まだありません</p>{% endfor %}
+        </dl>
+    </section>
+    <section class="col-md-6">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">最近の議事録</h2>
+        <ul class="list-group">
+            {% for d in minutes %}
+            <li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a> <span class="text-muted">／ {{ d.site.name }} ・ {{ d.created_at|date:"n/j" }}</span></li>
+            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+        </ul>
+    </section>
+</div>
+{% endblock %}

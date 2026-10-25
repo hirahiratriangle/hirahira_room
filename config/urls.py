@@ -30,6 +30,8 @@ urlpatterns = [
     path('ap/', include('ap.urls', namespace='ap')),
     # 銀行業務検定 法務3級 対策アプリ
     path('bk_houmu3/', include('bk_houmu3.urls', namespace='bk_houmu3')),
+    # genba（1現場1リポジトリの記録を4つの立場で使う）
+    path('genba/', include('genba.urls', namespace='genba')),
 ]
 
 # メディアファイルの配信設定

@@ -1,0 +1,29 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}裁量の線{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:site_detail' site.pk %}">{{ site.name }}</a></p>
+<h2 class="h5 mb-2" style="color: #2c5aa0;">裁量の線</h2>
+<p class="small text-muted">「自分で決める範囲」と「相談して決める範囲」の線を、本人とリーダーで一度言葉にして残します。本人とリーダーが書けます。</p>
+<div class="genba-phrase small mb-3"><i class="fas fa-comment-dots me-1"></i>使える一言：{{ phrase }}</div>
+{% for m, form in rows %}
+<div class="card shadow-sm mb-3"><div class="card-body">
+    <div class="d-flex justify-content-between mb-2"><strong>{{ m.user.username }}</strong><span class="small text-muted">{{ m.get_role_display }}{% if m.duty %} ・ {{ m.duty }}{% endif %}{% if m.line_updated_at %} ・ {{ m.line_updated_at|date:"n/j" }}に記録{% endif %}</span></div>
+    {% if form %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="membership" value="{{ m.pk }}">
+        <div class="row g-2">
+            <div class="col-md-6"><label class="form-label small">{{ form.line_self.label }}</label>{{ form.line_self }}</div>
+            <div class="col-md-6"><label class="form-label small">{{ form.line_consult.label }}</label>{{ form.line_consult }}</div>
+        </div>
+        <button class="btn btn-outline-primary btn-sm mt-2">残す</button>
+    </form>
+    {% else %}
+    <div class="row g-2 small">
+        <div class="col-md-6"><div class="text-muted">自分で決める範囲</div><div class="genba-pre">{{ m.line_self|default:"―" }}</div></div>
+        <div class="col-md-6"><div class="text-muted">相談して決める範囲</div><div class="genba-pre">{{ m.line_consult|default:"―" }}</div></div>
+    </div>
+    {% endif %}
+</div></div>
+{% endfor %}
+{% endblock %}

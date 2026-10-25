@@ -1,0 +1,45 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}{% if can_read_site %}{{ doc.title }}{% else %}{{ doc.public_title }}{% endif %}{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1">
+    {% if can_read_site %}<a href="{% url 'genba:site_detail' doc.site_id %}?tab=docs">{{ doc.site.name }}</a>{% else %}{{ doc.site.industry }}（会社公開）{% endif %}
+    ・ {{ doc.get_kind_display }} <span class="text-muted">― {{ section_note }}</span>
+</p>
+{% if not can_read_site %}
+<h2 class="h5 mb-1" style="color: #2c5aa0;">{{ doc.public_title }}</h2>
+<p class="small text-muted">{{ doc.site.industry }}の現場で一般化して公開された記録です。</p>
+<div class="card shadow-sm mb-3"><div class="card-body genba-pre">{{ doc.public_body }}</div></div>
+{% else %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <h2 class="h5 mb-0" style="color: #2c5aa0;">{{ doc.title }}</h2>
+    <div>
+        {% if can_read_site %}{% include 'genba/_knowledge.html' with obj=doc model='doc' next=request.get_full_path %}{% endif %}
+        {% if is_author %}<a class="btn btn-outline-primary btn-sm py-0 ms-1" href="{% url 'genba:document_update' doc.pk %}">編集</a>{% endif %}
+    </div>
+</div>
+<p class="small text-muted">
+    公開範囲：{{ doc.get_visibility_display }}
+    {% if can_read_site %} ・ {{ doc.author.username }}{% endif %}
+    ・ {% if doc.week_of %}{{ doc.week_of|date:"Y年n月j日" }}の週{% else %}{{ doc.created_at|date:"Y年n月j日" }}{% endif %}
+</p>
+{% if doc.kind == 'weekly' %}
+<div class="row g-2 small mb-3">
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">やったこと</div><div class="genba-pre">{{ doc.done|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">分かったこと</div><div class="genba-pre">{{ doc.learned|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100 border-warning"><div class="card-body py-2"><div class="fw-bold">詰まっていること</div><div class="genba-pre">{{ doc.stuck|default:"―" }}</div></div></div></div>
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">次にやること</div><div class="genba-pre">{{ doc.next_step|default:"―" }}</div></div></div></div>
+    {% if doc.goal_action %}<div class="col-12"><div class="card border-primary"><div class="card-body py-2"><div class="fw-bold">目標に近づいた行動</div><div class="genba-pre">{{ doc.goal_action }}</div></div></div></div>{% endif %}
+</div>
+{% else %}
+<div class="card shadow-sm mb-3"><div class="card-body genba-pre">{{ doc.body|default:"（本文なし）" }}</div></div>
+{% endif %}
+{% if doc.skill_item %}<p class="small"><i class="fas fa-tag me-1"></i>スキル対応：{{ doc.skill_item }}</p>{% endif %}
+{% if doc.knowledge_status == 'published' %}
+<h3 class="h6 mt-4">会社に公開している一般化した版</h3>
+<div class="card border-success"><div class="card-body small"><div class="fw-bold">{{ doc.public_title }}</div><div class="genba-pre">{{ doc.public_body }}</div>
+<div class="text-muted mt-1">{{ doc.published_by.username }} ・ {{ doc.published_at|date:"n/j" }}に公開</div></div></div>
+{% endif %}
+{% endif %}
+{% endblock %}

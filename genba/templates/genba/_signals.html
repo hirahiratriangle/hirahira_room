@@ -1,0 +1,10 @@
+{# 危険信号。signals と、detected_only（当てはまるものだけ出すか）を渡す #}
+{% for s in signals %}{% if s.detected or not detected_only %}
+<div class="d-flex gap-2 align-items-start small py-1 {% if not forloop.last %}border-bottom{% endif %}">
+    {% if s.detected %}<span class="badge bg-danger mt-1">当てはまる</span>{% elif s.detected is None %}<span class="badge bg-light text-muted border mt-1">案内</span>{% else %}<span class="badge bg-light text-success border mt-1">今はなし</span>{% endif %}
+    <div>
+        <strong>{{ s.sign }}</strong>{% if s.detail %} <span class="text-danger">― {{ s.detail }}</span>{% endif %}
+        <div>{{ s.action }}{% if s.link %} <a href="{{ s.link.1 }}" class="ms-1">{{ s.link.0 }} ›</a>{% endif %}</div>
+    </div>
+</div>
+{% endif %}{% endfor %}

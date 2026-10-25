@@ -1,0 +1,100 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}リーダー{% endblock %}
+
+{% block genba_contents %}
+<p class="small text-muted">作業量ではなく、詰まりを早く見つけます。止まっている日数は、本人の能力より現場の意思決定の遅さを示すことが多いので、まず「誰に・何を聞けば進むか」をフォローします。</p>
+
+{% for p in panels %}
+<section class="mb-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h2 class="h5 mb-0" style="color: #2c5aa0;"><a href="{% url 'genba:site_detail' p.site.pk %}" class="text-decoration-none">{{ p.site.name }}</a></h2>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:weekly_board' p.site.pk %}"><i class="fas fa-columns me-1"></i>週次共有の一覧</a>
+            <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:lines' p.site.pk %}"><i class="fas fa-ruler-horizontal me-1"></i>裁量の線</a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <h3 class="h6"><i class="fas fa-traffic-light me-1"></i>詰まりの一覧</h3>
+            {% for m in p.members %}
+            <div class="card shadow-sm mb-2 {% if m.weekly_missing %}border-warning{% endif %}"><div class="card-body py-2">
+                <div class="d-flex justify-content-between">
+                    <strong>{{ m.membership.user.username }}</strong>
+                    <span class="small">
+                        {% if m.weekly_missing %}<span class="badge bg-warning text-dark">週報が途切れている</span>{% endif %}
+                        {% if m.questions %}<span class="{% if m.max_days >= stall_days %}genba-stall{% else %}text-muted{% endif %}">最長 {{ m.max_days }}日</span>{% endif %}
+                    </span>
+                </div>
+                {% if m.weekly_missing %}<div class="small text-muted">「問題ない」と受け取らず、進捗と理解を聞きにいく。{% if m.weeks_missing >= escalate_weeks %}<span class="text-danger">{{ m.weeks_missing }}週続いているので、マネジメントの指標にも人数が出ています（名前は出ません）。</span>{% endif %}</div>{% endif %}
+                <ul class="small mb-0 ps-3">
+                    {% for q in m.questions %}
+                    <li><span class="{% if q.days_open >= stall_days %}genba-stall{% endif %}">{{ q.days_open }}日</span> ・ <a href="{% url 'genba:issue_detail' q.pk %}">{{ q.title }}</a>{% if q.ask_to %} <span class="text-muted">（{{ q.ask_to }}）</span>{% endif %}{% for label in q.labels %} <span class="badge bg-light text-dark border">{{ label }}</span>{% endfor %}</li>
+                    {% empty %}<li class="text-muted list-unstyled">未解決の Issue はありません</li>{% endfor %}
+                </ul>
+            </div></div>
+            {% empty %}<p class="small text-muted">メンバーがいません</p>{% endfor %}
+        </div>
+
+        <div class="col-lg-6">
+            <h3 class="h6"><i class="fas fa-question-circle me-1"></i>「読めない」の受け取り</h3>
+            <ul class="list-group mb-3">
+                {% for q, ask in p.unreadable %}
+                <li class="list-group-item small d-flex flex-wrap justify-content-between gap-1">
+                    <span><a href="{% url 'genba:issue_detail' q.pk %}">{{ q.source|default:q.title }}</a> {{ q.location }}（{{ q.get_reason_display }}）<span class="text-muted">／ {{ q.author.username }} ・ {{ q.days_open }}日</span></span>
+                    {% if q.support_on %}<span class="badge bg-success">説明 {{ q.support_on|date:"n/j" }}</span>{% elif ask %}<span class="badge bg-warning text-dark">{{ ask_days }}日動かない：説明の時間を</span>{% endif %}
+                </li>
+                {% empty %}<li class="list-group-item small text-muted">未解決の「読めない」はありません</li>{% endfor %}
+            </ul>
+
+            <h3 class="h6"><i class="fas fa-file-alt me-1"></i>1週目のまとめ確認</h3>
+            <ul class="list-group mb-3">
+                {% for s in p.summaries %}
+                <li class="list-group-item small d-flex justify-content-between">
+                    <a href="{% url 'genba:summary' p.site.pk %}?user={{ s.author_id }}">{{ s.author.username }} のまとめ</a>
+                    {% if s.feedback_at %}<span class="text-muted">{{ s.feedback_at|date:"n/j" }}に返した</span>{% else %}<span class="badge bg-warning text-dark">15分で確かめ、差と次の作業を返す</span>{% endif %}
+                </li>
+                {% empty %}<li class="list-group-item small text-muted">出されたまとめはありません</li>{% endfor %}
+            </ul>
+
+            <h3 class="h6"><i class="fas fa-ruler-horizontal me-1"></i>裁量の線</h3>
+            <p class="small mb-3">{% if p.lines_missing %}まだ線を引いていない：{% for m in p.lines_missing %}{{ m.user.username }}{% if not forloop.last %}、{% endif %}{% endfor %} <a href="{% url 'genba:lines' p.site.pk %}">一緒に言葉にする ›</a>{% else %}<span class="text-muted">全員が線を引いています</span>{% endif %}</p>
+        </div>
+
+        <div class="col-12">
+            <h3 class="h6"><i class="fas fa-exclamation-circle me-1"></i>懸念の受け取り</h3>
+            <div class="table-responsive"><table class="table table-sm small align-middle">
+                <thead class="text-muted"><tr><th>懸念</th><th>事実</th><th>解釈</th><th>未確認</th><th>影響</th><th></th></tr></thead>
+                <tbody>
+                    {% for q in p.concerns %}
+                    <tr class="{% if not q.received_at %}genba-alert-cell{% endif %}">
+                        <td><a href="{% url 'genba:issue_detail' q.pk %}">{{ q.title }}</a><div class="text-muted">{{ q.author.username }} ・ {{ q.days_open }}日</div></td>
+                        <td>{{ q.fact|truncatechars:50 }}</td><td>{{ q.interpretation|truncatechars:40 }}</td><td>{{ q.unconfirmed|truncatechars:40 }}</td><td>{{ q.impact|truncatechars:50 }}</td>
+                        <td class="text-nowrap">{% if q.received_at %}<span class="text-success">受け取った</span>{% else %}<a class="btn btn-outline-primary btn-sm py-0" href="{% url 'genba:issue_detail' q.pk %}#response">受け取る</a>{% endif %}</td>
+                    </tr>
+                    {% empty %}<tr><td colspan="6" class="text-muted">未解決の懸念はありません</td></tr>{% endfor %}
+                </tbody>
+            </table></div>
+
+            <h3 class="h6">週報の「詰まっていること」（直近2週）</h3>
+            {% for d in p.weekly %}
+            <div class="card border-warning mb-2"><div class="card-body py-2 small">
+                <span class="text-muted">{{ d.week_of|date:"n/j" }}の週 ・ {{ d.author.username }}</span>　{{ d.stuck }}
+            </div></div>
+            {% empty %}<p class="small text-muted">「詰まっていること」が書かれた週報はありません</p>{% endfor %}
+
+            <h3 class="h6 mt-3">一般化の確認待ち（ナレッジ候補）</h3>
+            <ul class="list-group">
+                {% for obj in p.candidates %}
+                <li class="list-group-item small d-flex flex-wrap justify-content-between gap-2">
+                    <span>{% if obj.term %}用語「{{ obj.term }}」{% else %}<a href="{% url 'genba:document_detail' obj.pk %}">{{ obj.title }}</a>{% endif %} <span class="text-muted">／ {{ obj.author.username }}</span></span>
+                    {% if obj.term %}{% include 'genba/_knowledge.html' with model='term' is_leader=True next=request.get_full_path %}{% else %}{% include 'genba/_knowledge.html' with model='doc' is_leader=True next=request.get_full_path %}{% endif %}
+                </li>
+                {% empty %}<li class="list-group-item small text-muted">確認待ちはありません</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+</section>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}目標を立てる{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:growth' site.pk %}">{{ site.name }} ／ 自分の成長</a></p>
+<h2 class="h5 mb-2" style="color: #2c5aa0;">目標を立てる</h2>
+{% for u in usage %}<p class="small text-muted mb-1">{{ u }}</p>{% endfor %}
+
+<form method="get" class="card my-3"><div class="card-body row g-2 align-items-end">
+    <div class="col-md-6"><label class="form-label small">{{ pick.item.label }}</label>{{ pick.item }}</div>
+    <div class="col-md-3"><label class="form-label small">{{ pick.level.label }}</label>{{ pick.level }}</div>
+    <div class="col-md-3"><button class="btn btn-outline-primary w-100">一つ上の記述を出す</button></div>
+    <div class="col-12 small text-muted">どの項目が問われそうかは、<a href="{% url 'genba:skillset' %}" target="_blank">スキルセット</a>の「典型的な場面」で選びます。</div>
+</div></form>
+
+{% if item %}
+<div class="row g-3">
+    <div class="col-lg-5">
+        <h3 class="h6">{{ item }}：レベル別の具体記述</h3>
+        <table class="table table-sm small">
+            <tbody>{% for n, text in levels %}<tr class="{% if n == target_level %}table-primary{% elif n == level %}table-light{% endif %}"><th class="text-nowrap">レベル{{ n }}{% if n == target_level %}<br><span class="badge bg-primary">目標</span>{% elif n == level %}<br><span class="badge bg-secondary">今</span>{% endif %}</th><td>{{ text|default:"—" }}</td></tr>{% endfor %}</tbody>
+        </table>
+        <h3 class="h6">具体スキルと典型的な場面</h3>
+        <ul class="small ps-3">{% for s in skills %}<li><strong>{{ s.skill }}</strong>：{{ s.behavior }}<br><span class="text-muted">場面：{{ s.scene }}</span></li>{% endfor %}</ul>
+    </div>
+    <div class="col-lg-7">
+        <form method="post" class="card shadow-sm"><div class="card-body">
+            {% csrf_token %}
+            <input type="hidden" name="item" value="{{ item }}"><input type="hidden" name="level" value="{{ level }}">
+            <p class="small mb-2">{{ item }}・今のレベル{{ level }} → 目標はレベル{{ target_level }}の記述</p>
+            {% for field in form %}
+            <div class="mb-3">
+                <label class="form-label small fw-bold" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+                {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+            {% endfor %}
+            <button class="btn btn-primary">目標にする</button>
+        </div></form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
