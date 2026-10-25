@@ -1,8 +1,9 @@
 """基本情報の問題を X に投稿する（1日3回・1回1問）。
 
 GitHub Actions が朝・昼・夜に /fe/tasks/post-x/ を叩き、post_slot がその時間帯の
-1問を投稿する。投稿は「問題文＋解答ページの URL＋タグ」だけで、選択肢・正解・
-解説は解答ページ（/fe/x/<code>/）にだけ出す。
+1問を投稿する。投稿は「問題文＋出典＋解答ページの URL＋タグ」だけで、選択肢・正解・
+解説は解答ページ（/fe/x/<code>/）にだけ出す。出典は、IPA の公開問題なら IPA の
+求める形、自作の問題なら「オリジナル問題」ともとにしたシラバスの項目。
 
 - 出題は、投稿できる問題（eligible_questions）から重みなしで毎回1問を引く。
   前に出た問題も同じように引くので、近いうちに同じ問題が出ることもある。
@@ -91,15 +92,27 @@ def citation(source):
     return '出典：{} {} {}'.format(match.group(1), EXAM_NAME, match.group(2)).strip()
 
 
+def source_line(source):
+    """投稿に書く出典の行。IPA の公開問題は IPA の求める形、自作の問題はシラバスの項目。
+
+    自作の問題の source は「シラバス Ver.8.0 中分類1 応用数学（3）数値解析」の形で、
+    もとにしたシラバスの項目を書いてある。それを「オリジナル問題」と並べて出す。
+    """
+    cite = citation(source)
+    if cite:
+        return '（{}）'.format(cite)
+    head = source.split(' ／ ')[0].strip()
+    if head.startswith('シラバス'):
+        return '（オリジナル問題／{}）'.format(head)
+    return '（オリジナル問題）'
+
+
 def page_url(code):
     return settings.FE_SITE_URL.rstrip('/') + reverse('fe:x_answer', args=[code])
 
 
 def build_text(stem, source, has_figures, url):
-    lines = [HEADER, stem]
-    cite = citation(source)
-    if cite:
-        lines.append('（{}）'.format(cite))
+    lines = [HEADER, stem, source_line(source)]
     lines += [LINK_LABEL_FIGURE if has_figures else LINK_LABEL, url, TAGS]
     return '\n'.join(lines)
 

@@ -3195,6 +3195,22 @@ class XPostTests(TestCase):
         )
         self.assertEqual(citation('シラバス Ver.8.0 中分類10'), '')
 
+    def test_source_line_names_syllabus_item_for_original_questions(self):
+        from .x_post import source_line
+        self.assertEqual(
+            source_line('シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN'),
+            '（オリジナル問題／シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN）',
+        )
+        self.assertEqual(
+            source_line('令和7年度 科目A 問2 ／ シラバス Ver.8.0 中分類1 応用数学'),
+            '（出典：令和7年度 基本情報技術者試験 科目A 問2）',
+        )
+        self.assertEqual(source_line('自作'), '（オリジナル問題）')
+
+    def test_text_has_source_line(self):
+        post = self._post(source='シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN')
+        self.assertIn('（オリジナル問題／シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN）', post.text)
+
     def test_weight_counts_full_width_and_url(self):
         from .x_post import weight
         self.assertEqual(weight('abc'), 3)
