@@ -102,6 +102,22 @@ az webapp config appsettings set --name hirahira-room --resource-group hirahira 
 # 4. Actions タブの「基本情報の問題メール送信」→ Run workflow で疎通確認
 # ※ 手元で送るとき: python manage.py send_fe_mails --settings=config.settings_dev
 
+# 基本情報の X 投稿（7:00・12:00・19:00 に1問、GitHub Actions の fe-x-posts.yml から起動）
+# 投稿は URL 入り1件 $0.20（月 約 $18.6）。キーを入れて FE_X_DRY_RUN=False にするまでは投稿しない。
+# 1. X の開発者コンソール（https://console.x.com）でアプリを作り、読み書きの権限で
+#    API Key・API Key Secret・Access Token・Access Token Secret を発行する。クレジットを買っておく。
+#    投稿するアカウントのプロフィールで「自動化」のラベルを付ける。
+# 2. トークンを生成する
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# 3. Azure のアプリ設定に入れる（FE_X_DRY_RUN=False で本当に投稿する）
+az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings FE_X_TOKEN="＜生成した値＞" X_API_KEY="＜API Key＞" X_API_SECRET="＜API Key Secret＞" X_ACCESS_TOKEN="＜Access Token＞" X_ACCESS_SECRET="＜Access Token Secret＞" FE_X_DRY_RUN=False
+# 4. GitHub の Settings → Secrets and variables → Actions に登録する
+#    FE_X_TOKEN = 2 と同じ値
+#    FE_X_URL   = https://hirahira-room.net/fe/tasks/post-x/
+# 5. Actions タブの「基本情報の問題の X 投稿」→ Run workflow（時間帯を選ぶ）で1件投稿して確かめる
+#    同じ日の同じ時間帯は1回しか投稿しない。失敗した時間帯は流し直すと同じ問題で投稿し直す。
+# 解答ページは https://hirahira-room.net/fe/x/<記号>/。30日で消え、案内ページになる。
+
 # アプリ設定の一覧（値はマスクされるのでキーの確認用）
 az webapp config appsettings list --name hirahira-room --resource-group hirahira --query "[].name" -o tsv
 
