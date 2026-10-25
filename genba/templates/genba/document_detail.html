@@ -25,6 +25,7 @@
     <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">分かったこと</div><div class="genba-pre">{{ doc.learned|default:"―" }}</div></div></div></div>
     <div class="col-md-6"><div class="card h-100 border-warning"><div class="card-body py-2"><div class="fw-bold">詰まっていること</div><div class="genba-pre">{{ doc.stuck|default:"―" }}</div></div></div></div>
     <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">次にやること</div><div class="genba-pre">{{ doc.next_step|default:"―" }}</div></div></div></div>
+    {% if doc.goal_action %}<div class="col-12"><div class="card border-primary"><div class="card-body py-2"><div class="fw-bold">目標に近づいた行動</div><div class="genba-pre">{{ doc.goal_action }}</div></div></div></div>{% endif %}
 </div>
 {% else %}
 <div class="card shadow-sm mb-3"><div class="card-body genba-pre">{{ doc.body|default:"（本文なし）" }}</div></div>

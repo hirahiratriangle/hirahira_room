@@ -15,6 +15,9 @@
             <p class="small text-muted mb-2"><i class="fab fa-github me-1"></i>{{ card.site.repo_name }} ・ {{ card.site.industry }} ・ 入場 {{ card.site.started_on|date:"n/j" }}</p>
             <div class="small fw-bold mb-1">入場時チェックリスト</div>
             {% for stage in card.stages %}{% include 'genba/_progress_bar.html' %}{% endfor %}
+            <div class="small fw-bold mt-2 mb-1">目標 <a href="{% url 'genba:growth' card.site.pk %}" class="fw-normal ms-1">自分の成長 ›</a></div>
+            {% for g in card.goals %}<div class="small">{{ g.skill_item }}（レベル{{ g.target_level }}）：{{ g.target_text|truncatechars:60 }}</div>
+            {% empty %}<div class="small text-muted">まだ目標がありません</div>{% endfor %}
             {% if card.signals %}
             <div class="small fw-bold text-danger mt-2"><i class="fas fa-exclamation-triangle me-1"></i>危険信号：その日のうちに動く</div>
             {% include 'genba/_signals.html' with signals=card.signals detected_only=True %}

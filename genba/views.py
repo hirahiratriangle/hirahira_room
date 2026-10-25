@@ -12,15 +12,15 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views import View, generic
 
-from . import kit, kit_data, roles, signals
+from . import growth, kit, kit_data, roles, signals, skillset_data
 from .forms import (
-    DocumentForm, IssueForm, PromiseCheckForm, SearchForm, SiteForm, SummaryForm, SummaryReviewForm,
-    TaskProgressForm, TermForm,
+    DocumentForm, GoalForm, GoalPickForm, IssueForm, PromiseCheckForm, ReachForm, SearchForm, SiteForm, SummaryForm,
+    SummaryReviewForm, TaskProgressForm, TermForm,
 )
 from .metrics import THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Membership, Question, Site, Summary, Term, week_start,
+    ChecklistItem, Document, Goal, GoalEvidence, Question, Site, Summary, Term, week_start,
 )
 
 
@@ -84,9 +84,9 @@ def search_knowledge(user, q):
     return docs, terms
 
 
-def checklist_progress(site):
-    """段階ごとのチェックリストの進み具合 [{'key','label','done','total','issues'}]"""
-    issues = site.questions.exclude(stage='').prefetch_related('items').order_by('order')
+def checklist_progress(site, user):
+    """その人の、段階ごとのチェックリストの進み具合 [{'key','label','done','total','issues'}]"""
+    issues = site.questions.filter(author=user).exclude(stage='').prefetch_related('items').order_by('order')
     stages = []
     for key, label in kit.STAGE_LABELS.items():
         qs = [q for q in issues if q.stage == key]
@@ -155,8 +155,9 @@ class MemberHomeView(GenbaMixin, generic.TemplateView):
         context['site_cards'] = [
             {
                 'site': site,
-                'stages': checklist_progress(site),
+                'stages': checklist_progress(site, user),
                 'signals': [s for s in signals.signals_for(user, site) if s.detected],
+                'goals': site.goals.filter(author=user),
             }
             for site in sites.order_by('is_archived', '-started_on')
         ]
@@ -183,9 +184,7 @@ class SiteCreateView(GenbaMixin, generic.CreateView):
     def form_valid(self, form):
         response = super().form_valid(form)
         site = self.object
-        Membership.objects.create(site=site, user=self.request.user, role=form.cleaned_data['my_role'],
-                                  joined_on=site.started_on)
-        kit.create_checklist(site, self.request.user)
+        kit.join_site(site, self.request.user, form.cleaned_data['my_role'], site.started_on)
         messages.success(self.request, f'テンプレートから「{site.name}」を作りました。入場時チェックリストが並んでいます。')
         return response
 
@@ -211,7 +210,7 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
         context['tab'] = tab if tab in self.TABS else 'checklist'
         context['signals'] = signals.signals_for(self.request.user, site)
         context['detected'] = signals.detected_count(context['signals'])
-        context['stages'] = checklist_progress(site)
+        context['stages'] = checklist_progress(site, self.request.user)
         context['memberships'] = site.memberships.select_related('user')
         context['open_questions'] = open_issues([site])
         context['closed_questions'] = (
@@ -222,7 +221,7 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
         context['unreadable_open'] = sum(1 for q, _ in context['unreadable'] if q.is_open)
         context['phrase_unreadable'] = kit.phrase('読めない資料を上げる')
         context['tasks'] = sorted(
-            site.questions.filter(kind=Question.KIND_TASK).select_related('author'),
+            site.questions.filter(Q(stage='') | Q(author=self.request.user), kind=Question.KIND_TASK).select_related('author'),
             key=lambda q: (q.due_on is None, q.due_on or timezone.localdate(), q.order, q.created_at),
         )
         context['today'] = timezone.localdate()
@@ -238,6 +237,7 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
             docs[d.kind].append(d)
         context['doc_groups'] = [(k, label, note, docs.get(k, [])) for k, label, note in kit.DOC_SECTIONS]
         context['summaries'] = site.summaries.select_related('author')
+        context['goals'] = site.goals.select_related('author')
         return context
 
 
@@ -572,6 +572,131 @@ class KnowledgeActionView(LoginRequiredMixin, View):
         obj.save()
         messages.success(request, msg)
         return redirect(request.POST.get('next') or reverse('genba:site_detail', args=[obj.site_id]))
+
+
+# ---------------------------------------------------------------------------
+# 成長基軸（メンバー本人）：目標を立て、記録で到達を示す
+# ---------------------------------------------------------------------------
+
+class SkillsetView(GenbaMixin, generic.TemplateView):
+    """基本設計スキルセット（ITSS対応）"""
+    template_name = 'genba/skillset.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['d'] = skillset_data
+        context['items'] = [
+            {**item, 'skills': growth.concrete_skills(item['name']), 'levels': growth.level_descriptions(item['name'])}
+            for item in skillset_data.SKILL_ITEMS
+        ]
+        return context
+
+
+class GrowthView(SiteMixin, generic.TemplateView):
+    """自分の成長：この現場の目標と、証拠になる記録"""
+    template_name = 'genba/growth.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        goals = []
+        for goal in self.site.goals.filter(author=user).prefetch_related('evidence'):
+            rows = growth.candidates(goal)
+            goals.append({
+                'goal': goal, 'matches': sum(1 for r in rows if r['matches']), 'chosen': goal.evidence.count(),
+                'grade': growth.ae_grade(goal.reached_level, goal.mentored),
+            })
+        context['goals'] = goals
+        context['goal_actions'] = (
+            self.site.documents.filter(author=user, kind=Document.KIND_WEEKLY).exclude(goal_action='').order_by('-week_of')
+        )
+        context['usage'] = skillset_data.USAGE
+        return context
+
+
+class GoalCreateView(SiteMixin, generic.TemplateView):
+    """目標を立てる。項目と今のレベルを選ぶと、一つ上の具体記述と具体スキルが出る。"""
+    template_name = 'genba/goal_form.html'
+    writable = True
+
+    def picked(self, data):
+        pick = GoalPickForm(data or None)
+        if pick.is_valid():
+            return pick, pick.cleaned_data['item'], pick.cleaned_data['level']
+        return pick, None, None
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pick, item, level = kwargs.get('picked') or self.picked(self.request.GET)
+        context['pick'] = pick
+        context['item'], context['level'] = item, level
+        context['usage'] = skillset_data.USAGE[2:]
+        if item:
+            target = growth.level_description(item, level + 1)
+            context['target_level'] = level + 1
+            context['levels'] = growth.level_descriptions(item)
+            context['skills'] = growth.concrete_skills(item)
+            context['form'] = kwargs.get('form') or GoalForm(item=item, initial={'target_text': target})
+        return context
+
+    def post(self, request, *args, **kwargs):
+        picked = self.picked(request.POST)
+        _, item, level = picked
+        if not item:
+            return self.render_to_response(self.get_context_data(picked=picked))
+        form = GoalForm(request.POST, item=item)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(picked=picked, form=form))
+        goal = form.save(commit=False)
+        goal.site, goal.author, goal.skill_item, goal.current_level = self.site, request.user, item, level
+        goal.save()
+        messages.success(request, '目標を立てました。課会資料の「現参画PJを通しての目標」に書けます。')
+        return redirect('genba:growth', site_pk=self.site.pk)
+
+
+class GoalReachView(GenbaMixin, generic.UpdateView):
+    """到達を説明する（本人だけ）。証拠を選び、具体記述に当てはめ、目安と貼る文章を出す。"""
+    model = Goal
+    form_class = ReachForm
+    template_name = 'genba/goal_reach.html'
+    role_name = 'member'
+
+    def get_object(self, queryset=None):
+        goal = super().get_object(queryset)
+        if goal.author_id != self.request.user.pk:
+            raise PermissionDenied
+        return goal
+
+    def post(self, request, *args, **kwargs):
+        check_writable(request.user, self.get_object().site)
+        return super().post(request, *args, **kwargs)
+
+    @transaction.atomic
+    def form_valid(self, form):
+        goal = form.save()
+        rows = {r['key']: r for r in growth.candidates(goal)}
+        goal.evidence.all().delete()
+        GoalEvidence.objects.bulk_create(
+            GoalEvidence(goal=goal, record_type=rows[k]['type'], record_id=rows[k]['id'], title=rows[k]['title'])
+            for k in self.request.POST.getlist('evidence') if k in rows
+        )
+        messages.success(self.request, '到達を保存しました。')
+        return redirect('genba:goal_reach', pk=goal.pk)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        goal = self.object
+        context['site'] = goal.site
+        context['candidates'] = growth.candidates(goal)
+        context['levels'] = growth.level_descriptions(goal.skill_item)
+        context['grade'] = growth.ae_grade(goal.reached_level, goal.mentored)
+        context['itss'] = growth.itss_equivalent(goal.role, goal.team_size, len(goal.complexity_numbers))
+        context['paste'] = growth.paste_text(goal, [e.title for e in goal.evidence.all()])
+        context['itss_levels'] = skillset_data.ITSS_LEVELS
+        context['ae_note'] = skillset_data.AE_NOTE
+        context['cautions'] = skillset_data.CAUTIONS
+        context['writable'] = not goal.site.is_archived
+        return context
 
 
 # ---------------------------------------------------------------------------

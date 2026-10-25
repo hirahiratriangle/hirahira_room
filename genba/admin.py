@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ChecklistItem, Document, Membership, PromiseCheck, Question, Site, Summary, Term
+from .models import ChecklistItem, Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, Summary, Term
 
 
 class MembershipInline(admin.TabularInline):
@@ -52,3 +52,15 @@ class SummaryAdmin(admin.ModelAdmin):
 class PromiseCheckAdmin(admin.ModelAdmin):
     list_display = ('promise', 'actual', 'is_gap', 'site')
     list_filter = ('site', 'is_gap')
+
+
+class GoalEvidenceInline(admin.TabularInline):
+    model = GoalEvidence
+    extra = 0
+
+
+@admin.register(Goal)
+class GoalAdmin(admin.ModelAdmin):
+    list_display = ('site', 'author', 'skill_item', 'current_level', 'reached_level', 'agreed_on')
+    list_filter = ('site', 'skill_item')
+    inlines = [GoalEvidenceInline]

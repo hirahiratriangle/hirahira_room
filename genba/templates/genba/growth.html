@@ -1,0 +1,45 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}自分の成長{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:site_detail' site.pk %}">{{ site.name }}</a></p>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+    <h2 class="h5 mb-0" style="color: #2c5aa0;">自分の成長</h2>
+    {% if not site.is_archived %}<a class="btn btn-primary btn-sm" href="{% url 'genba:goal_create' site.pk %}"><i class="fas fa-plus me-1"></i>目標を立てる</a>{% endif %}
+</div>
+<p class="small text-muted">入場前に目標を立て、期中の記録を証拠に、振り返りで到達を確かめます。物差しは<a href="{% url 'genba:skillset' %}">基本設計スキルセット</a>です。目標は現場チームに見え、到達の説明は自分だけが見ます。</p>
+
+<div class="d-flex flex-wrap align-items-center gap-2 small mb-4">
+    <span class="badge bg-light text-dark border fw-normal">① 入場前　目標を立てる</span><i class="fas fa-arrow-right text-muted"></i>
+    <span class="badge bg-light text-dark border fw-normal">② 期中　チェックリストに沿って動く</span><i class="fas fa-arrow-right text-muted"></i>
+    <span class="badge bg-light text-dark border fw-normal">③ 期中　記録にスキル項目が付く</span><i class="fas fa-arrow-right text-muted"></i>
+    <span class="badge bg-light text-dark border fw-normal">④ 振り返り　到達を確かめる</span><i class="fas fa-arrow-right text-muted"></i>
+    <span class="badge bg-light text-dark border fw-normal">⑤ 次の現場　一つ上の列を次の目標へ</span>
+</div>
+
+{% for g in goals %}
+<div class="card shadow-sm mb-3"><div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between gap-2">
+        <div>
+            <div class="small text-muted">{{ g.goal.skill_item }}{% if g.goal.concrete_skill %} ／ {{ g.goal.concrete_skill }}{% endif %} ・ レベル{{ g.goal.current_level }} → {{ g.goal.target_level }}</div>
+            <div class="fw-bold">{{ g.goal.target_text }}</div>
+            {% if g.goal.preparation %}<div class="small mt-1"><span class="text-muted">入場前の準備：</span>{{ g.goal.preparation }}</div>{% endif %}
+        </div>
+        <div class="text-end small">
+            <div>この項目に付いた記録 <strong>{{ g.matches }}</strong> 件</div>
+            {% if g.goal.reached_level %}<div>到達：レベル{{ g.goal.reached_level }}（評価の目安 {{ g.grade }}）{% if g.goal.agreed_on %} <span class="badge bg-success">課長と合意</span>{% endif %}</div>{% endif %}
+            <a class="btn btn-outline-primary btn-sm mt-1" href="{% url 'genba:goal_reach' g.goal.pk %}">到達を説明する</a>
+        </div>
+    </div>
+</div></div>
+{% empty %}
+<div class="alert alert-light border small">まだ目標がありません。担当工程と担当機能から、問われそうなスキル項目を「典型的な場面」で選び、今のレベルの一つ上の具体記述を目標にします。</div>
+{% endfor %}
+
+<h3 class="h6 mt-4">週報の「目標に近づいた行動」</h3>
+<ul class="list-group">
+    {% for d in goal_actions %}<li class="list-group-item small"><span class="text-muted">{{ d.week_of|date:"n/j" }}の週</span>　{{ d.goal_action }}</li>
+    {% empty %}<li class="list-group-item small text-muted">まだありません。週報に1行書くと、ここに並びます。</li>{% endfor %}
+</ul>
+{% endblock %}

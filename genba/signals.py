@@ -14,6 +14,7 @@ from .models import Document, Membership, Summary, target_url, week_start
 UNREADABLE_ASK_DAYS = 2     # 一覧を持って質問の時間をもらう目安
 UNREADABLE_STUCK_DAYS = 3   # 「3日経っても理解が進んでいない」
 SUMMARY_DAYS = 5            # 「理解の『まとめ』を出す（5日目）」
+SUMMARY_WINDOW_DAYS = 28    # まとめの危険信号は入場期（4週）だけ出す
 
 
 @dataclass
@@ -67,7 +68,7 @@ def _no_weekly(user, site, joined_on, today):
 
 def _no_summary(user, site, joined_on, today):
     days = (today - joined_on).days
-    if days < SUMMARY_DAYS:
+    if not SUMMARY_DAYS <= days <= SUMMARY_WINDOW_DAYS:
         return False, '', None
     if Summary.objects.filter(site=site, author=user, submitted_at__isnull=False).exists():
         return False, '', None

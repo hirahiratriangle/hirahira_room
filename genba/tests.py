@@ -9,11 +9,11 @@ from django.utils import timezone
 
 from accounts.models import CustomUser
 
-from . import kit, kit_data
+from . import growth, kit, kit_data, skillset_data
 from .metrics import site_metrics, weekly_rate
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Membership, PromiseCheck, Question, Site, Summary, Term, week_start,
+    ChecklistItem, Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, Summary, Term, week_start,
 )
 from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
 from .signals import signals_for
@@ -327,6 +327,12 @@ class SignalTests(GenbaTestBase):
         m.joined_on = self.today - timedelta(days=5)
         m.save()
         self.assertTrue(self.signal(self.member, self.site, sign).detected)
+        # 入場期（4週）を過ぎたら出さない
+        m.joined_on = self.today - timedelta(days=29)
+        m.save()
+        self.assertFalse(self.signal(self.member, self.site, sign).detected)
+        m.joined_on = self.today - timedelta(days=5)
+        m.save()
         Summary.objects.create(site=self.site, author=self.member, submitted_at=timezone.now())
         self.assertFalse(self.signal(self.member, self.site, sign).detected)
 
@@ -404,7 +410,7 @@ class SeedCommandTests(TestCase):
             call_command('seed_genba', '--user', 'me', stdout=StringIO())
         self.assertEqual(Site.objects.count(), 3)
         self.client.force_login(user)
-        for name in ('portal', 'kit', 'phrases', 'member_home', 'leader_home', 'management', 'company'):
+        for name in ('portal', 'kit', 'phrases', 'skillset', 'member_home', 'leader_home', 'management', 'company'):
             self.assertEqual(self.client.get(reverse(f'genba:{name}')).status_code, 200, name)
         claims = Site.objects.get(repo_name='genba-demo-claims')
         detected = {s.sign for s in signals_for(user, claims) if s.detected}
@@ -412,3 +418,130 @@ class SeedCommandTests(TestCase):
         for site in Site.objects.all():
             self.client.force_login(site.memberships.first().user)
             self.assertEqual(self.client.get(reverse('genba:site_detail', args=[site.pk])).status_code, 200)
+            self.assertEqual(self.client.get(reverse('genba:growth', args=[site.pk])).status_code, 200)
+        self.client.force_login(user)
+        for goal in Goal.objects.filter(author=user):
+            self.assertEqual(self.client.get(reverse('genba:goal_reach', args=[goal.pk])).status_code, 200)
+
+
+class SkillsetTests(TestCase):
+    def test_skillset_data_matches_source(self):
+        self.assertEqual(len(skillset_data.SKILL_ITEMS), 11)
+        self.assertEqual(len(skillset_data.CONCRETE_SKILLS), 23)
+        self.assertEqual(len(skillset_data.COMPLEXITY), 8)
+        self.assertEqual(len(skillset_data.ITSS_LEVELS), 6)
+        covered = {i for row in skillset_data.LEVEL_DESCRIPTIONS for i in row['items']}
+        self.assertEqual(covered, set(growth.SKILL_ITEMS))
+        self.assertEqual({s['item'] for s in skillset_data.CONCRETE_SKILLS}, set(growth.SKILL_ITEMS))
+
+    def test_no_pay_grade_in_skillset(self):
+        text = repr({k: v for k, v in vars(skillset_data).items() if k.isupper()})
+        self.assertNotIn('職級', text)
+        self.assertNotIn('賃金', text)
+
+    def test_auto_skills_exist_in_skillset(self):
+        pairs = {(s['item'], s['skill']) for s in skillset_data.CONCRETE_SKILLS}
+        for pair in growth.AUTO_SKILLS.values():
+            self.assertIn(pair, pairs)
+
+    def test_level_description(self):
+        self.assertEqual(growth.level_description('デザイン', 4), '画面標準・データモデル・IF方針をチームに示し、レビューで整合させる')
+        self.assertEqual(growth.level_description('ネゴシエーション', 3), growth.level_description('コミュニケーション', 3))
+        self.assertEqual(growth.level_description('リーダーシップ', 2), '')
+
+    def test_grade_and_itss(self):
+        self.assertEqual(growth.ae_grade(2, False), 'C')
+        self.assertEqual(growth.ae_grade(3, False), 'B')
+        self.assertEqual(growth.ae_grade(3, True), 'A')
+        self.assertEqual(growth.ae_grade(4, False), 'A')
+        self.assertEqual(growth.itss_equivalent('member', 5, 0), 3)
+        self.assertEqual(growth.itss_equivalent('leader', 2, 0), 3)
+        self.assertEqual(growth.itss_equivalent('leader', 3, 0), 4)
+        self.assertEqual(growth.itss_equivalent('owner', 10, 0), 5)
+        self.assertEqual(growth.itss_equivalent('owner', 3, 4), 5)
+        self.assertIsNone(growth.itss_equivalent('', 3, 0))
+
+
+class GoalTests(GenbaTestBase):
+    def test_pick_shows_one_level_up(self):
+        self.client.force_login(self.member)
+        res = self.client.get(reverse('genba:goal_create', args=[self.site.pk]), {'item': 'デザイン', 'level': 3})
+        self.assertContains(res, '画面標準・データモデル・IF方針をチームに示し、レビューで整合させる')
+        self.assertContains(res, '画面・入力チェック設計')
+
+    def test_create_goal(self):
+        self.client.force_login(self.member)
+        res = self.client.post(reverse('genba:goal_create', args=[self.site.pk]), {
+            'item': 'デザイン', 'level': 3, 'concrete_skill': '帳票・出力設計', 'target_text': '目標の文', 'preparation': ''})
+        self.assertRedirects(res, reverse('genba:growth', args=[self.site.pk]))
+        g = Goal.objects.get()
+        self.assertEqual((g.author, g.skill_item, g.current_level, g.target_level), (self.member, 'デザイン', 3, 4))
+
+    def test_concrete_skill_must_belong_to_item(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('genba:goal_create', args=[self.site.pk]), {
+            'item': 'デザイン', 'level': 3, 'concrete_skill': '後進の指導', 'target_text': 'x'})
+        self.assertFalse(Goal.objects.exists())
+
+    def test_goal_visible_to_team_reach_only_to_author(self):
+        g = Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=3,
+                                target_text='チームに見える目標', explanation='本人だけの説明')
+        self.client.force_login(self.leader)
+        res = self.client.get(reverse('genba:site_detail', args=[self.site.pk]), {'tab': 'members'})
+        self.assertContains(res, 'チームに見える目標')
+        self.assertNotContains(res, '本人だけの説明')
+        self.assertEqual(self.client.get(reverse('genba:goal_reach', args=[g.pk])).status_code, 403)
+        self.client.force_login(self.member)
+        self.assertContains(self.client.get(reverse('genba:goal_reach', args=[g.pk])), '本人だけの説明')
+
+    def test_candidates_are_own_records_with_matching_first(self):
+        other = self.make_site('現場B', 'genba-b')
+        g = Goal.objects.create(site=self.site, author=self.member, skill_item='コミュニケーション', current_level=2,
+                                target_text='x')
+        mine = Question.objects.create(site=self.site, author=self.member, title='読めないA', unreadable=True)
+        Term.objects.create(site=self.site, author=self.member, term='用語A', meaning='m')
+        Question.objects.create(site=self.site, author=self.leader, title='他人の読めない', unreadable=True)
+        Question.objects.create(site=other, author=self.member, title='他現場の読めない', unreadable=True)
+        kit.create_checklist(self.site, self.member)
+        rows = growth.candidates(g)
+        titles = [r['title'] for r in rows]
+        self.assertEqual(rows[0]['key'], f'issue:{mine.pk}')
+        self.assertTrue(rows[0]['matches'])
+        self.assertIn('用語集：用語A', titles)
+        self.assertFalse(any('他人' in t or '他現場' in t or '［' in t for t in titles))
+
+    def test_reach_saves_evidence_and_paste_text(self):
+        g = Goal.objects.create(site=self.site, author=self.member, skill_item='コミュニケーション', current_level=2,
+                                target_text='説明して取り決める')
+        q = Question.objects.create(site=self.site, author=self.member, title='読めないA', unreadable=True)
+        other = Question.objects.create(site=self.site, author=self.leader, title='他人の', unreadable=True)
+        self.client.force_login(self.member)
+        self.client.post(reverse('genba:goal_reach', args=[g.pk]), {
+            'reached_level': 3, 'explanation': 'やった', 'role': 'member', 'team_size': 5,
+            'complexity': ['1', '4'], 'agreed': 'on', 'evidence': [f'issue:{q.pk}', f'issue:{other.pk}']})
+        g.refresh_from_db()
+        self.assertEqual((g.reached_level, g.complexity, g.agreed_on), (3, '1,4', self.today))
+        self.assertEqual(list(g.evidence.values_list('record_id', flat=True)), [q.pk])
+        res = self.client.get(reverse('genba:goal_reach', args=[g.pk]))
+        self.assertContains(res, 'スキルシート（基本設計）の評価の目安：B')
+        self.assertContains(res, 'ITSSレベル3相当')
+
+    def test_weekly_goal_action_on_growth_page(self):
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_WEEKLY, title='w',
+                                week_of=self.today, goal_action='設計方針をチームに示した')
+        self.client.force_login(self.member)
+        self.assertContains(self.client.get(reverse('genba:growth', args=[self.site.pk])), '設計方針をチームに示した')
+
+    def test_checklist_is_per_person(self):
+        newcomer = CustomUser.objects.create_user('newcomer', 'n@example.com', 'pass12345')
+        kit.join_site(self.site, newcomer, Membership.ROLE_MEMBER, self.today)
+        self.assertEqual(self.site.questions.filter(author=newcomer).exclude(stage='').count(), 12)
+        self.assertFalse(self.site.questions.filter(author=self.member).exclude(stage='').exists())
+        q = self.site.questions.filter(author=newcomer, title__contains='役割と期待値').get()
+        self.assertIn(('目標（スキルセット）', reverse('genba:goal_create', args=[self.site.pk])), q.record_targets())
+
+    def test_skillset_page(self):
+        self.client.force_login(self.outsider)
+        res = self.client.get(reverse('genba:skillset'))
+        self.assertContains(res, '業務アプリケーション開発 基本設計スキルセット')
+        self.assertContains(res, '読めない資料の早期の共有')

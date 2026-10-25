@@ -122,6 +122,7 @@ class Document(KnowledgeMixin):
     learned = models.TextField(verbose_name='分かったこと', blank=True)
     stuck = models.TextField(verbose_name='詰まっていること', blank=True, help_text='リーダーの画面に出る。')
     next_step = models.TextField(verbose_name='次にやること', blank=True)
+    goal_action = models.TextField(verbose_name='目標に近づいた行動', blank=True, help_text='1行でよい（任意）。')
     # 振り返りだけ
     skill_item = models.CharField(
         verbose_name='スキル対応', max_length=100, blank=True,
@@ -263,6 +264,8 @@ def target_url(site_id, code):
         return reverse('genba:issue_create', args=[site_id, code])
     if code == 'summary':
         return reverse('genba:summary', args=[site_id])
+    if code == 'goal':
+        return reverse('genba:goal_create', args=[site_id])
     if code == 'progress':
         return reverse('genba:site_detail', args=[site_id]) + '?tab=progress'
     raise ValueError(code)
@@ -328,3 +331,63 @@ class PromiseCheck(models.Model):
 
     def __str__(self):
         return self.promise
+
+
+class Goal(models.Model):
+    """現場ごとの成長の目標と到達（基本設計スキルセット）。
+    目標は現場チームに見せる。到達の説明は本人だけが見る。"""
+
+    ROLE_CHOICES = [('member', 'メンバー'), ('leader', 'リーダー'), ('owner', '責任者')]
+    LEVEL_CHOICES = [(n, f'レベル{n}') for n in range(1, 6)]
+
+    site = models.ForeignKey(Site, verbose_name='現場', on_delete=models.CASCADE, related_name='goals')
+    author = models.ForeignKey(CustomUser, verbose_name='本人', on_delete=models.PROTECT, related_name='genba_goals')
+    skill_item = models.CharField(verbose_name='スキル項目', max_length=40)
+    concrete_skill = models.CharField(verbose_name='基本設計の具体スキル', max_length=60, blank=True)
+    current_level = models.PositiveSmallIntegerField(verbose_name='今のレベル', choices=LEVEL_CHOICES[:4])
+    target_text = models.TextField(verbose_name='目標（一つ上のレベルの具体記述）')
+    preparation = models.TextField(verbose_name='入場前に準備すること', blank=True)
+    # 到達（振り返り）
+    reached_level = models.PositiveSmallIntegerField(
+        verbose_name='当てはまるレベル', choices=LEVEL_CHOICES[1:], null=True, blank=True)
+    explanation = models.TextField(verbose_name='実際にやった行動', blank=True)
+    mentored = models.BooleanField(verbose_name='後進の指導をした', default=False)
+    role = models.CharField(verbose_name='立場（責任性）', max_length=10, choices=ROLE_CHOICES, blank=True)
+    team_size = models.PositiveIntegerField(verbose_name='ピーク時のチーム人数', null=True, blank=True)
+    complexity = models.CharField(verbose_name='複雑性（該当する番号）', max_length=30, blank=True)
+    agreed_on = models.DateField(verbose_name='課長と合意した日', null=True, blank=True)
+    created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
+    updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '目標と到達'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.skill_item}：{self.target_text[:30]}'
+
+    @property
+    def target_level(self):
+        return self.current_level + 1
+
+    @property
+    def complexity_numbers(self):
+        return [int(n) for n in self.complexity.split(',') if n]
+
+
+class GoalEvidence(models.Model):
+    """到達の証拠に選んだ本人の記録"""
+
+    TYPE_CHOICES = [('doc', '文書'), ('term', '用語'), ('issue', 'Issue'), ('summary', 'まとめ')]
+
+    goal = models.ForeignKey(Goal, verbose_name='目標', on_delete=models.CASCADE, related_name='evidence')
+    record_type = models.CharField(verbose_name='記録の種類', max_length=10, choices=TYPE_CHOICES)
+    record_id = models.PositiveIntegerField(verbose_name='記録のID')
+    title = models.CharField(verbose_name='記録の名前', max_length=150)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '到達の証拠'
+        constraints = [models.UniqueConstraint(fields=['goal', 'record_type', 'record_id'], name='genba_unique_evidence')]
+
+    def __str__(self):
+        return self.title

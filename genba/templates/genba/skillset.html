@@ -1,0 +1,57 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}スキルセット{% endblock %}
+
+{% block genba_contents %}
+<h2 class="h5 mb-2" style="color: #2c5aa0;">{{ d.SKILLSET_TITLE }}</h2>
+{% for p in d.SKILLSET_INTRO %}<p class="small">{{ p }}</p>{% endfor %}
+<table class="table table-sm small mb-4">
+    <thead class="text-muted"><tr><th>層</th><th>中身</th><th>根拠</th></tr></thead>
+    <tbody>{% for l in d.LAYERS %}<tr><td class="text-nowrap">{{ l.layer }}</td><td>{{ l.content }}</td><td>{{ l.basis }}</td></tr>{% endfor %}</tbody>
+</table>
+
+<h3 class="h6">使い方</h3>
+<ol class="small mb-4">{% for u in d.USAGE %}<li>{{ u }}</li>{% endfor %}</ol>
+
+<h3 class="h6">ITSSの枠組み（親）</h3>
+{% for p in d.FRAME %}<p class="small mb-1">{{ p }}</p>{% endfor %}
+{% for p in d.FRAME_NOTES %}<p class="small text-muted mb-1">{{ p }}</p>{% endfor %}
+
+<h3 class="h6 mt-4">スキル項目ごとの具体スキルとレベル別の具体記述</h3>
+<p class="small text-muted">{{ d.SKILLSET_LEAD }} {{ d.LEVEL_DESC_LEAD }}</p>
+<div class="accordion mb-4" id="items">
+    {% for item in items %}
+    <div class="accordion-item">
+        <h4 class="accordion-header"><button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#item{{ forloop.counter }}">
+            <span class="fw-bold me-2">{{ item.name }}</span><span class="small text-muted">{{ item.kind }} ― {{ item.role }}</span>
+        </button></h4>
+        <div id="item{{ forloop.counter }}" class="accordion-collapse collapse"><div class="accordion-body small">
+            <table class="table table-sm mb-3">
+                <thead class="text-muted"><tr><th>基本設計の具体スキル</th><th>具体記述（行動）</th><th>典型的な場面</th></tr></thead>
+                <tbody>{% for s in item.skills %}<tr><td class="text-nowrap">{{ s.skill }}</td><td>{{ s.behavior }}</td><td>{{ s.scene }}</td></tr>{% endfor %}</tbody>
+            </table>
+            <table class="table table-sm mb-0">
+                <tbody>{% for n, text in item.levels %}<tr><th class="text-nowrap text-muted">レベル{{ n }}</th><td>{{ text|default:"—" }}</td></tr>{% endfor %}</tbody>
+            </table>
+        </div></div>
+    </div>
+    {% endfor %}
+</div>
+
+<h3 class="h6">ITSSのレベル（親）</h3>
+<p class="small">{{ d.ITSS_LEVELS_INTRO }}</p>
+<div class="table-responsive"><table class="table table-sm small">
+    <thead class="text-muted"><tr><th>レベル</th><th>責任性</th><th>複雑性</th><th>サイズ（ピーク時要員）</th><th>プロフェッショナル貢献</th><th>試験の目安</th></tr></thead>
+    <tbody>{% for r in d.ITSS_LEVELS %}<tr><td class="text-nowrap">{{ r.level }}</td><td>{{ r.responsibility }}</td><td>{{ r.complexity }}</td><td>{{ r.size }}</td><td>{{ r.contribution }}</td><td>{{ r.exam }}</td></tr>{% endfor %}</tbody>
+</table></div>
+<p class="small text-muted">{{ d.ITSS_LEVELS_NOTE }}</p>
+<h4 class="h6">複雑性の8項目（業務システム）</h4>
+<ol class="small">{% for c in d.COMPLEXITY %}<li>{{ c }}</li>{% endfor %}</ol>
+<h4 class="h6">スキルシートの評価A〜Eとの関係</h4>
+<p class="small">{{ d.AE_NOTE }}</p>
+
+<h3 class="h6 mt-4">注意点</h3>
+<ul class="small">{% for c in d.CAUTIONS %}<li>{{ c }}</li>{% endfor %}</ul>
+<h3 class="h6">出典</h3>
+<ul class="small text-muted">{% for s in d.SOURCES %}<li>{{ s }}</li>{% endfor %}</ul>
+{% endblock %}

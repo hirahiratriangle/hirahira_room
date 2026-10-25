@@ -9,6 +9,7 @@ urlpatterns = [
     # 現場テンプレートと言い回し集（全現場共通）
     path('kit/', views.KitView.as_view(), name='kit'),
     path('kit/phrases/', views.PhrasesView.as_view(), name='phrases'),
+    path('kit/skills/', views.SkillsetView.as_view(), name='skillset'),
     # 立場ごとのホーム
     path('member/', views.MemberHomeView.as_view(), name='member_home'),
     path('leader/', views.LeaderHomeView.as_view(), name='leader_home'),
@@ -19,6 +20,9 @@ urlpatterns = [
     path('sites/<int:site_pk>/', views.SiteDetailView.as_view(), name='site_detail'),
     path('sites/<int:site_pk>/archive/', views.SiteArchiveView.as_view(), name='site_archive'),
     path('sites/<int:site_pk>/summary/', views.SummaryView.as_view(), name='summary'),
+    path('sites/<int:site_pk>/growth/', views.GrowthView.as_view(), name='growth'),
+    path('sites/<int:site_pk>/goals/create/', views.GoalCreateView.as_view(), name='goal_create'),
+    path('goals/<int:pk>/reach/', views.GoalReachView.as_view(), name='goal_reach'),
     path('sites/<int:site_pk>/issues/create/<str:kind>/', views.IssueCreateView.as_view(), name='issue_create'),
     path('sites/<int:site_pk>/terms/create/', views.TermCreateView.as_view(), name='term_create'),
     path('sites/<int:site_pk>/promises/create/', views.PromiseCheckCreateView.as_view(), name='promise_create'),

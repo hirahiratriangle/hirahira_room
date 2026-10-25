@@ -1,7 +1,7 @@
 """現場テンプレート（genba-template に当たるもの）。
 
 プロトタイプでは GitHub のテンプレートリポジトリを作らず、構成をここに持つ。
-現場を作ると、チェックリストがその現場の作業 Issue としてコピーされる。
+現場に入った人ごとに、チェックリストがその現場の作業 Issue としてコピーされる。
 元資料を改訂しても、作成済みの現場は変わらない（新しく作る現場から新しい版を使う）。
 """
 from . import kit_data
@@ -40,13 +40,14 @@ RECORD_TARGETS = {
     'unreadable': '「読めない」Issue',
     'problem': '課題 Issue',
     'summary': '1週目のまとめ',
+    'goal': '目標（スキルセット）',
     **{f'doc:{key}': label for key, label, _ in DOC_SECTIONS},
 }
 
 # 小見出しごとの残す場所
 _SECTION_TARGETS = {
     '契約・商流': ['doc:contract'],
-    '役割と期待値': ['doc:pre'],
+    '役割と期待値': ['doc:pre', 'goal'],
     '自社側の支援': ['doc:pre'],
     '体制と人': ['doc:structure'],
     'ドキュメントと環境': ['doc:structure'],
@@ -106,8 +107,17 @@ def checklist():
     return stages
 
 
+def join_site(site, user, role, joined_on, duty=''):
+    """現場に入る。その人の入場時チェックリストを作業 Issue として並べる"""
+    from .models import Membership
+
+    membership = Membership.objects.create(site=site, user=user, role=role, joined_on=joined_on, duty=duty)
+    create_checklist(site, user)
+    return membership
+
+
 def create_checklist(site, user):
-    """現場の作成時に、チェックリストを作業 Issue とチェック項目として並べる"""
+    """その人のチェックリストを、作業 Issue とチェック項目として並べる"""
     from .models import ChecklistItem, Question
 
     order = 0

@@ -7,9 +7,10 @@
 デモの現場（リポジトリ名が genba-demo- で始まるもの）は毎回作り直す。
 
 筋書き：
-- 受発注（リーダー）：入場から10週。チェックリストはほぼ済み、まとめはリーダーと確認済み
+- 受発注（リーダー）：入場から10週。チェックリストはほぼ済み、まとめはリーダーと確認済み。
+  目標（プロジェクトマネジメント レベル3→4）の到達を説明し、課長と合意済み
 - 保険金請求（メンバー）：入場から6日。1週目の途中で、3日止まっている「読めない」があり、
-  まとめはまだ出していない → 危険信号が2つ出る
+  まとめはまだ出していない → 危険信号が2つ出る。目標（デザイン レベル3→4）を立てている
 - 店舗在庫（入っていない）：マネジメント・会社の画面でだけ見える
 """
 from datetime import timedelta
@@ -23,7 +24,7 @@ from accounts.models import CustomUser
 from genba import kit
 from genba.models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY,
-    Document, Membership, PromiseCheck, Question, Site, Summary, Term, week_start,
+    Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, Summary, Term, week_start,
 )
 from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
@@ -75,18 +76,18 @@ class Command(BaseCommand):
     def week(self, n):
         return week_start(self.today) - timedelta(weeks=n)
 
-    def create_site(self, creator, **fields):
-        site = Site.objects.create(**fields)
-        kit.create_checklist(site, creator)
-        for q in site.questions.exclude(stage=''):
-            q.due_on = site.started_on + timedelta(days=STAGE_DUE[q.stage])
-            q.created_at = self.now - timedelta(days=(self.today - site.started_on).days + 1)
+    def join(self, site, user, role=Membership.ROLE_MEMBER, joined_on=None, duty=''):
+        """現場に入る（その人のチェックリストが並ぶ）。予定日は入場日から決める"""
+        joined_on = joined_on or site.started_on
+        kit.join_site(site, user, role, joined_on, duty)
+        for q in site.questions.filter(author=user).exclude(stage=''):
+            q.due_on = joined_on + timedelta(days=STAGE_DUE[q.stage])
+            q.created_at = self.now - timedelta(days=(self.today - joined_on).days + 1)
             q.save()
-        return site
 
-    def check_items(self, site, stage, sections=None, items=None):
-        """チェックリストを済みにする。sections を省くと段階の全部。items で各 Issue の先頭から何項目か"""
-        for q in site.questions.filter(stage=stage).order_by('order'):
+    def check_items(self, site, user, stage, sections=None, items=None):
+        """その人のチェックリストを済みにする。sections を省くと段階の全部。items で各 Issue の先頭から何項目か"""
+        for q in site.questions.filter(author=user, stage=stage).order_by('order'):
             if sections is not None and not any(s in q.title for s in sections):
                 continue
             targets = list(q.items.all())[:items] if items else q.items.all()
@@ -99,25 +100,27 @@ class Command(BaseCommand):
                 q.closed_at = self.now
                 q.save()
 
-    def weekly(self, site, author, n, done, learned='', stuck='', next_step=''):
+    def weekly(self, site, author, n, done, learned='', stuck='', next_step='', goal_action=''):
         w = self.week(n)
         Document.objects.create(site=site, author=author, kind=Document.KIND_WEEKLY, title=f'週報 {w.month}/{w.day}の週',
-                                week_of=w, done=done, learned=learned, stuck=stuck, next_step=next_step)
+                                week_of=w, done=done, learned=learned, stuck=stuck, next_step=next_step,
+                                goal_action=goal_action)
 
     # ---- 現場1: 受発注システム刷新（自分はリーダー） ----
 
     def seed_order(self, me, sato, suzuki):
         started = self.today - timedelta(weeks=10)
-        site = self.create_site(
-            me, name='受発注システム刷新', repo_name=f'{DEMO_PREFIX}order', industry='製造業',
+        site = Site.objects.create(
+            name='受発注システム刷新', repo_name=f'{DEMO_PREFIX}order', industry='製造業',
             description='既存の受発注システムを刷新する基本設計フェーズ。', started_on=started,
         )
-        Membership.objects.create(site=site, user=me, role=Membership.ROLE_LEADER, duty='基本設計リード', joined_on=started)
-        Membership.objects.create(site=site, user=sato, duty='画面設計', joined_on=started)
-        Membership.objects.create(site=site, user=suzuki, duty='帳票・バッチ設計', joined_on=started + timedelta(weeks=2))
-        for stage in ('pre', 'day1', 'week1'):
-            self.check_items(site, stage)
-        self.check_items(site, 'week2', items=4)
+        self.join(site, me, Membership.ROLE_LEADER, duty='基本設計リード')
+        self.join(site, sato, duty='画面設計')
+        self.join(site, suzuki, duty='帳票・バッチ設計', joined_on=started + timedelta(weeks=2))
+        for user in (me, sato, suzuki):
+            for stage in ('pre', 'day1', 'week1'):
+                self.check_items(site, user, stage)
+            self.check_items(site, user, 'week2', items=4)
 
         Q = Question.objects
         Q.create(site=site, author=sato, title='「確定」ボタン押下後の取消可否', ask_to='業務部 課長',
@@ -176,7 +179,8 @@ class Command(BaseCommand):
             self.weekly(site, me, n, done='受注画面・帳票の設計を進めた。',
                         learned='業務部の「出荷」は得意先受領の意味。' if n == 1 else '',
                         stuck='確定後の取消可否の回答待ちで、受注画面の遷移が決められない。' if n <= 1 else '',
-                        next_step='回答を受けて受注画面の遷移を確定する。')
+                        next_step='回答を受けて受注画面の遷移を確定する。',
+                        goal_action='3人の設計チームの課題とリスクを週次で棚卸しし、レビューに出した。' if n in (0, 3) else '')
         Summary.objects.create(site=site, author=sato, submitted_at=self.ago(65),
                                overview='受注〜請求の基幹業務を刷新。利用者は業務部と倉庫。業務フローは 03_業務理解 を参照。',
                                functions='担当：受注画面。入力＝受注明細、処理＝引当、出力＝出荷指示。つながる機能：在庫引当・請求。',
@@ -188,22 +192,36 @@ class Command(BaseCommand):
         PromiseCheck.objects.create(site=site, author=me, promise='要件は確定済み', actual='確定後の取消など業務ルールが未定', is_gap=True)
         PromiseCheck.objects.create(site=site, author=me, promise='帳票は20本', actual='棚卸しで35本見つかった', is_gap=True)
         PromiseCheck.objects.create(site=site, author=me, promise='レビューは週1回', actual='週1回で回っている')
+        goal = Goal.objects.create(
+            site=site, author=me, skill_item='プロジェクトマネジメント', concrete_skill='担当機能の設計スケジュール管理',
+            current_level=3, target_text='3人以上の設計チームのスケジュール・課題・リスクを管理する',
+            preparation='マスタースケジュールの読み方と、課題管理表の運用を確認しておく。', created_at=self.ago(71),
+            reached_level=4, mentored=True, role='leader', team_size=3, complexity='1,4',
+            explanation='3人の設計チームの課題とリスクを週次で棚卸しし、レビュー計画に組み込んだ。仕様書が最新でない課題は、影響と見込みを添えて上げた。',
+            agreed_on=self.today - timedelta(days=2))
+        problem = site.questions.get(title='旧システムの仕様書が最新でない')
+        GoalEvidence.objects.create(goal=goal, record_type='issue', record_id=problem.pk, title=f'課題：{problem.title}')
 
     # ---- 現場2: 保険金請求の基本設計（自分はメンバー。入場から6日） ----
 
     def seed_claims(self, me, tanaka):
         started = self.today - timedelta(days=6)
-        site = self.create_site(
-            tanaka, name='保険金請求 基本設計', repo_name=f'{DEMO_PREFIX}claims', industry='保険業',
+        site = Site.objects.create(
+            name='保険金請求 基本設計', repo_name=f'{DEMO_PREFIX}claims', industry='保険業',
             description='保険金請求の受付から支払までの業務フローと画面の基本設計。', started_on=started,
         )
-        Membership.objects.create(site=site, user=tanaka, role=Membership.ROLE_LEADER, duty='PM',
-                                  joined_on=started - timedelta(weeks=8))
-        Membership.objects.create(site=site, user=me, duty='業務フロー設計', joined_on=started)
-        self.check_items(site, 'pre')
-        self.check_items(site, 'day1')
-        self.check_items(site, 'week1', sections=['全体像'], items=2)
-        self.check_items(site, 'week1', sections=['読めない'], items=1)
+        self.join(site, tanaka, Membership.ROLE_LEADER, duty='PM')
+        self.join(site, me, duty='業務フロー設計')
+        for stage in kit.STAGE_LABELS:
+            self.check_items(site, tanaka, stage)
+        self.check_items(site, me, 'pre')
+        self.check_items(site, me, 'day1')
+        self.check_items(site, me, 'week1', sections=['全体像'], items=2)
+        self.check_items(site, me, 'week1', sections=['読めない'], items=1)
+        Goal.objects.create(
+            site=site, author=me, skill_item='デザイン', concrete_skill='画面・入力チェック設計', current_level=3,
+            target_text='画面標準・データモデル・IF方針をチームに示し、レビューで整合させる',
+            preparation='保険金請求の業務と画面標準（入力チェックの共通化）を入場前に読む。', created_at=self.ago(8))
 
         Question.objects.create(site=site, author=me, title='査定の二段階承認は全件か', ask_to='査定部', created_at=self.ago(2))
         Question.objects.create(site=site, author=me, unreadable=True, title='支払業務説明書の「免責判定」の前提が分からない',
@@ -229,12 +247,12 @@ class Command(BaseCommand):
 
     def seed_stock(self, ito):
         started = self.today - timedelta(weeks=20)
-        site = self.create_site(
-            ito, name='店舗在庫の可視化', repo_name=f'{DEMO_PREFIX}stock', industry='小売業', started_on=started,
+        site = Site.objects.create(
+            name='店舗在庫の可視化', repo_name=f'{DEMO_PREFIX}stock', industry='小売業', started_on=started,
         )
-        Membership.objects.create(site=site, user=ito, role=Membership.ROLE_LEADER, joined_on=started)
+        self.join(site, ito, Membership.ROLE_LEADER)
         for stage in kit.STAGE_LABELS:
-            self.check_items(site, stage)
+            self.check_items(site, ito, stage)
         for title, days in (('旧POSのデータ移行', 40), ('店舗端末の手配', 30), ('操作マニュアル作成', 10)):
             Question.objects.create(site=site, author=ito, kind=Question.KIND_TASK, title=title, scope_out=True,
                                     created_at=self.ago(days))

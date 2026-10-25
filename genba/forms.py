@@ -1,6 +1,8 @@
 from django import forms
+from django.utils import timezone
 
-from .models import Document, Membership, PromiseCheck, Question, Site, Summary, Term
+from . import growth
+from .models import Document, Goal, Membership, PromiseCheck, Question, Site, Summary, Term
 
 
 class BootstrapMixin:
@@ -103,11 +105,11 @@ class TermForm(BootstrapMixin, forms.ModelForm):
 class DocumentForm(BootstrapMixin, forms.ModelForm):
     """区分ごとに要る項目だけ出す"""
 
-    WEEKLY_FIELDS = ['title', 'week_of', 'done', 'learned', 'stuck', 'next_step']
+    WEEKLY_FIELDS = ['title', 'week_of', 'done', 'learned', 'stuck', 'next_step', 'goal_action']
 
     class Meta:
         model = Document
-        fields = ['title', 'body', 'week_of', 'done', 'learned', 'stuck', 'next_step', 'skill_item']
+        fields = ['title', 'body', 'week_of', 'done', 'learned', 'stuck', 'next_step', 'goal_action', 'skill_item']
         widgets = {
             'body': forms.Textarea(attrs={'rows': 10}),
             'week_of': forms.DateInput(attrs={'type': 'date'}),
@@ -115,6 +117,7 @@ class DocumentForm(BootstrapMixin, forms.ModelForm):
             'learned': forms.Textarea(attrs={'rows': 3}),
             'stuck': forms.Textarea(attrs={'rows': 3}),
             'next_step': forms.Textarea(attrs={'rows': 3}),
+            'goal_action': forms.TextInput(),
         }
 
     def __init__(self, *args, kind, **kwargs):
@@ -144,6 +147,67 @@ class SummaryReviewForm(BootstrapMixin, forms.ModelForm):
         model = Summary
         fields = ['review_note']
         widgets = {'review_note': forms.Textarea(attrs={'rows': 3})}
+
+
+class GoalPickForm(forms.Form):
+    """目標を立てる1段目：スキル項目と今のレベルを選ぶ"""
+
+    item = forms.ChoiceField(label='スキル項目', choices=[('', '選ぶ')] + [(n, n) for n in growth.SKILL_ITEMS],
+                             widget=forms.Select(attrs={'class': 'form-select'}))
+    level = forms.TypedChoiceField(label='今のレベル', coerce=int, choices=Goal.LEVEL_CHOICES[:4], initial=3,
+                                   widget=forms.Select(attrs={'class': 'form-select'}))
+
+
+class GoalForm(BootstrapMixin, forms.ModelForm):
+    """目標を立てる2段目：一つ上の具体記述を目標の文にする"""
+
+    class Meta:
+        model = Goal
+        fields = ['concrete_skill', 'target_text', 'preparation']
+        widgets = {
+            'target_text': forms.Textarea(attrs={'rows': 3}),
+            'preparation': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, item, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['concrete_skill'] = forms.ChoiceField(
+            label='基本設計の具体スキル', required=False,
+            choices=[('', '（選ばない）')] + [(s['skill'], s['skill']) for s in growth.concrete_skills(item)],
+            widget=forms.Select(attrs={'class': 'form-select'}),
+        )
+
+
+class ReachForm(BootstrapMixin, forms.ModelForm):
+    """振り返りで到達を説明する"""
+
+    complexity = forms.MultipleChoiceField(
+        label='複雑性（当てはまるもの）', required=False, widget=forms.CheckboxSelectMultiple,
+        choices=[(str(i), f'{i}. {text}') for i, text in enumerate(growth.data.COMPLEXITY, 1)],
+    )
+    agreed = forms.BooleanField(label='この到達を課長と合意した', required=False)
+
+    class Meta:
+        model = Goal
+        fields = ['reached_level', 'explanation', 'mentored', 'role', 'team_size']
+        widgets = {'explanation': forms.Textarea(attrs={'rows': 4})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['complexity'].initial = [str(n) for n in self.instance.complexity_numbers]
+        self.fields['complexity'].widget.attrs = {}
+        self.fields['agreed'].initial = bool(self.instance.agreed_on)
+
+    def save(self, commit=True):
+        goal = super().save(commit=False)
+        goal.complexity = ','.join(sorted(self.cleaned_data['complexity'], key=int))
+        if not self.cleaned_data['agreed']:
+            goal.agreed_on = None
+        elif not goal.agreed_on:
+            goal.agreed_on = timezone.localdate()
+        if commit:
+            goal.save()
+        return goal
 
 
 class PromiseCheckForm(BootstrapMixin, forms.ModelForm):
