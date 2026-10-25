@@ -3,7 +3,10 @@
 # コミット済みのファイルだけを zip にして送る（git archive → az webapp deploy --type zip）。
 # リポジトリのフォルダで az webapp up はしない。フォルダをまるごと zip にするので、
 # db.sqlite3・.env.local・.git まで本番に上がる（.gitignore は読まない）。
+# 終わりに、今回のコミットで動いているかを https://hirahira-room.net/static/revision.txt で確かめ、
+# 古いコンテナのままなら再起動する（「今回の版（xxxxxxx）で動いています。」が出れば入れ替わっている）。
 # マイグレーションが要る変更なら、このあと下の「マイグレーション」を行う。
+# 新しいコードが動き出してから migrate が済むまでは、新しい欄を読む画面がエラーになる。すぐに続けて行う。
 
 # 前準備
 az webapp stop --name hirahira-room --resource-group hirahira

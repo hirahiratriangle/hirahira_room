@@ -15,6 +15,11 @@
 #   ・staticfiles はビルド（Oryx）が collectstatic で作り直す
 # ビルドは、アプリ設定 SCM_DO_BUILD_DURING_DEPLOYMENT=True により az webapp up と同じく走る。
 #
+# デプロイが終わっても、動いているコンテナが古いまま入れ替わらないことがある（2026-10-25・26 に2回。
+# az webapp restart で入れ替わった）。そこで zip に版の印 static/revision.txt（コミットの短いハッシュ）を
+# 入れ、/static/revision.txt が今回のコミットを返すまで確かめる。返さなければ再起動する。
+# WhiteNoise は起動したときの静的ファイルを配るので、この印は「いま動いているコンテナの版」になる。
+#
 # マイグレーションは別に要る（deploy.txt の「マイグレーション」）。
 
 set -eu
@@ -30,6 +35,12 @@ ZIP="$(mktemp -d)/hirahira_room.zip"
 trap 'rm -rf "$(dirname "$ZIP")"' EXIT   # az を裏で動かすところで、止める処理も足して張り直す
 
 git archive --format=zip -o "$ZIP" HEAD
+
+# 版の印を zip に足す（リポジトリには置かない。collectstatic で staticfiles に入り、WhiteNoise が配る）
+REV="$(git rev-parse --short HEAD)"
+mkdir -p "$(dirname "$ZIP")/rev/static"
+echo "$REV" > "$(dirname "$ZIP")/rev/static/revision.txt"
+(cd "$(dirname "$ZIP")/rev" && zip -q "$ZIP" static/revision.txt)
 
 # 入ってはいけないものが無いか、送る前に確かめる
 BAD="$(unzip -Z1 "$ZIP" | grep -E '(^|/)(db\.sqlite3|\.env[^/]*|\.git/|\.claude/|venv/)' || true)"
@@ -94,6 +105,27 @@ while :; do
     fi
     sleep 15
 done
+
+# 今回のコミットで動いているか。/static/revision.txt が今回の版を返すまで待つ（最大10分）。
+# 3分たっても古いままなら、コンテナが入れ替わっていないとみて一度だけ再起動する
+running_rev() { curl -s -m 30 "https://hirahira-room.net/static/revision.txt?t=$(date +%s)" | tr -d '[:space:]'; }
+i=0
+RESTARTED=""
+until [ "$(running_rev)" = "$REV" ]; do
+    i=$((i + 1))
+    if [ -z "$RESTARTED" ] && [ "$i" -ge 12 ]; then
+        echo "まだ古い版で動いています（$(running_rev || true)）。アプリを再起動します…"
+        az webapp restart $APP
+        RESTARTED=1
+        i=0
+    fi
+    if [ "$i" -ge 40 ]; then
+        echo "10分待っても今回の版（${REV}）になりません。az webapp log tail $APP で確かめてください。" >&2
+        exit 1
+    fi
+    sleep 15
+done
+echo "今回の版（${REV}）で動いています。"
 
 # 起動を待つ。ログイン画面が 200 を返せば動いている（最大10分）
 URL="https://hirahira-room.net/accounts/login/"
