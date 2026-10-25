@@ -57,6 +57,20 @@
     {% endif %}
 </section>
 
+{% if leader_concerns %}
+<section class="mb-4">
+    <h2 class="h5 mb-3" style="color: #2c5aa0;">リーダーからの懸念（フィードバック）</h2>
+    <ul class="list-group">
+        {% for q in leader_concerns %}
+        <li class="list-group-item small d-flex flex-wrap justify-content-between gap-2">
+            <span><a href="{% url 'genba:issue_detail' q.pk %}">{{ q.title }}</a> <span class="text-muted">／ {{ q.site.name }} ・ {{ q.author.username }}</span><br><span class="text-muted">影響：{{ q.impact|default:"―" }}</span></span>
+            {% if q.received_at %}<span class="badge bg-success align-self-start">受け取り済み</span>{% else %}<a class="btn btn-outline-primary btn-sm py-0 align-self-start" href="{% url 'genba:issue_detail' q.pk %}#response">受け取る</a>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
 <section class="mb-4">
     <h2 class="h5 mb-3" style="color: #2c5aa0;">未解決の Issue</h2>
     <div class="table-responsive"><table class="table table-sm align-middle">

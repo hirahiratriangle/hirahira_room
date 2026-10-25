@@ -29,6 +29,7 @@ urlpatterns = [
     path('sites/<int:site_pk>/issues/create/<str:kind>/', views.IssueCreateView.as_view(), name='issue_create'),
     path('sites/<int:site_pk>/terms/create/', views.TermCreateView.as_view(), name='term_create'),
     path('sites/<int:site_pk>/promises/create/', views.PromiseCheckCreateView.as_view(), name='promise_create'),
+    path('sites/<int:site_pk>/structure-gaps/create/', views.StructureGapCreateView.as_view(), name='structure_gap_create'),
     path('sites/<int:site_pk>/docs/<str:kind>/create/', views.DocumentCreateView.as_view(), name='document_create'),
     # Issue
     path('issues/<int:pk>/', views.IssueDetailView.as_view(), name='issue_detail'),

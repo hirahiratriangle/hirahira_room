@@ -210,8 +210,10 @@ class Question(models.Model):
     interpretation = models.TextField(verbose_name='自分の解釈', blank=True)
     unconfirmed = models.TextField(verbose_name='未確認のこと', blank=True)
     impact = models.TextField(verbose_name='影響', blank=True)
-    received_at = models.DateTimeField(verbose_name='リーダーが受け取った日時', null=True, blank=True)
-    response = models.TextField(verbose_name='リーダーの返事', blank=True)
+    received_at = models.DateTimeField(verbose_name='受け取った日時', null=True, blank=True)
+    received_by = models.ForeignKey(CustomUser, verbose_name='受け取った人', on_delete=models.PROTECT,
+                                    null=True, blank=True, related_name='genba_received_concerns')
+    response = models.TextField(verbose_name='受け取った人の返事', blank=True)
     # 作業：進捗表
     due_on = models.DateField(verbose_name='予定日', null=True, blank=True)
     done_on = models.DateField(verbose_name='完了日', null=True, blank=True)
@@ -274,6 +276,8 @@ def target_url(site_id, code):
         return reverse('genba:summary', args=[site_id])
     if code == 'goal':
         return reverse('genba:goal_create', args=[site_id])
+    if code == 'structure_gap':
+        return reverse('genba:structure_gap_create', args=[site_id])
     if code == 'progress':
         return reverse('genba:site_detail', args=[site_id]) + '?tab=progress'
     raise ValueError(code)
@@ -328,6 +332,28 @@ class Summary(models.Model):
 
     def __str__(self):
         return f'{self.site} / {self.author}'
+
+
+class StructureGap(models.Model):
+    """体制のズレ：実際の指示者・決裁者が体制図と違う（危険信号「日々の指示者が体制図と違う」の記録）"""
+
+    ROLE_CHOICES = [('instructor', '日々の指示者'), ('approver', '決裁者')]
+
+    site = models.ForeignKey(Site, verbose_name='現場', on_delete=models.CASCADE, related_name='structure_gaps')
+    author = models.ForeignKey(CustomUser, verbose_name='書いた人', on_delete=models.PROTECT,
+                               related_name='genba_structure_gaps')
+    role_kind = models.CharField(verbose_name='どちらが違うか', max_length=12, choices=ROLE_CHOICES)
+    on_chart = models.CharField(verbose_name='体制図では', max_length=100)
+    actual = models.CharField(verbose_name='実際は', max_length=100)
+    note = models.TextField(verbose_name='実際の決裁の流れ（メモ）', blank=True)
+    created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '体制のズレ'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.get_role_kind_display()}：{self.on_chart} → {self.actual}'
 
 
 class PromiseCheck(models.Model):

@@ -81,6 +81,22 @@ def missing_last_weekly(membership, today=None):
     return _no_weekly(membership.user, membership.site, membership.joined_on, today)[0]
 
 
+WEEKLY_GAP_ESCALATE = 2     # 週報の途切れが何週続いたらマネジメントにも届けるか
+
+
+def weeks_missing_in_row(membership, today=None):
+    """前週からさかのぼって、週報が続けて出ていない週の数（入場した週より前は数えない）"""
+    today = today or timezone.localdate()
+    submitted = set(membership.site.documents.filter(author=membership.user, kind=Document.KIND_WEEKLY)
+                    .values_list('week_of', flat=True))
+    first = week_start(membership.joined_on)
+    week, n = week_start(today) - timedelta(weeks=1), 0
+    while week >= first and week not in submitted:
+        n += 1
+        week -= timedelta(weeks=1)
+    return n
+
+
 def unreadable_needs_question(question):
     """2日経っても進まない「読めない」は、一覧を持って質問の時間をもらう"""
     return question.unreadable and question.is_open and question.days_open >= UNREADABLE_ASK_DAYS

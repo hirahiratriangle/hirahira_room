@@ -7,7 +7,10 @@
     .genba-tabs .nav-link { color: #2c5aa0; }
     .genba-tabs .nav-link.active { background-color: #2c5aa0; color: #fff; }
     .genba-stall { color: #b02a37; font-weight: 600; }
-    .genba-alert-cell { background-color: #fff3cd; }
+    /* Bootstrap の表はセルの背景を変数で塗るので、変数ごと上書きする */
+    .genba-alert-cell, .table > :not(caption) > * > .genba-alert-cell, .table > :not(caption) > .genba-alert-cell > * {
+        --bs-table-bg: #fff3cd; --bs-table-accent-bg: #fff3cd; background-color: #fff3cd;
+    }
     .genba-pre { white-space: pre-wrap; }
     .genba-phrase { border-left: 4px solid #2c5aa0; background: #f3f6fb; padding: .5rem .75rem; }
     .genba-done { text-decoration: line-through; color: #6c757d; }

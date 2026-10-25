@@ -53,12 +53,13 @@
     <div class="col-md-6"><div class="card h-100 border-warning"><div class="card-body py-2"><div class="fw-bold">影響</div><div class="genba-pre">{{ q.impact|default:"―" }}</div></div></div></div>
 </div>
 <div id="response">
-{% if q.received_at %}<div class="alert alert-success small py-2"><strong>リーダーが受け取りました（{{ q.received_at|date:"n/j" }}）</strong><br><span class="genba-pre">{{ q.response }}</span></div>
-{% else %}<p class="small text-muted">リーダーはまだ受け取っていません。</p>{% endif %}
+{% if from_leader %}<p class="small"><span class="badge bg-primary">リーダーからの懸念</span> メンバーへのフィードバックとして共有されています。同じ現場のメンバーが受け取ります。</p>{% endif %}
+{% if q.received_at %}<div class="alert alert-success small py-2"><strong>{{ q.received_by.username }} さんが受け取りました（{{ q.received_at|date:"n/j" }}）</strong><br><span class="genba-pre">{{ q.response }}</span></div>
+{% else %}<p class="small text-muted">まだ受け取られていません。</p>{% endif %}
 {% if response_form %}
 <form method="post" class="card border-primary mb-3"><div class="card-body py-2">
     {% csrf_token %}<input type="hidden" name="form" value="response">
-    <div class="small fw-bold mb-1">リーダー：懸念を受け取り、返事を書く</div>
+    <div class="small fw-bold mb-1">{% if from_leader %}メンバー{% else %}リーダー{% endif %}：懸念を受け取り、返事を書く</div>
     {{ response_form.response }}
     {% for e in response_form.response.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
     <button class="btn btn-primary btn-sm mt-2">受け取った</button>

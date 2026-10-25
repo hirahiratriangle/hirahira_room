@@ -25,7 +25,7 @@ from accounts.models import CustomUser
 from genba import kit
 from genba.models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY,
-    Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, Summary, Term, week_start,
+    Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term, week_start,
 )
 from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
@@ -214,6 +214,9 @@ class Command(BaseCommand):
                                overview='受注〜請求の基幹業務を刷新。帳票とバッチの全体像は 03_業務理解 を参照。',
                                functions='担当：設計全体のリード。受注・帳票・バッチのつながりを整理。',
                                review_note='PMと確認。期待値との差は帳票本数の把握。2週目は帳票の棚卸し範囲を契約と照らす。')
+        StructureGap.objects.create(site=site, author=sato, role_kind='instructor', on_chart='顧客情シス課長（PM）',
+                                    actual='業務部 課長', note='画面の仕様は業務部 課長が日々決めている。情シス課長は週次で追認するだけ。',
+                                    created_at=self.ago(50))
         PromiseCheck.objects.create(site=site, author=me, promise='要件は確定済み', actual='確定後の取消など業務ルールが未定', is_gap=True)
         PromiseCheck.objects.create(site=site, author=me, promise='帳票は20本', actual='棚卸しで35本見つかった', is_gap=True)
         PromiseCheck.objects.create(site=site, author=me, promise='レビューは週1回', actual='週1回で回っている')
@@ -276,6 +279,12 @@ class Command(BaseCommand):
                     learned='決裁者は査定部長。日々の指示は元請PMから。',
                     stuck='支払業務説明書の免責判定が読めていない。', next_step='まとめを5日目に出す。')
         Summary.objects.create(site=site, author=me, overview='保険金の請求受付から支払まで。利用者は査定部と支払担当。')
+        # リーダーの懸念：メンバーにはフィードバックとして見える
+        Question.objects.create(site=site, author=tanaka, kind=Question.KIND_PROBLEM, title='査定部の窓口が一人に集中している',
+                                created_at=self.ago(2), fact='確認事項の回答がすべて査定部の担当者1人に集まっている。',
+                                interpretation='担当者の都合で回答が遅れやすい。',
+                                unconfirmed='査定部に代わりの窓口を立てられるか。',
+                                impact='業務フローの確認が止まると、基本設計の初版が遅れる。')
 
     # ---- 現場3: 店舗在庫の可視化（自分は入っていない） ----
 
@@ -298,3 +307,10 @@ class Command(BaseCommand):
                                 knowledge_status=KNOWLEDGE_REVIEWED, created_at=self.ago(5))
         self.weekly(site, ito, 7, done='可視化画面のレビュー。')
         PromiseCheck.objects.create(site=site, author=ito, promise='可視化画面の設計のみ', actual='移行・端末手配まで依頼', is_gap=True)
+        StructureGap.objects.create(site=site, author=ito, role_kind='approver', on_chart='顧客の店舗運営部長',
+                                    actual='元請のPM', note='仕様の決裁を元請PMが代わりに出している。', created_at=self.ago(60))
+        StructureGap.objects.create(site=site, author=ito, role_kind='instructor', on_chart='元請のPM',
+                                    actual='顧客の店舗担当者', note='店舗担当者から直接作業を頼まれる。', created_at=self.ago(30))
+        for title, days in (('移行の範囲が決まらない', 20), ('店舗担当者からの直接の依頼が続く', 8)):
+            Question.objects.create(site=site, author=ito, kind=Question.KIND_PROBLEM, title=title, created_at=self.ago(days),
+                                    fact=title, impact='可視化画面の設計が後回しになる。')

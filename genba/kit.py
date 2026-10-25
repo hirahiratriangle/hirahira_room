@@ -41,6 +41,7 @@ RECORD_TARGETS = {
     'problem': '課題 Issue',
     'summary': '1週目のまとめ',
     'goal': '目標（スキルセット）',
+    'structure_gap': '体制のズレ',
     **{f'doc:{key}': label for key, label, _ in DOC_SECTIONS},
 }
 
@@ -79,7 +80,7 @@ DETECTED_SIGNS = {
 # 判定しない兆候の、移る先
 SIGN_TARGETS = {
     '契約にない作業・責任を頼まれる': 'scope_out',
-    '日々の指示者が体制図と違う': 'doc:structure',
+    '日々の指示者が体制図と違う': 'structure_gap',
 }
 
 

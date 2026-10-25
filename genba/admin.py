@@ -1,6 +1,8 @@
 from django.contrib import admin
 
-from .models import ChecklistItem, Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, Summary, Term
+from .models import (
+    ChecklistItem, Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term,
+)
 
 
 class MembershipInline(admin.TabularInline):
@@ -64,3 +66,9 @@ class GoalAdmin(admin.ModelAdmin):
     list_display = ('site', 'author', 'skill_item', 'current_level', 'reached_level', 'agreement_requested_at', 'agreed_on')
     list_filter = ('site', 'skill_item')
     inlines = [GoalEvidenceInline]
+
+
+@admin.register(StructureGap)
+class StructureGapAdmin(admin.ModelAdmin):
+    list_display = ('site', 'role_kind', 'on_chart', 'actual', 'created_at')
+    list_filter = ('site', 'role_kind')

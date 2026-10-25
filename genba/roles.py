@@ -38,6 +38,15 @@ def is_company(user):
     return in_group(user, GROUP_COMPANY)
 
 
+def can_receive_concern(user, question):
+    """懸念を受け取れる人：書いた人がリーダーなら同じ現場の他のメンバー、そうでなければリーダー"""
+    if question.author_id == user.pk or not can_read_site(user, question.site):
+        return False
+    if is_leader(question.author, question.site):
+        return True
+    return is_leader(user, question.site)
+
+
 def available_roles(user):
     """ナビに出す立場の一覧（持っている立場だけ）"""
     roles = []

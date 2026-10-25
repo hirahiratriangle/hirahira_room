@@ -29,6 +29,17 @@
 </div></div>
 {% endif %}
 
+{% if leader_concerns %}
+<div class="card border-primary mb-3"><div class="card-body py-2">
+    <div class="small fw-bold mb-1" style="color:#2c5aa0;"><i class="fas fa-comment-alt me-1"></i>リーダーからの懸念（フィードバック）</div>
+    {% for q in leader_concerns %}
+    <div class="small py-1 {% if not forloop.last %}border-bottom{% endif %}"><a href="{% url 'genba:issue_detail' q.pk %}">{{ q.title }}</a>
+        <span class="text-muted">／ {{ q.author.username }} ・ 影響：{{ q.impact|truncatechars:50 }}</span>
+        {% if q.received_at %}<span class="badge bg-success">受け取り済み</span>{% else %}<span class="badge bg-warning text-dark">受け取って返事を</span>{% endif %}</div>
+    {% endfor %}
+</div></div>
+{% endif %}
+
 {% with path=request.path %}
 <ul class="nav nav-tabs mb-3 small">
     <li class="nav-item"><a class="nav-link {% if tab == 'checklist' %}active{% endif %}" href="{{ path }}?tab=checklist">チェックリスト</a></li>
@@ -38,6 +49,7 @@
     <li class="nav-item"><a class="nav-link {% if tab == 'docs' %}active{% endif %}" href="{{ path }}?tab=docs">docs</a></li>
     <li class="nav-item"><a class="nav-link {% if tab == 'terms' %}active{% endif %}" href="{{ path }}?tab=terms">用語集</a></li>
     <li class="nav-item"><a class="nav-link {% if tab == 'promises' %}active{% endif %}" href="{{ path }}?tab=promises">約束と実際</a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'structure' %}active{% endif %}" href="{{ path }}?tab=structure">体制のズレ</a></li>
     <li class="nav-item"><a class="nav-link {% if tab == 'members' %}active{% endif %}" href="{{ path }}?tab=members">メンバー</a></li>
 </ul>
 {% endwith %}
@@ -182,6 +194,18 @@
         {% for p in promise_checks %}
         <tr class="small {% if p.is_gap %}genba-alert-cell{% endif %}"><td>{{ p.promise }}</td><td>{{ p.actual }}</td><td>{% if p.is_gap %}<span class="badge bg-warning text-dark">あり</span>{% endif %}</td></tr>
         {% empty %}<tr><td colspan="3" class="text-muted small">まだありません</td></tr>{% endfor %}
+    </tbody>
+</table></div>
+
+{% elif tab == 'structure' %}
+<p class="small text-muted">実際の指示者・決裁者が体制図と違うときに記録します（危険信号「日々の指示者が体制図と違う」）。件数がマネジメントの指標になります（個人名は出ません）。</p>
+{% if not site.is_archived %}<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:structure_gap_create' site.pk %}"><i class="fas fa-plus me-1"></i>体制のズレを記録</a></div>{% endif %}
+<div class="table-responsive"><table class="table table-sm">
+    <thead><tr class="small text-muted"><th>どちらが違うか</th><th>体制図では</th><th>実際は</th><th>実際の決裁の流れ</th></tr></thead>
+    <tbody>
+        {% for g in structure_gaps %}
+        <tr class="small genba-alert-cell"><td class="text-nowrap">{{ g.get_role_kind_display }}</td><td>{{ g.on_chart }}</td><td>{{ g.actual }}</td><td class="genba-pre">{{ g.note }}</td></tr>
+        {% empty %}<tr><td colspan="4" class="text-muted small">記録はありません</td></tr>{% endfor %}
     </tbody>
 </table></div>
 

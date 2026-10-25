@@ -15,9 +15,10 @@ from django.views import View, generic
 from . import growth, kit, kit_data, roles, signals, skillset_data
 from .forms import (
     DocumentForm, FeedbackForm, GoalForm, GoalPickForm, IssueForm, LineForm, PromiseCheckForm, ReachForm,
-    ResponseForm, SearchForm, SiteForm, SummaryForm, SummaryReviewForm, SupportForm, TaskProgressForm, TermForm,
+    ResponseForm, SearchForm, SiteForm, StructureGapForm, SummaryForm, SummaryReviewForm, SupportForm, TaskProgressForm,
+    TermForm,
 )
-from .metrics import THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
+from .metrics import DEFINITIONS, THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
     ChecklistItem, Document, Goal, GoalEvidence, Membership, Question, Site, Summary, Term, week_start,
@@ -98,6 +99,18 @@ def checklist_progress(site, user):
     return stages
 
 
+def leader_concerns(user, sites):
+    """リーダーが書いた未解決の懸念（メンバーへのフィードバック）。自分が書いたものは除く"""
+    leaders = Membership.objects.filter(site__in=sites, role=Membership.ROLE_LEADER)
+    q = Q()
+    for m in leaders:
+        q |= Q(site_id=m.site_id, author_id=m.user_id)
+    if not leaders:
+        return Question.objects.none()
+    return (Question.objects.filter(q, kind=Question.KIND_PROBLEM, is_open=True).exclude(author=user)
+            .select_related('site', 'author').order_by('received_at', 'created_at'))
+
+
 def open_issues(sites):
     """未解決の Issue（チェックリストの作業は除く）"""
     return Question.objects.filter(site__in=sites, is_open=True, stage='').select_related('site', 'author')
@@ -162,6 +175,7 @@ class MemberHomeView(GenbaMixin, generic.TemplateView):
             for site in sites.order_by('is_archived', '-started_on')
         ]
         context['open_questions'] = open_issues(sites).order_by('created_at')
+        context['leader_concerns'] = leader_concerns(user, sites)
         context['terms'] = Term.objects.filter(site__in=sites).select_related('site')[:20]
         context['minutes'] = (
             Document.objects.filter(site__in=sites, kind=Document.KIND_MINUTES).select_related('site')[:5]
@@ -201,7 +215,7 @@ class SiteCreateView(GenbaMixin, generic.CreateView):
 
 class SiteDetailView(SiteMixin, generic.TemplateView):
     template_name = 'genba/site_detail.html'
-    TABS = ['checklist', 'issues', 'unreadable', 'progress', 'docs', 'terms', 'promises', 'members']
+    TABS = ['checklist', 'issues', 'unreadable', 'progress', 'docs', 'terms', 'promises', 'structure', 'members']
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -232,6 +246,8 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
             others[t.term].append(t)
         context['terms'] = [(t, others.get(t.term, [])) for t in terms]
         context['promise_checks'] = site.promise_checks.all()
+        context['structure_gaps'] = site.structure_gaps.select_related('author')
+        context['leader_concerns'] = leader_concerns(self.request.user, [site])
         docs = defaultdict(list)
         for d in site.documents.select_related('author').order_by('-week_of', '-created_at'):
             docs[d.kind].append(d)
@@ -343,8 +359,9 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
         context['is_leader'] = is_leader = roles.is_leader(self.request.user, q.site) and not q.site.is_archived
         if is_leader and q.unreadable:
             context['support_form'] = kwargs.get('support_form') or SupportForm(instance=q)
-        if is_leader and q.kind == Question.KIND_PROBLEM:
+        if q.kind == Question.KIND_PROBLEM and not q.site.is_archived and roles.can_receive_concern(self.request.user, q):
             context['response_form'] = kwargs.get('response_form') or ResponseForm(instance=q)
+        context['from_leader'] = q.kind == Question.KIND_PROBLEM and roles.is_leader(q.author, q.site)
         context['needs_question'] = signals.unreadable_needs_question(q)
         if q.unreadable:
             context['phrase'] = kit.phrase('読めない資料を上げる')
@@ -360,7 +377,7 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
     FORMS = {
         'progress': (TaskProgressForm, False, '予定と実績を保存しました。'),
         'support': (SupportForm, True, '説明の時間を割り当てました。メンバーの Issue に出ます。'),
-        'response': (ResponseForm, True, '懸念を受け取り、返事を書きました。メンバーの Issue に出ます。'),
+        'response': (ResponseForm, False, '懸念を受け取り、返事を書きました。書いた人の Issue に出ます。'),
     }
 
     def post(self, request, *args, **kwargs):
@@ -373,11 +390,13 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
         form_class, leader_only, msg = self.FORMS[name]
         if leader_only and not roles.is_leader(request.user, q.site):
             raise PermissionDenied
+        if name == 'response' and (q.kind != Question.KIND_PROBLEM or not roles.can_receive_concern(request.user, q)):
+            raise PermissionDenied
         form = form_class(request.POST, instance=q)
         if form.is_valid():
             q = form.save(commit=False)
             if name == 'response':
-                q.received_at = timezone.now()
+                q.received_at, q.received_by = timezone.now(), request.user
             q.save()
             messages.success(request, msg)
             return redirect(q)
@@ -550,6 +569,13 @@ class TermCreateView(SiteCreateMixin, generic.CreateView):
     tab = 'terms'
     heading = '用語を追加'
     lead = '分からない語も、意味を空のまま載せてかまいません。'
+
+
+class StructureGapCreateView(SiteCreateMixin, generic.CreateView):
+    form_class = StructureGapForm
+    tab = 'structure'
+    heading = '体制のズレを記録する'
+    lead = '日々の指示者や決裁者が体制図と違うとき、実際の決裁の流れをメモし、自社に共有します。件数がマネジメントの指標になります。'
 
 
 class PromiseCheckCreateView(SiteCreateMixin, generic.CreateView):
@@ -825,6 +851,7 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
                 members.append({
                     'membership': m, 'questions': qs, 'max_days': max((q.days_open for q in qs), default=0),
                     'weekly_missing': signals.missing_last_weekly(m),
+                    'weeks_missing': signals.weeks_missing_in_row(m),
                 })
             members.sort(key=lambda r: (-r['weekly_missing'], -r['max_days']))
             unreadable = site.questions.filter(unreadable=True, is_open=True).select_related('author')
@@ -848,6 +875,7 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
         context['panels'] = panels
         context['stall_days'] = THRESHOLDS['stall_days']
         context['ask_days'] = signals.UNREADABLE_ASK_DAYS
+        context['escalate_weeks'] = signals.WEEKLY_GAP_ESCALATE
         return context
 
 
@@ -879,6 +907,7 @@ class ManagementView(GenbaMixin, generic.TemplateView):
         context['thresholds'] = THRESHOLDS
         context['weekly_rate_min'] = WEEKLY_RATE_MIN
         context['weekly_window'] = WEEKLY_WINDOW
+        context['definitions'] = DEFINITIONS
         return context
 
 

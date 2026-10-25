@@ -2,7 +2,7 @@ from django import forms
 from django.utils import timezone
 
 from . import growth
-from .models import Document, Goal, Membership, PromiseCheck, Question, Site, Summary, Term
+from .models import Document, Goal, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term
 
 
 class BootstrapMixin:
@@ -259,6 +259,13 @@ class ReachForm(BootstrapMixin, forms.ModelForm):
         if commit:
             goal.save()
         return goal
+
+
+class StructureGapForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = StructureGap
+        fields = ['role_kind', 'on_chart', 'actual', 'note']
+        widgets = {'note': forms.Textarea(attrs={'rows': 3})}
 
 
 class PromiseCheckForm(BootstrapMixin, forms.ModelForm):

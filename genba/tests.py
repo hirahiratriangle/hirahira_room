@@ -13,10 +13,11 @@ from . import growth, kit, kit_data, skillset_data
 from .metrics import site_metrics, weekly_rate
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, Summary, Term, week_start,
+    ChecklistItem, Document, Goal, GoalEvidence, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term,
+    week_start,
 )
 from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
-from .signals import signals_for
+from .signals import signals_for, weeks_missing_in_row
 
 
 class GenbaTestBase(TestCase):
@@ -713,3 +714,75 @@ class LeaderTests(GenbaTestBase):
         m.refresh_from_db()
         self.assertEqual(m.line_self, '画面項目')
         self.assertIsNotNone(m.line_updated_at)
+
+
+
+class MetricsV2Tests(GenbaTestBase):
+    def test_structure_gap_record_and_sign_link(self):
+        self.client.force_login(self.member)
+        url = reverse('genba:structure_gap_create', args=[self.site.pk])
+        sign = self.signal(self.member, self.site, '日々の指示者が体制図と違う')
+        self.assertEqual(sign.link[1], url)
+        self.client.post(url, {'role_kind': 'instructor', 'on_chart': 'PM', 'actual': '業務部課長', 'note': ''})
+        self.assertEqual(site_metrics(self.site).structure_gaps, 1)
+        self.assertIn('契約形態と指示系統が一致していない', site_metrics(self.site).alerts)
+
+    def test_weeks_missing_in_row(self):
+        m = Membership.objects.get(site=self.site, user=self.member)  # 入場は4週前
+        self.assertEqual(weeks_missing_in_row(m), 4)
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_WEEKLY, title='w',
+                                week_of=week_start(self.today) - timedelta(weeks=2))
+        self.assertEqual(weeks_missing_in_row(m), 1)
+        m.joined_on = self.today
+        self.assertEqual(weeks_missing_in_row(m), 0)
+
+    def test_weekly_gap_reaches_management_only_when_continued(self):
+        last = week_start(self.today) - timedelta(weeks=1)
+        Document.objects.create(site=self.site, author=self.leader, kind=Document.KIND_WEEKLY, title='w', week_of=last)
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_WEEKLY, title='w',
+                                week_of=last - timedelta(weeks=1))
+        self.assertEqual(site_metrics(self.site).weekly_gap_people, 0)  # 1週だけ途切れている
+        Document.objects.filter(author=self.member).update(week_of=last - timedelta(weeks=2))
+        self.assertEqual(site_metrics(self.site).weekly_gap_people, 1)
+        self.add_group(self.outsider, GROUP_MANAGEMENT)
+        self.client.force_login(self.outsider)
+        res = self.client.get(reverse('genba:management'))
+        self.assertContains(res, '1人')
+        self.assertNotContains(res, 'member')
+
+    def test_leader_concern_metric_and_feedback(self):
+        q = Question.objects.create(site=self.site, author=self.leader, kind=Question.KIND_PROBLEM, title='リーダーの懸念',
+                                    fact='f', impact='影響')
+        Question.objects.create(site=self.site, author=self.member, kind=Question.KIND_PROBLEM, title='メンバーの懸念')
+        m = site_metrics(self.site)
+        self.assertEqual((m.leader_concerns, m.leader_concerns_unreceived), (1, 1))
+        # メンバーにはフィードバックとして見え、受け取れる
+        self.client.force_login(self.member)
+        self.assertContains(self.client.get(reverse('genba:member_home')), 'リーダーからの懸念')
+        url = reverse('genba:issue_detail', args=[q.pk])
+        self.client.post(url, {'form': 'response', 'response': '受け取りました'})
+        q.refresh_from_db()
+        self.assertEqual(q.received_by, self.member)
+        self.assertEqual(site_metrics(self.site).leader_concerns_unreceived, 0)
+        # リーダーは自分の懸念を受け取れない
+        self.client.force_login(self.leader)
+        self.assertEqual(self.client.post(url, {'form': 'response', 'response': 'x'}).status_code, 403)
+
+    def test_member_cannot_receive_member_concern(self):
+        third = CustomUser.objects.create_user('third', 't@example.com', 'pass12345')
+        Membership.objects.create(site=self.site, user=third, joined_on=self.today)
+        q = Question.objects.create(site=self.site, author=self.member, kind=Question.KIND_PROBLEM, title='懸念')
+        self.client.force_login(third)
+        url = reverse('genba:issue_detail', args=[q.pk])
+        self.assertEqual(self.client.post(url, {'form': 'response', 'response': 'x'}).status_code, 403)
+
+    def test_management_shows_definitions_and_no_text(self):
+        Question.objects.create(site=self.site, author=self.leader, kind=Question.KIND_PROBLEM, title='秘密の懸念')
+        StructureGap.objects.create(site=self.site, author=self.member, role_kind='approver', on_chart='秘密の部長', actual='x')
+        self.add_group(self.outsider, GROUP_MANAGEMENT)
+        self.client.force_login(self.outsider)
+        res = self.client.get(reverse('genba:management'))
+        self.assertContains(res, '指標の定義（案）')
+        self.assertContains(res, '契約形態と指示系統の不一致')
+        self.assertNotContains(res, '秘密の懸念')
+        self.assertNotContains(res, '秘密の部長')
