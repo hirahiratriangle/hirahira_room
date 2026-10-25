@@ -3174,7 +3174,7 @@ class XPostTests(TestCase):
         post = self._post()
         self.assertLessEqual(x_post.weight(post.text), x_post.LIMIT)
         self.assertIn('https://example.jp/fe/x/{}/'.format(post.code), post.text)
-        self.assertIn('#基本情報技術者試験 #FE', post.text)
+        self.assertIn('#基本情報技術者試験 #FE #IPA', post.text)
         self.assertIn('▶選択肢と解答はこちら', post.text)
         # 選択肢と正解は投稿に入れない
         self.assertNotIn('ネットワークの名前', post.text)
