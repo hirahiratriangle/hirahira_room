@@ -13,7 +13,7 @@ from django.views import View, generic
 
 from . import growth, kit, kit_data, roles, signals, skillset_data
 from .forms import (
-    DocumentForm, FeedbackForm, GoalForm, GoalPickForm, InterviewQuestionForm, IssueForm, KitProposalForm, LineForm,
+    ApprovalForm, DocumentForm, FeedbackForm, GoalForm, GoalPickForm, InterviewQuestionForm, IssueForm, KitProposalForm, LineForm,
     PromiseCheckForm, ReachForm, publish_form_for,
     ResponseForm, SearchForm, SiteForm, StructureGapForm, SummaryForm, SummaryReviewForm, SupportForm, TaskProgressForm,
     TermForm,
@@ -27,9 +27,6 @@ from .models import (
 
 
 class GuestMixin:
-    """デモ：ログインしていない人は共通のゲストユーザーとして扱う（ログイン画面へは送らない）。
-    dispatch より前の setup で入れ替えるので、各ビューの dispatch の判定にも効く。
-    LoginRequiredMiddleware からは urls.py で外している"""
 
     def setup(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -38,7 +35,6 @@ class GuestMixin:
 
 
 class GenbaMixin(GuestMixin):
-    """ナビに出す立場の一覧をテンプレートへ渡す"""
     role_name = ''
 
     def get_context_data(self, **kwargs):
@@ -49,14 +45,11 @@ class GenbaMixin(GuestMixin):
 
 
 def check_writable(user, site):
-    """同じ現場の人だけが書ける。Archive した現場は読むだけ。"""
     if not roles.can_read_site(user, site) or site.is_archived:
         raise PermissionDenied
 
 
 class SiteMixin(GenbaMixin):
-    """URL の site_pk の現場を読み込み、その現場のメンバー・リーダーだけ通す。
-    writable なビューは、Archive した現場では使えない。"""
     role_name = 'member'
     writable = False
 
@@ -84,7 +77,6 @@ def published_terms():
 
 
 def search_knowledge(user, q):
-    """自分の現場の原文と、他の現場の一般化して公開された版から探す"""
     sites = roles.member_sites(user)
     public_q = Q(visibility=VISIBILITY_COMPANY) & (Q(public_title__icontains=q) | Q(public_body__icontains=q))
     docs = Document.objects.filter(
@@ -98,7 +90,6 @@ def search_knowledge(user, q):
 
 
 def checklist_progress(site, user):
-    """その人の、段階ごとのチェックリストの進み具合 [{'key','label','done','total','issues'}]"""
     issues = site.questions.filter(author=user).exclude(stage='').prefetch_related('items').order_by('order')
     stages = []
     for key, label in kit.STAGE_LABELS.items():
@@ -112,7 +103,6 @@ def checklist_progress(site, user):
 
 
 def leader_concerns(user, sites):
-    """リーダーが書いた未解決の懸念（メンバーへのフィードバック）。自分が書いたものは除く"""
     leaders = Membership.objects.filter(site__in=sites, role=Membership.ROLE_LEADER)
     q = Q()
     for m in leaders:
@@ -124,21 +114,14 @@ def leader_concerns(user, sites):
 
 
 def open_issues(sites):
-    """未解決の Issue（チェックリストの作業は除く）"""
     return Question.objects.filter(site__in=sites, is_open=True, stage='').select_related('site', 'author')
 
 
-# ---------------------------------------------------------------------------
-# 入口・テンプレート
-# ---------------------------------------------------------------------------
-
 class PortalView(GenbaMixin, generic.TemplateView):
-    """genba の入口。持っている立場の画面へ案内する。"""
     template_name = 'genba/portal.html'
 
 
 class KitView(GenbaMixin, generic.TemplateView):
-    """現場テンプレート（genba-template に当たるもの）"""
     template_name = 'genba/kit.html'
 
     def get_context_data(self, **kwargs):
@@ -154,7 +137,6 @@ class KitView(GenbaMixin, generic.TemplateView):
 
 
 class PhrasesView(GenbaMixin, generic.TemplateView):
-    """言い回し集：確認の言い回しと SI業界ワード確認表"""
     template_name = 'genba/phrases.html'
 
     def get_context_data(self, **kwargs):
@@ -165,10 +147,6 @@ class PhrasesView(GenbaMixin, generic.TemplateView):
         )
         return context
 
-
-# ---------------------------------------------------------------------------
-# メンバー：現場で迷わず働くための支援 kit
-# ---------------------------------------------------------------------------
 
 class MemberHomeView(GenbaMixin, generic.TemplateView):
     template_name = 'genba/member_home.html'
@@ -202,7 +180,6 @@ class MemberHomeView(GenbaMixin, generic.TemplateView):
 
 
 class SiteCreateView(GenbaMixin, generic.CreateView):
-    """テンプレートから現場を作る。チェックリストが作業 Issue として並ぶ。"""
     form_class = SiteForm
     template_name = 'genba/form.html'
     role_name = 'member'
@@ -271,7 +248,6 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
 
 
 class SiteArchiveView(GuestMixin, View):
-    """現場の一生の最後。Archive した現場は読むだけになる（リーダーだけが切り替える）"""
 
     def post(self, request, site_pk):
         site = get_object_or_404(Site, pk=site_pk)
@@ -284,7 +260,6 @@ class SiteArchiveView(GuestMixin, View):
 
 
 class SiteCreateMixin(SiteMixin):
-    """現場に記録を足すフォームの共通部分"""
     template_name = 'genba/form.html'
     writable = True
     tab = 'issues'
@@ -311,7 +286,6 @@ class SiteCreateMixin(SiteMixin):
 
 
 class IssueCreateView(SiteCreateMixin, generic.CreateView):
-    """Issue を作る。種類（確認事項・読めない・課題・作業・スコープ外）で欄を変える。"""
     form_class = IssueForm
     KINDS = {
         'question': (Question.KIND_QUESTION, '確認事項を追加', '誰に・何を確かめるかを書きます。', None),
@@ -349,7 +323,6 @@ class IssueCreateView(SiteCreateMixin, generic.CreateView):
 
 
 class IssueDetailView(GenbaMixin, generic.DetailView):
-    """Issue の詳細。チェック項目、作業の予定と実績、解決／再開"""
     model = Question
     template_name = 'genba/issue_detail.html'
     context_object_name = 'q'
@@ -386,7 +359,6 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
             context['phrase'] = kit.phrase('期待値を聞く')
         return context
 
-    # フォームの種類 → (フォーム, リーダーだけか, 保存したときの知らせ)
     FORMS = {
         'progress': (TaskProgressForm, False, '予定と実績を保存しました。'),
         'support': (SupportForm, True, '説明の時間を割り当てました。メンバーの Issue に出ます。'),
@@ -394,7 +366,6 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
     }
 
     def post(self, request, *args, **kwargs):
-        """作業の予定と実績（同じ現場の人）、説明の時間・懸念の返事（リーダー）を保存する"""
         self.object = q = self.get_object()
         check_writable(request.user, q.site)
         name = request.POST.get('form', 'progress')
@@ -417,7 +388,6 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
 
 
 class QuestionToggleView(GuestMixin, View):
-    """Issue を解決済みにする／未解決に戻す（同じ現場の人なら誰でも）"""
 
     def post(self, request, pk):
         question = get_object_or_404(Question, pk=pk)
@@ -431,7 +401,6 @@ class QuestionToggleView(GuestMixin, View):
 
 
 class ChecklistItemToggleView(GuestMixin, View):
-    """チェック項目を済みにする／戻す。全部済めば作業 Issue も閉じる。"""
 
     def post(self, request, pk):
         item = get_object_or_404(ChecklistItem.objects.select_related('question__site'), pk=pk)
@@ -451,7 +420,6 @@ class ChecklistItemToggleView(GuestMixin, View):
 
 
 class SummaryView(SiteMixin, generic.TemplateView):
-    """1週目のまとめ。自分の分を書き、出す。同じ現場の人の分は読める。"""
     template_name = 'genba/summary.html'
 
     def get_summary(self):
@@ -508,7 +476,6 @@ class SummaryView(SiteMixin, generic.TemplateView):
         return redirect('genba:summary', site_pk=self.site.pk)
 
     def post_feedback(self, request):
-        """リーダーが、出されたまとめに差と次の作業を返す"""
         summary = get_object_or_404(Summary, site=self.site, author_id=request.POST.get('user'),
                                     submitted_at__isnull=False)
         if not roles.is_leader(request.user, self.site) or summary.author_id == request.user.pk:
@@ -524,7 +491,6 @@ class SummaryView(SiteMixin, generic.TemplateView):
 
 
 class WeeklyBoardView(SiteMixin, generic.TemplateView):
-    """週次共有の一覧：週ごとに、メンバーの週報4欄を横に並べる（現場チーム）"""
     template_name = 'genba/weekly_board.html'
 
     def get_context_data(self, **kwargs):
@@ -546,7 +512,6 @@ class WeeklyBoardView(SiteMixin, generic.TemplateView):
 
 
 class LinesView(SiteMixin, generic.TemplateView):
-    """裁量の線：「自分で決める範囲」と「相談して決める範囲」。本人とリーダーが書く"""
     template_name = 'genba/lines.html'
 
     def can_edit(self, membership):
@@ -623,7 +588,6 @@ class DocumentCreateView(SiteCreateMixin, generic.CreateView):
 
 
 class DocumentDetailView(GenbaMixin, generic.DetailView):
-    """同じ現場の人は原文を、それ以外の人は会社公開された文書だけ読める"""
     model = Document
     template_name = 'genba/document_detail.html'
     context_object_name = 'doc'
@@ -673,8 +637,6 @@ class DocumentUpdateView(GenbaMixin, generic.UpdateView):
 
 
 class KnowledgeActionView(GuestMixin, View):
-    """公開レビュー：現場チームの誰かが候補にする／候補から外す。リーダーが公開をやめる。
-    本人に公開範囲を選ばせない（憲章 III）。公開はリーダーが一般化した版を書いて行う（KnowledgePublishView）。"""
 
     MODELS = {'doc': Document, 'term': Term}
 
@@ -704,7 +666,6 @@ class KnowledgeActionView(GuestMixin, View):
 
 
 class KnowledgePublishView(GenbaMixin, generic.UpdateView):
-    """リーダーが一般化した版を書いて会社に公開する。会社に見えるのは一般化した版だけ。"""
     template_name = 'genba/knowledge_publish.html'
     role_name = 'leader'
 
@@ -748,12 +709,7 @@ class KnowledgePublishView(GenbaMixin, generic.UpdateView):
         return context
 
 
-# ---------------------------------------------------------------------------
-# 成長基軸（メンバー本人）：目標を立て、記録で到達を示す
-# ---------------------------------------------------------------------------
-
 class SkillsetView(GenbaMixin, generic.TemplateView):
-    """基本設計スキルセット（ITSS対応）"""
     template_name = 'genba/skillset.html'
 
     def get_context_data(self, **kwargs):
@@ -767,7 +723,6 @@ class SkillsetView(GenbaMixin, generic.TemplateView):
 
 
 class GrowthView(SiteMixin, generic.TemplateView):
-    """自分の成長：この現場の目標と、証拠になる記録"""
     template_name = 'genba/growth.html'
 
     def get_context_data(self, **kwargs):
@@ -789,7 +744,6 @@ class GrowthView(SiteMixin, generic.TemplateView):
 
 
 class GoalCreateView(SiteMixin, generic.TemplateView):
-    """目標を立てる。項目と今のレベルを選ぶと、一つ上の具体記述と具体スキルが出る。"""
     template_name = 'genba/goal_form.html'
     writable = True
 
@@ -828,8 +782,24 @@ class GoalCreateView(SiteMixin, generic.TemplateView):
         return redirect('genba:growth', site_pk=self.site.pk)
 
 
+def can_read_reach(user, goal):
+    if roles.can_read_site(user, goal.site):
+        return True
+    return roles.is_management(user) and goal.author_id != user.pk and (
+        goal.stage in (Goal.STAGE_CONFIRMED, Goal.STAGE_APPROVED) or (goal.stage == Goal.STAGE_SUBMITTED and goal.is_solo))
+
+
+def reach_context(goal):
+    return {
+        'levels': growth.level_descriptions(goal.skill_item),
+        'grade': growth.ae_grade(goal.reached_level, goal.mentored),
+        'itss': growth.itss_equivalent(goal.role, goal.team_size, len(goal.complexity_numbers)),
+        'paste': growth.paste_text(goal, [e.title for e in goal.evidence.all()]),
+        'evidence': goal.evidence.all(),
+    }
+
+
 class GoalReachView(GenbaMixin, generic.UpdateView):
-    """到達を説明する（本人だけ）。証拠を選び、具体記述に当てはめ、目安と貼る文章を出す。"""
     model = Goal
     form_class = ReachForm
     template_name = 'genba/goal_reach.html'
@@ -837,12 +807,45 @@ class GoalReachView(GenbaMixin, generic.UpdateView):
 
     def get_object(self, queryset=None):
         goal = super().get_object(queryset)
-        if goal.author_id != self.request.user.pk:
+        if not can_read_reach(self.request.user, goal):
             raise PermissionDenied
         return goal
 
+    def is_author(self):
+        return self.object.author_id == self.request.user.pk
+
+    def can_confirm(self):
+        goal = self.object
+        return (goal.stage == Goal.STAGE_SUBMITTED and not goal.site.is_archived
+                and goal.confirmers().filter(pk=self.request.user.pk).exists())
+
     def post(self, request, *args, **kwargs):
-        check_writable(request.user, self.get_object().site)
+        self.object = goal = self.get_object()
+        action = request.POST.get('action', 'save')
+        if action in ('confirm', 'return'):
+            if not self.can_confirm():
+                raise PermissionDenied
+            goal.confirm_comment = request.POST.get('comment', '')
+            if action == 'confirm':
+                goal.confirmed_at, goal.confirmed_by = timezone.now(), request.user
+                messages.success(request, '確認しました。マネジメントの承認に進みます。')
+            else:
+                goal.reset()
+                messages.success(request, '差し戻しました。')
+            goal.save()
+            return redirect('genba:goal_reach', pk=goal.pk)
+        if not self.is_author():
+            raise PermissionDenied
+        check_writable(request.user, goal.site)
+        if action == 'withdraw':
+            if goal.stage == Goal.STAGE_APPROVED:
+                raise PermissionDenied
+            goal.reset()
+            goal.save()
+            messages.success(request, '依頼を取り下げました。')
+            return redirect('genba:goal_reach', pk=goal.pk)
+        if goal.stage != Goal.STAGE_DRAFT:
+            raise PermissionDenied
         return super().post(request, *args, **kwargs)
 
     @transaction.atomic
@@ -854,31 +857,69 @@ class GoalReachView(GenbaMixin, generic.UpdateView):
             GoalEvidence(goal=goal, record_type=rows[k]['type'], record_id=rows[k]['id'], title=rows[k]['title'])
             for k in self.request.POST.getlist('evidence') if k in rows
         )
-        messages.success(self.request, '到達を保存しました。')
+        if self.request.POST.get('action') == 'submit' and goal.reached_level:
+            goal.submitted_at = timezone.now()
+            goal.save()
+            messages.success(self.request, '確認を依頼しました。')
+        else:
+            messages.success(self.request, '到達を保存しました。')
         return redirect('genba:goal_reach', pk=goal.pk)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         goal = self.object
+        context.update(reach_context(goal))
         context['site'] = goal.site
-        context['candidates'] = growth.candidates(goal)
-        context['levels'] = growth.level_descriptions(goal.skill_item)
-        context['grade'] = growth.ae_grade(goal.reached_level, goal.mentored)
-        context['itss'] = growth.itss_equivalent(goal.role, goal.team_size, len(goal.complexity_numbers))
-        context['paste'] = growth.paste_text(goal, [e.title for e in goal.evidence.all()])
-        context['itss_levels'] = skillset_data.ITSS_LEVELS
-        context['ae_note'] = skillset_data.AE_NOTE
-        context['cautions'] = skillset_data.CAUTIONS
-        context['writable'] = not goal.site.is_archived
+        context['is_author'] = self.is_author()
+        context['can_confirm'] = self.can_confirm()
+        context['editable'] = self.is_author() and goal.stage == Goal.STAGE_DRAFT and not goal.site.is_archived
+        context['candidates'] = growth.candidates(goal) if context['editable'] else []
         return context
 
 
-# ---------------------------------------------------------------------------
-# リーダー：メンバーの状況把握とフォロー（見るのは作業量ではなく詰まり）
-# ---------------------------------------------------------------------------
+class GoalApprovalView(GenbaMixin, generic.UpdateView):
+    model = Goal
+    form_class = ApprovalForm
+    template_name = 'genba/goal_approval.html'
+    context_object_name = 'goal'
+    role_name = 'management'
+
+    def get_object(self, queryset=None):
+        goal = super().get_object(queryset)
+        user = self.request.user
+        if not roles.is_management(user) or goal.author_id == user.pk or not can_read_reach(user, goal):
+            raise PermissionDenied
+        return goal
+
+    def post(self, request, *args, **kwargs):
+        self.object = goal = self.get_object()
+        if goal.stage == Goal.STAGE_APPROVED:
+            raise PermissionDenied
+        if request.POST.get('action') == 'return':
+            goal.approval_comment = request.POST.get('approval_comment', '')
+            goal.reset()
+            goal.save()
+            messages.success(request, f'{goal.author.username} さんに差し戻しました。')
+            return redirect('genba:management')
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        goal = form.save(commit=False)
+        user, now = self.request.user, timezone.now()
+        if not goal.confirmed_at:
+            goal.confirmed_at, goal.confirmed_by = now, user
+        goal.approved_on, goal.approved_by = now.date(), user
+        goal.save()
+        messages.success(self.request, f'{goal.author.username} さんの到達を承認しました。')
+        return redirect('genba:management')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(reach_context(self.object))
+        return context
+
 
 class LeaderHomeView(GenbaMixin, generic.TemplateView):
-    """担当現場ごとに：詰まり、読めない、まとめ確認、週次共有、裁量の線、懸念、ナレッジ候補"""
     template_name = 'genba/leader_home.html'
     role_name = 'leader'
 
@@ -918,6 +959,8 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
                 'weekly': site.documents.filter(kind=Document.KIND_WEEKLY,
                                                 week_of__gte=week_start(timezone.localdate()) - timedelta(weeks=1))
                 .exclude(stuck='').select_related('author').order_by('-week_of'),
+                'reach_requests': site.goals.filter(submitted_at__isnull=False, confirmed_at__isnull=True)
+                .exclude(author=user).select_related('author'),
                 'candidates': [
                     *site.documents.filter(knowledge_status=KNOWLEDGE_CANDIDATE).select_related('author'),
                     *site.terms.filter(knowledge_status=KNOWLEDGE_CANDIDATE).select_related('author'),
@@ -929,10 +972,6 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
         context['escalate_weeks'] = signals.WEEKLY_GAP_ESCALATE
         return context
 
-
-# ---------------------------------------------------------------------------
-# マネジメント：現場単位の集計値だけを見る
-# ---------------------------------------------------------------------------
 
 class ManagementView(GenbaMixin, generic.TemplateView):
     template_name = 'genba/management.html'
@@ -948,13 +987,13 @@ class ManagementView(GenbaMixin, generic.TemplateView):
         rows = [site_metrics(s) for s in Site.objects.all()]
         rows.sort(key=lambda m: (-len(m.alerts), m.site.name))
         context['rows'] = rows
-        # 到達の合意は、本人が依頼したものだけ（自分の目標は自分で合意しない）
-        requested = Goal.objects.filter(agreement_requested_at__isnull=False).exclude(author=self.request.user)
-        context['agreement_requests'] = requested.filter(agreed_on__isnull=True).select_related('author', 'site')
-        context['agreed_recently'] = (
-            requested.filter(agreed_on__gte=timezone.localdate() - timedelta(days=30))
-            .select_related('author', 'site').order_by('-agreed_on')
-        )
+        goals = Goal.objects.exclude(author=self.request.user).select_related('author', 'site', 'confirmed_by')
+        context['approval_requests'] = [
+            g for g in goals.filter(approved_on__isnull=True, submitted_at__isnull=False).order_by('submitted_at')
+            if g.confirmed_at or g.is_solo
+        ]
+        context['approved_recently'] = goals.filter(
+            approved_on__gte=timezone.localdate() - timedelta(days=30)).order_by('-approved_on')
         context['thresholds'] = THRESHOLDS
         context['weekly_rate_min'] = WEEKLY_RATE_MIN
         context['weekly_window'] = WEEKLY_WINDOW
@@ -962,46 +1001,7 @@ class ManagementView(GenbaMixin, generic.TemplateView):
         return context
 
 
-class GoalAgreementView(GenbaMixin, generic.DetailView):
-    """マネジメント（課長）が、本人から依頼された到達の説明を読んで合意する／差し戻す"""
-    model = Goal
-    template_name = 'genba/goal_agreement.html'
-    context_object_name = 'goal'
-    role_name = 'management'
-
-    def get_object(self, queryset=None):
-        goal = super().get_object(queryset)
-        user = self.request.user
-        if not roles.is_management(user) or goal.author_id == user.pk or not goal.agreement_requested_at:
-            raise PermissionDenied
-        return goal
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        goal = self.object
-        context['paste'] = growth.paste_text(goal, [e.title for e in goal.evidence.all()])
-        context['evidence'] = goal.evidence.all()
-        return context
-
-    def post(self, request, *args, **kwargs):
-        goal = self.get_object()
-        goal.agreement_comment = request.POST.get('comment', '')
-        if request.POST.get('action') == 'agree':
-            goal.agreed_on, goal.agreed_by = timezone.localdate(), request.user
-            messages.success(request, f'{goal.author.username} さんの到達に合意しました。')
-        else:
-            goal.agreement_requested_at, goal.agreed_on, goal.agreed_by = None, None, None
-            messages.success(request, f'{goal.author.username} さんに差し戻しました。コメントが本人に見えます。')
-        goal.save()
-        return redirect('genba:management')
-
-
-# ---------------------------------------------------------------------------
-# 会社：会社公開に切り替えられた記録だけ（顧客名の代わりに業界を出す）
-# ---------------------------------------------------------------------------
-
 class CompanyView(GenbaMixin, generic.TemplateView):
-    """会社：一般化して公開された記録（ナレッジ資産）と、合意した到達の匿名の集計（組織の力）"""
     template_name = 'genba/company.html'
     role_name = 'company'
 
@@ -1031,23 +1031,19 @@ class CompanyView(GenbaMixin, generic.TemplateView):
         context['questions'] = InterviewQuestion.objects.select_related('source__site')
         context['question_form'] = kwargs.get('question_form') or InterviewQuestionForm()
         context['proposals'] = KitProposal.objects.select_related('author', 'decided_by')
-        # 組織の力（合意した到達だけ、匿名）
-        reaches = growth.agreed_reaches()
+        reaches = growth.approved_reaches()
         distribution = growth.skill_distribution(reaches)
+        context['ledger'] = growth.ledger(reaches)
+        context['skill_items'] = growth.SKILL_ITEMS
         context['distribution'] = distribution
-        context['reach_people'] = len({g.author_id for g in reaches})
         context['itss'] = growth.itss_distribution(reaches)
         context['complexity'] = growth.complexity_experience(reaches)
         context['thin_items'] = growth.thin_items(distribution)
-        # アサインの希望（本人が出したものだけ）
-        context['next_goals'] = (Goal.objects.filter(share_next=True).exclude(next_text='')
-                                 .select_related('author').order_by('-shared_at'))
         context.update(growth_links=kit.GROWTH_LINKS, growth_loop=kit.GROWTH_LOOP, growth_note=kit.GROWTH_NOTE,
                        role_growth=kit.ROLE_GROWTH, role_growth_note=kit.ROLE_GROWTH_NOTE)
         return context
 
     def post(self, request, *args, **kwargs):
-        """質問リストに足す／改訂の提案を採用・見送る"""
         action = request.POST.get('action')
         if action == 'question':
             form = InterviewQuestionForm(request.POST)
@@ -1068,7 +1064,6 @@ class CompanyView(GenbaMixin, generic.TemplateView):
 
 
 class KitProposalCreateView(GenbaMixin, generic.CreateView):
-    """テンプレート・言い回し集・スキルセットの改訂を提案する（誰でも）"""
     form_class = KitProposalForm
     template_name = 'genba/form.html'
 

@@ -64,7 +64,7 @@ class GoalEvidenceInline(admin.TabularInline):
 
 @admin.register(Goal)
 class GoalAdmin(admin.ModelAdmin):
-    list_display = ('site', 'author', 'skill_item', 'current_level', 'reached_level', 'agreement_requested_at', 'agreed_on')
+    list_display = ('site', 'author', 'skill_item', 'current_level', 'reached_level', 'submitted_at', 'confirmed_at', 'approved_on')
     list_filter = ('site', 'skill_item')
     inlines = [GoalEvidenceInline]
 

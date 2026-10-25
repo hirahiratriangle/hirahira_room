@@ -1,5 +1,4 @@
 from django import forms
-from django.utils import timezone
 
 from . import growth
 from .models import (
@@ -20,7 +19,6 @@ class BootstrapMixin:
 
 
 class SiteForm(BootstrapMixin, forms.ModelForm):
-    """テンプレートから現場を作る。作った人はメンバーかリーダーとして入る。"""
 
     my_role = forms.ChoiceField(label='自分の立場', choices=Membership.ROLE_CHOICES, initial=Membership.ROLE_MEMBER)
 
@@ -40,7 +38,6 @@ class SiteForm(BootstrapMixin, forms.ModelForm):
 
 
 class IssueForm(BootstrapMixin, forms.ModelForm):
-    """Issue の作成。種類（確認事項・読めない・課題・作業・スコープ外）で欄を変える。"""
 
     FIELDS = {
         'question': ['title', 'body', 'ask_to'],
@@ -82,7 +79,6 @@ class IssueForm(BootstrapMixin, forms.ModelForm):
 
 
 class TaskProgressForm(BootstrapMixin, forms.ModelForm):
-    """作業 Issue の予定と実績"""
 
     class Meta:
         model = Question
@@ -105,7 +101,6 @@ class TermForm(BootstrapMixin, forms.ModelForm):
 
 
 class DocumentForm(BootstrapMixin, forms.ModelForm):
-    """区分ごとに要る項目だけ出す"""
 
     WEEKLY_FIELDS = ['title', 'week_of', 'done', 'learned', 'stuck', 'next_step', 'goal_action']
 
@@ -145,7 +140,6 @@ class SummaryForm(BootstrapMixin, forms.ModelForm):
 
 
 class SupportForm(BootstrapMixin, forms.ModelForm):
-    """リーダーが「読めない」に説明の時間を割り当てる"""
 
     class Meta:
         model = Question
@@ -158,7 +152,6 @@ class SupportForm(BootstrapMixin, forms.ModelForm):
 
 
 class ResponseForm(BootstrapMixin, forms.ModelForm):
-    """リーダーが懸念を受け取り、返事を書く"""
 
     class Meta:
         model = Question
@@ -171,7 +164,6 @@ class ResponseForm(BootstrapMixin, forms.ModelForm):
 
 
 class FeedbackForm(BootstrapMixin, forms.ModelForm):
-    """リーダーがまとめに差と次の作業を返す"""
 
     class Meta:
         model = Summary
@@ -184,7 +176,6 @@ class FeedbackForm(BootstrapMixin, forms.ModelForm):
 
 
 class LineForm(BootstrapMixin, forms.ModelForm):
-    """裁量の線"""
 
     class Meta:
         model = Membership
@@ -200,7 +191,6 @@ class SummaryReviewForm(BootstrapMixin, forms.ModelForm):
 
 
 class GoalPickForm(forms.Form):
-    """目標を立てる1段目：スキル項目と今のレベルを選ぶ"""
 
     item = forms.ChoiceField(label='スキル項目', choices=[('', '選ぶ')] + [(n, n) for n in growth.SKILL_ITEMS],
                              widget=forms.Select(attrs={'class': 'form-select'}))
@@ -209,7 +199,6 @@ class GoalPickForm(forms.Form):
 
 
 class GoalForm(BootstrapMixin, forms.ModelForm):
-    """目標を立てる2段目：一つ上の具体記述を目標の文にする"""
 
     class Meta:
         model = Goal
@@ -229,42 +218,46 @@ class GoalForm(BootstrapMixin, forms.ModelForm):
 
 
 class ReachForm(BootstrapMixin, forms.ModelForm):
-    """振り返りで到達を説明する"""
-
     complexity = forms.MultipleChoiceField(
         label='複雑性（当てはまるもの）', required=False, widget=forms.CheckboxSelectMultiple,
         choices=[(str(i), f'{i}. {text}') for i, text in enumerate(growth.data.COMPLEXITY, 1)],
     )
-    request_agreement = forms.BooleanField(label='この到達について、マネジメント（課長）に合意を依頼する', required=False)
 
     class Meta:
         model = Goal
-        fields = ['reached_level', 'explanation', 'mentored', 'role', 'team_size', 'next_text', 'share_next']
+        fields = ['reached_level', 'explanation', 'mentored', 'role', 'team_size', 'next_text']
         widgets = {'explanation': forms.Textarea(attrs={'rows': 4}), 'next_text': forms.Textarea(attrs={'rows': 2})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['complexity'].initial = [str(n) for n in self.instance.complexity_numbers]
         self.fields['complexity'].widget.attrs = {}
-        self.fields['request_agreement'].initial = bool(self.instance.agreement_requested_at)
 
     def save(self, commit=True):
         goal = super().save(commit=False)
         goal.complexity = ','.join(sorted(self.cleaned_data['complexity'], key=int))
-        # 合意したあとで到達の中身を変えたら、合意はやり直し
-        if goal.agreed_on and set(self.changed_data) - {'request_agreement'}:
-            goal.agreed_on, goal.agreed_by = None, None
-        if not self.cleaned_data['request_agreement']:
-            goal.agreement_requested_at, goal.agreed_on, goal.agreed_by = None, None, None
-        elif not goal.agreement_requested_at:
-            goal.agreement_requested_at = timezone.now()
-        if not goal.share_next or not goal.next_text.strip():
-            goal.share_next, goal.shared_at = False, None
-        elif not goal.shared_at:
-            goal.shared_at = timezone.now()
         if commit:
             goal.save()
         return goal
+
+
+class ApprovalForm(BootstrapMixin, forms.ModelForm):
+    class Meta:
+        model = Goal
+        fields = ['approved_level', 'approved_grade', 'next_text', 'approval_comment', 'customer_voice']
+        widgets = {'next_text': forms.Textarea(attrs={'rows': 2}), 'approval_comment': forms.Textarea(attrs={'rows': 2}),
+                   'customer_voice': forms.Textarea(attrs={'rows': 2})}
+        labels = {'next_text': '次の目標'}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        goal = self.instance
+        self.fields['approved_level'].required = self.fields['approved_grade'].required = True
+        if not goal.approved_level:
+            self.initial['approved_level'] = goal.reached_level
+            self.initial['approved_grade'] = growth.ae_grade(goal.reached_level, goal.mentored)
+        if not goal.is_solo:
+            del self.fields['customer_voice']
 
 
 class StructureGapForm(BootstrapMixin, forms.ModelForm):
@@ -281,7 +274,6 @@ class PromiseCheckForm(BootstrapMixin, forms.ModelForm):
 
 
 def publish_form_for(model):
-    """一般化した版を書くフォーム（文書・用語のどちらにも使う）"""
     target_model = model
 
     class PublishForm(BootstrapMixin, forms.ModelForm):

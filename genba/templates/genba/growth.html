@@ -8,7 +8,6 @@
     <h2 class="h5 mb-0" style="color: #2c5aa0;">自分の成長</h2>
     {% if not site.is_archived %}<a class="btn btn-primary btn-sm" href="{% url 'genba:goal_create' site.pk %}"><i class="fas fa-plus me-1"></i>目標を立てる</a>{% endif %}
 </div>
-<p class="small text-muted">入場前に目標を立て、期中の記録を証拠に、振り返りで到達を確かめます。物差しは<a href="{% url 'genba:skillset' %}">基本設計スキルセット</a>です。目標は現場チームに見え、到達の説明は自分だけが見ます。</p>
 
 <div class="d-flex flex-wrap align-items-center gap-2 small mb-4">
     <span class="badge bg-light text-dark border fw-normal">① 入場前　目標を立てる</span><i class="fas fa-arrow-right text-muted"></i>
@@ -28,8 +27,9 @@
         </div>
         <div class="text-end small">
             <div>この項目に付いた記録 <strong>{{ g.matches }}</strong> 件</div>
-            {% if g.goal.reached_level %}<div>到達：レベル{{ g.goal.reached_level }}（評価の目安 {{ g.grade }}）{% if g.goal.agreement_status == 'agreed' %} <span class="badge bg-success">合意済み</span>{% elif g.goal.agreement_status == 'requested' %} <span class="badge bg-info text-dark">合意を依頼中</span>{% endif %}</div>{% endif %}
-            <a class="btn btn-outline-primary btn-sm mt-1" href="{% url 'genba:goal_reach' g.goal.pk %}">到達を説明する</a>
+            {% if g.goal.approved_on %}<div>承認：レベル{{ g.goal.approved_level }}・評価{{ g.goal.approved_grade }}</div>{% elif g.goal.reached_level %}<div>到達：レベル{{ g.goal.reached_level }}（評価の目安 {{ g.grade }}）</div>{% endif %}
+            <span class="badge {% if g.goal.stage == 'approved' %}bg-success{% elif g.goal.stage %}bg-info text-dark{% else %}bg-light text-dark border{% endif %}">{{ g.goal.stage_label }}</span>
+            <a class="btn btn-outline-primary btn-sm mt-1" href="{% url 'genba:goal_reach' g.goal.pk %}">到達を記入する</a>
         </div>
     </div>
 </div></div>

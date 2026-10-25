@@ -1,0 +1,5 @@
+<ol class="list-group list-group-horizontal-md small mb-3">
+    <li class="list-group-item flex-fill"><div class="fw-bold">記入（メンバー）</div>{% if object.submitted_at %}{{ object.submitted_at|date:"n/j" }} 依頼{% else %}<span class="text-muted">記入中</span>{% endif %}</li>
+    <li class="list-group-item flex-fill"><div class="fw-bold">確認（{% if object.is_solo %}マネジメント{% else %}リーダー{% endif %}）</div>{% if object.confirmed_at %}{{ object.confirmed_at|date:"n/j" }} {{ object.confirmed_by.username }}{% else %}<span class="text-muted">―</span>{% endif %}{% if object.confirm_comment %}<div class="text-muted">{{ object.confirm_comment }}</div>{% endif %}{% if object.customer_voice %}<div class="text-muted">元請・顧客の声：{{ object.customer_voice }}</div>{% endif %}</li>
+    <li class="list-group-item flex-fill"><div class="fw-bold">承認（マネジメント）</div>{% if object.approved_on %}{{ object.approved_on|date:"n/j" }} {{ object.approved_by.username }}：レベル{{ object.approved_level }}・評価{{ object.approved_grade }}{% else %}<span class="text-muted">―</span>{% endif %}{% if object.approval_comment %}<div class="text-muted">{{ object.approval_comment }}</div>{% endif %}</li>
+</ol>

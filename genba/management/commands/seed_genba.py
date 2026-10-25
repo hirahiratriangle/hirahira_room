@@ -8,8 +8,8 @@
 
 筋書き：
 - 受発注（リーダー）：入場から10週。チェックリストはほぼ済み、まとめはリーダーと確認済み。
-  目標（プロジェクトマネジメント レベル3→4）の到達を説明し、課長（demo_kacho）と合意済み。
-  demo_sato からの合意の依頼が、マネジメントの画面に届いている
+  目標（プロジェクトマネジメント レベル3→4）の到達を課長（demo_kacho）が承認済み。
+  demo_sato の到達の確認がリーダーの画面に届いている
 - 保険金請求（メンバー）：入場から6日。1週目の途中で、3日止まっている「読めない」があり、
   まとめはまだ出していない → 危険信号が2つ出る。目標（デザイン レベル3→4）を立てている
 - 店舗在庫（入っていない）：マネジメント・会社の画面でだけ見える
@@ -77,6 +77,11 @@ class Command(BaseCommand):
         """リーダーが一般化した版を書いて会社に公開した状態"""
         return dict(visibility=VISIBILITY_COMPANY, knowledge_status=KNOWLEDGE_PUBLISHED, public_title=title,
                     public_body=body, published_by=leader, published_at=self.now - timedelta(days=3))
+
+    def approved(self, level, grade, confirmed_by, days=2, comment='', customer_voice=''):
+        return dict(submitted_at=self.ago(days + 2), confirmed_at=self.ago(days + 1), confirmed_by=confirmed_by,
+                    customer_voice=customer_voice, approved_on=self.today - timedelta(days=days), approved_by=self.kacho,
+                    approved_level=level, approved_grade=grade, approval_comment=comment)
 
     def ago(self, days):
         return self.now - timedelta(days=days)
@@ -236,10 +241,9 @@ class Command(BaseCommand):
             preparation='マスタースケジュールの読み方と、課題管理表の運用を確認しておく。', created_at=self.ago(71),
             reached_level=4, mentored=True, role='leader', team_size=3, complexity='1,4',
             explanation='3人の設計チームの課題とリスクを週次で棚卸しし、レビュー計画に組み込んだ。仕様書が最新でない課題は、影響と見込みを添えて上げた。',
-            agreement_requested_at=self.ago(4), agreed_on=self.today - timedelta(days=2), agreed_by=self.kacho,
-            agreement_comment='チームの課題管理が回っていた。次はレベル4の「デザイン」も視野に。',
             next_text='10人以上の開発チームのコスト・スケジュール・リスクを管理し、他を指導する',
-            share_next=True, shared_at=self.ago(1))
+            **self.approved(4, 'A', confirmed_by=self.kacho,
+                            comment='チームの課題管理が回っていた。次はレベル4の「デザイン」も視野に。'))
         problem = site.questions.get(title='旧システムの仕様書が最新でない')
         GoalEvidence.objects.create(goal=goal, record_type='issue', record_id=problem.pk, title=f'課題：{problem.title}')
         sato_goal = Goal.objects.create(
@@ -247,13 +251,13 @@ class Command(BaseCommand):
             current_level=2, target_text='担当機能の業務フローを自分で追い、業務ルールと例外を漏れなく設計する',
             created_at=self.ago(70), reached_level=3, role='member', team_size=3,
             explanation='受注から請求までの業務フローを自分で追って資料にし、受注画面の業務ルールと例外を設計した。',
-            agreement_requested_at=self.ago(1))
+            next_text='画面・帳票・テーブル・IFを、影響範囲を含めて独力で設計する', submitted_at=self.ago(1))
         flow = site.documents.get(title='受注から請求までの業務フロー')
         GoalEvidence.objects.create(goal=sato_goal, record_type='doc', record_id=flow.pk, title=f'03_業務理解：{flow.title}')
         Goal.objects.create(site=site, author=suzuki, skill_item='デザイン', current_level=2,
                             target_text='画面・帳票・テーブル・IFを、影響範囲を含めて独力で設計する', reached_level=3, role='member',
                             team_size=3, complexity='1', explanation='帳票20本の出力設計を、画面項目との対応を含めて独力で設計した。',
-                            agreement_requested_at=self.ago(30), agreed_on=self.today - timedelta(days=28), agreed_by=self.kacho)
+                            **self.approved(3, 'B', confirmed_by=me, days=28))
 
     # ---- 現場2: 保険金請求の基本設計（自分はメンバー。入場から6日） ----
 
@@ -305,7 +309,7 @@ class Command(BaseCommand):
                             target_text='10人以上の開発チームのコスト・スケジュール・リスクを管理し、他を指導する', reached_level=4,
                             role='leader', team_size=6, complexity='1,4,5',
                             explanation='6人の設計チームのスケジュールと課題を管理した（レベル5には規模が届かない）。',
-                            agreement_requested_at=self.ago(40), agreed_on=self.today - timedelta(days=38), agreed_by=self.kacho)
+                            **self.approved(4, 'A', confirmed_by=self.kacho, days=38))
 
     # ---- 現場3: 店舗在庫の可視化（自分は入っていない） ----
 
@@ -336,11 +340,13 @@ class Command(BaseCommand):
         Goal.objects.create(site=site, author=ito, skill_item='ネゴシエーション', current_level=3,
                             target_text='チームを代表して仕様変更・責任範囲を交渉する', reached_level=4, role='leader',
                             team_size=4, complexity='3,8', explanation='スコープ外の依頼について、元請と範囲を交渉した。',
-                            agreement_requested_at=self.ago(10), agreed_on=self.today - timedelta(days=9), agreed_by=self.kacho)
+                            next_text='複数社にまたがる仕様変更と責任範囲の交渉を主導する',
+                            **self.approved(4, 'A', confirmed_by=self.kacho, days=9,
+                                            customer_voice='元請PM：周辺作業の範囲を、根拠を示して整理してくれた。'))
         Goal.objects.create(site=site, author=ito, skill_item='業務分析', current_level=2,
                             target_text='顧客ヒアリングや現行システム解析で、担当範囲の要件を自分で確定させる', reached_level=3,
                             role='leader', team_size=4, explanation='店舗担当者へのヒアリングで在庫の要件を確定した。',
-                            agreement_requested_at=self.ago(10), agreed_on=self.today - timedelta(days=9), agreed_by=self.kacho)
+                            submitted_at=self.ago(3))
         KitProposal.objects.create(target='checklist', title='入場前に「周辺作業の範囲」を確かめる項目を足す',
                                    proposal='「契約・商流」に「データ移行・端末手配・マニュアル作成が作業範囲に入るか」を足す',
                                    reason='店舗系の現場で、周辺作業がスコープ外のまま依頼され続けた', author=ito,

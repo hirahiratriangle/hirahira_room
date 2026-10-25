@@ -531,16 +531,16 @@ class GoalTests(GenbaTestBase):
             'item': 'デザイン', 'level': 3, 'concrete_skill': '後進の指導', 'target_text': 'x'})
         self.assertFalse(Goal.objects.exists())
 
-    def test_goal_visible_to_team_reach_only_to_author(self):
+    def test_goal_and_reach_visible_to_team_only(self):
         g = Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=3,
-                                target_text='チームに見える目標', explanation='本人だけの説明')
+                                target_text='チームに見える目標', explanation='チームに見える説明')
         self.client.force_login(self.leader)
         res = self.client.get(reverse('genba:site_detail', args=[self.site.pk]), {'tab': 'members'})
         self.assertContains(res, 'チームに見える目標')
-        self.assertNotContains(res, '本人だけの説明')
+        self.assertContains(self.client.get(reverse('genba:goal_reach', args=[g.pk])), 'チームに見える説明')
+        self.assertEqual(self.client.post(reverse('genba:goal_reach', args=[g.pk]), {'reached_level': 3}).status_code, 403)
+        self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(reverse('genba:goal_reach', args=[g.pk])).status_code, 403)
-        self.client.force_login(self.member)
-        self.assertContains(self.client.get(reverse('genba:goal_reach', args=[g.pk])), '本人だけの説明')
 
     def test_candidates_are_own_records_with_matching_first(self):
         other = self.make_site('現場B', 'genba-b')
@@ -566,9 +566,9 @@ class GoalTests(GenbaTestBase):
         self.client.force_login(self.member)
         self.client.post(reverse('genba:goal_reach', args=[g.pk]), {
             'reached_level': 3, 'explanation': 'やった', 'role': 'member', 'team_size': 5,
-            'complexity': ['1', '4'], 'request_agreement': 'on', 'evidence': [f'issue:{q.pk}', f'issue:{other.pk}']})
+            'complexity': ['1', '4'], 'action': 'save', 'evidence': [f'issue:{q.pk}', f'issue:{other.pk}']})
         g.refresh_from_db()
-        self.assertEqual((g.reached_level, g.complexity, g.agreement_status), (3, '1,4', 'requested'))
+        self.assertEqual((g.reached_level, g.complexity, g.stage), (3, '1,4', Goal.STAGE_DRAFT))
         self.assertEqual(list(g.evidence.values_list('record_id', flat=True)), [q.pk])
         res = self.client.get(reverse('genba:goal_reach', args=[g.pk]))
         self.assertContains(res, 'スキルシート（基本設計）の評価の目安：B')
@@ -595,56 +595,76 @@ class GoalTests(GenbaTestBase):
         self.assertContains(res, '読めない資料の早期の共有')
 
 
-class AgreementTests(GenbaTestBase):
+class ReachStageTests(GenbaTestBase):
     def setUp(self):
         super().setUp()
         self.manager = CustomUser.objects.create_user('manager', 'k@example.com', 'pass12345')
         self.add_group(self.manager, GROUP_MANAGEMENT)
         self.goal = Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=3,
-                                        target_text='目標', reached_level=4, explanation='説明',
-                                        agreement_requested_at=timezone.now())
+                                        target_text='目標')
+        self.reach_url = reverse('genba:goal_reach', args=[self.goal.pk])
+        self.approval_url = reverse('genba:goal_approval', args=[self.goal.pk])
 
-    def test_only_requested_goals_reach_management(self):
-        Goal.objects.create(site=self.site, author=self.leader, skill_item='デザイン', current_level=3,
-                            target_text='依頼していない目標', explanation='依頼していない説明')
-        self.client.force_login(self.manager)
-        res = self.client.get(reverse('genba:management'))
-        self.assertContains(res, '説明を読んで合意する')
-        self.assertNotContains(res, '依頼していない')
-        self.assertContains(self.client.get(reverse('genba:goal_agreement', args=[self.goal.pk])), '説明')
-
-    def test_agree_and_return(self):
-        self.client.force_login(self.manager)
-        url = reverse('genba:goal_agreement', args=[self.goal.pk])
-        self.client.post(url, {'action': 'agree', 'comment': 'よい'})
+    def submit(self):
+        self.client.force_login(self.member)
+        self.client.post(self.reach_url, {'reached_level': 4, 'explanation': '説明', 'action': 'submit'})
         self.goal.refresh_from_db()
-        self.assertEqual((self.goal.agreed_on, self.goal.agreed_by), (self.today, self.manager))
-        self.goal.agreed_on = None
-        self.goal.save()
-        self.client.post(url, {'action': 'return', 'comment': '証拠を足して'})
-        self.goal.refresh_from_db()
-        self.assertEqual(self.goal.agreement_status, '')
-        self.assertEqual(self.goal.agreement_comment, '証拠を足して')
 
-    def test_not_requested_or_not_management_or_own(self):
+    def test_enter_confirm_approve(self):
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.get(self.approval_url).status_code, 403)
+        self.submit()
+        self.assertEqual(self.goal.stage, Goal.STAGE_SUBMITTED)
+        self.client.post(self.reach_url, {'reached_level': 2, 'action': 'save'})
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.reached_level, 4)
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.get(self.approval_url).status_code, 403)
         self.client.force_login(self.leader)
-        self.assertEqual(self.client.get(reverse('genba:goal_agreement', args=[self.goal.pk])).status_code, 403)
-        self.add_group(self.member, GROUP_MANAGEMENT)
-        self.client.force_login(self.member)
-        self.assertEqual(self.client.get(reverse('genba:goal_agreement', args=[self.goal.pk])).status_code, 403)
-        self.goal.agreement_requested_at = None
-        self.goal.save()
-        self.client.force_login(self.manager)
-        self.assertEqual(self.client.get(reverse('genba:goal_agreement', args=[self.goal.pk])).status_code, 403)
-
-    def test_changing_reach_resets_agreement(self):
-        self.goal.agreed_on, self.goal.agreed_by = self.today, self.manager
-        self.goal.save()
-        self.client.force_login(self.member)
-        self.client.post(reverse('genba:goal_reach', args=[self.goal.pk]), {
-            'reached_level': 3, 'explanation': '説明', 'request_agreement': 'on'})
+        self.assertContains(self.client.get(reverse('genba:leader_home')), '確認する')
+        self.client.post(self.reach_url, {'action': 'confirm', 'comment': '事実を確かめた'})
         self.goal.refresh_from_db()
-        self.assertEqual(self.goal.agreement_status, 'requested')
+        self.assertEqual((self.goal.stage, self.goal.confirmed_by), (Goal.STAGE_CONFIRMED, self.leader))
+        self.client.force_login(self.manager)
+        self.assertContains(self.client.get(reverse('genba:management')), '承認する')
+        self.client.post(self.approval_url, {'approved_level': 4, 'approved_grade': 'A', 'next_text': '次',
+                                             'approval_comment': '', 'action': 'approve'})
+        self.goal.refresh_from_db()
+        self.assertEqual((self.goal.stage, self.goal.approved_level, self.goal.approved_grade, self.goal.approved_by),
+                         (Goal.STAGE_APPROVED, 4, 'A', self.manager))
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(self.reach_url, {'action': 'withdraw'}).status_code, 403)
+
+    def test_return_and_withdraw(self):
+        self.submit()
+        self.client.force_login(self.leader)
+        self.client.post(self.reach_url, {'action': 'return', 'comment': '証拠を足して'})
+        self.goal.refresh_from_db()
+        self.assertEqual((self.goal.stage, self.goal.confirm_comment), (Goal.STAGE_DRAFT, '証拠を足して'))
+        self.submit()
+        self.client.post(self.reach_url, {'action': 'withdraw'})
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.stage, Goal.STAGE_DRAFT)
+
+    def test_only_other_leader_confirms_and_not_own(self):
+        self.submit()
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(self.reach_url, {'action': 'confirm'}).status_code, 403)
+        self.add_group(self.member, GROUP_MANAGEMENT)
+        self.assertEqual(self.client.get(self.approval_url).status_code, 403)
+
+    def test_solo_site_management_confirms_and_approves(self):
+        solo = Site.objects.create(name='ひとり', repo_name='genba-solo', industry='小売業', started_on=self.today)
+        Membership.objects.create(site=solo, user=self.outsider, joined_on=self.today)
+        g = Goal.objects.create(site=solo, author=self.outsider, skill_item='業務分析', current_level=2, target_text='t',
+                                reached_level=3, submitted_at=timezone.now())
+        self.assertTrue(g.is_solo)
+        self.client.force_login(self.manager)
+        self.assertContains(self.client.get(reverse('genba:management')), '確認して承認する')
+        self.client.post(reverse('genba:goal_approval', args=[g.pk]), {
+            'approved_level': 3, 'approved_grade': 'B', 'customer_voice': '元請：よく説明してくれた', 'action': 'approve'})
+        g.refresh_from_db()
+        self.assertEqual((g.stage, g.confirmed_by, g.customer_voice), (Goal.STAGE_APPROVED, self.manager, '元請：よく説明してくれた'))
 
     def test_weekly_with_goal_action_is_candidate(self):
         Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_WEEKLY, title='週報A',
@@ -839,45 +859,36 @@ class CompanyTests(GenbaTestBase):
         self.company = CustomUser.objects.create_user('company', 'c@example.com', 'pass12345')
         self.add_group(self.company, GROUP_COMPANY)
 
-    def goal(self, author, item, level, agreed=True, **kw):
+    def goal(self, author, item, level, approved=True, **kw):
+        if approved:
+            kw.update(approved_on=self.today, approved_level=level, approved_grade='B')
         return Goal.objects.create(site=self.site, author=author, skill_item=item, current_level=level - 1,
-                                   target_text='t', reached_level=level,
-                                   agreed_on=self.today if agreed else None, **kw)
+                                   target_text='t', reached_level=level, **kw)
 
-    def test_distribution_counts_only_agreed_latest(self):
+    def test_distribution_counts_only_approved_latest(self):
         self.goal(self.member, 'デザイン', 3)
         g = self.goal(self.member, 'デザイン', 4)
-        g.agreed_on = self.today + timedelta(days=1)
+        g.approved_on = self.today + timedelta(days=1)
         g.save()
-        self.goal(self.leader, 'デザイン', 3, agreed=False)
+        self.goal(self.leader, 'デザイン', 3, approved=False)
         self.goal(self.leader, '業務分析', 4, role='leader', team_size=3, complexity='1,2')
         rows = {r['item']: r['counts'] for r in growth.skill_distribution()}
-        self.assertEqual(rows['デザイン'], [0, 0, 1, 0])  # 同じ人の同じ項目は最新の1件。合意していないものは数えない
+        self.assertEqual(rows['デザイン'], [0, 0, 1, 0])
         self.assertEqual(rows['業務分析'], [0, 0, 1, 0])
         self.assertEqual(dict(growth.itss_distribution())[4], 1)
         self.assertEqual({i: n for i, _, n in growth.complexity_experience()}[1], 1)
         self.assertIn('テクノロジ', growth.thin_items(growth.skill_distribution()))
 
-    def test_company_page_has_no_names_in_distribution(self):
-        self.goal(self.member, 'デザイン', 3)
+    def test_ledger_shows_only_approved(self):
+        self.goal(self.member, 'デザイン', 3, explanation='承認した行動', next_text='次はチームに方針を示す')
+        self.goal(self.leader, '業務分析', 3, approved=False, explanation='承認していない行動')
         self.client.force_login(self.company)
         res = self.client.get(reverse('genba:company'))
-        self.assertContains(res, '組織のスキル分布')
-        self.assertNotContains(res, 'member')
-
-    def test_assignment_wish_only_when_shared(self):
-        g = self.goal(self.member, 'デザイン', 3)
-        self.client.force_login(self.member)
-        url = reverse('genba:goal_reach', args=[g.pk])
-        self.client.post(url, {'reached_level': 3, 'next_text': '次はチームに方針を示す'})
-        self.client.force_login(self.company)
-        self.assertNotContains(self.client.get(reverse('genba:company')), '次はチームに方針を示す')
-        self.client.force_login(self.member)
-        self.client.post(url, {'reached_level': 3, 'next_text': '次はチームに方針を示す', 'share_next': 'on'})
-        g.refresh_from_db()
-        self.assertIsNotNone(g.shared_at)
-        self.client.force_login(self.company)
-        self.assertContains(self.client.get(reverse('genba:company')), '次はチームに方針を示す')
+        self.assertContains(res, '個人のスキル台帳')
+        self.assertContains(res, '承認した行動')
+        self.assertContains(res, '次はチームに方針を示す')
+        self.assertNotContains(res, '承認していない行動')
+        self.assertNotContains(res, '現場A')
 
     def test_kit_proposal_by_anyone_decided_by_company(self):
         self.client.force_login(self.member)

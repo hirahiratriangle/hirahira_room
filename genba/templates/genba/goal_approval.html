@@ -1,0 +1,33 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}到達の承認{% endblock %}
+
+{% block genba_contents %}
+<p class="small mb-1"><a href="{% url 'genba:management' %}">マネジメント</a></p>
+<h2 class="h5 mb-1" style="color: #2c5aa0;">到達の承認：{{ goal.author.username }} さん</h2>
+<p class="small mb-2">{{ goal.skill_item }} ・ {{ goal.site.industry }}{% if goal.is_solo %} ・ <span class="badge bg-warning text-dark">ひとり現場</span>{% endif %}</p>
+{% with object=goal %}{% include 'genba/_reach_steps.html' %}{% endwith %}
+<div class="row g-3">
+    <div class="col-lg-6">
+        <pre class="card card-body small genba-pre">{{ paste }}</pre>
+        {% for n, text in levels %}<div class="small{% if n == goal.reached_level %} fw-bold{% endif %}">レベル{{ n }}：{{ text|default:"—" }}</div>{% endfor %}
+    </div>
+    <div class="col-lg-6">
+        {% if goal.stage == 'approved' %}<div class="alert alert-success small">承認済み</div>{% else %}
+        <form method="post" class="card"><div class="card-body small">
+            {% csrf_token %}
+            <div class="row g-2">
+                <div class="col-6"><label class="form-label">{{ form.approved_level.label }}</label>{{ form.approved_level }}</div>
+                <div class="col-6"><label class="form-label">{{ form.approved_grade.label }}</label>{{ form.approved_grade }}</div>
+                {% if form.customer_voice %}<div class="col-12"><label class="form-label">{{ form.customer_voice.label }}</label>{{ form.customer_voice }}</div>{% endif %}
+                <div class="col-12"><label class="form-label">{{ form.next_text.label }}</label>{{ form.next_text }}</div>
+                <div class="col-12"><label class="form-label">{{ form.approval_comment.label }}</label>{{ form.approval_comment }}</div>
+            </div>
+            {% for e in form.non_field_errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
+            <button class="btn btn-primary btn-sm mt-2" name="action" value="approve">{% if goal.is_solo and not goal.confirmed_at %}確認して承認する{% else %}承認する{% endif %}</button>
+            <button class="btn btn-outline-secondary btn-sm mt-2 ms-1" name="action" value="return">差し戻す</button>
+        </div></form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

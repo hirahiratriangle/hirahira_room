@@ -214,10 +214,9 @@
     <thead><tr class="small text-muted"><th>名前</th><th>立場</th><th>役割</th><th>入場日</th></tr></thead>
     <tbody>{% for m in memberships %}<tr class="small"><td>{{ m.user.username }}</td><td>{{ m.get_role_display }}</td><td>{{ m.duty|default:"―" }}</td><td>{{ m.joined_on|date:"n/j" }}</td></tr>{% endfor %}</tbody>
 </table>
-<h3 class="h6 mt-4">目標（スキルセット）</h3>
-<p class="small text-muted">目標は現場チームに見えます。到達の説明は本人だけが見ます。</p>
+<h3 class="h6 mt-4">目標と到達</h3>
 <ul class="list-group mb-3">
-    {% for g in goals %}<li class="list-group-item small"><strong>{{ g.author.username }}</strong>　{{ g.skill_item }}（レベル{{ g.target_level }}）：{{ g.target_text }}</li>
+    {% for g in goals %}<li class="list-group-item small d-flex flex-wrap justify-content-between gap-2"><span><strong>{{ g.author.username }}</strong>　{{ g.skill_item }}（レベル{{ g.target_level }}）：{{ g.target_text }}</span><a href="{% url 'genba:goal_reach' g.pk %}" class="text-nowrap">{{ g.stage_label }}</a></li>
     {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
 </ul>
 <h3 class="h6 mt-4">1週目のまとめ</h3>
