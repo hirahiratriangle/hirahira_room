@@ -5,8 +5,11 @@ GitHub Actions が朝・昼・夜に /fe/tasks/post-x/ を叩き、post_slot が
 解説は解答ページ（/fe/x/<code>/）にだけ出す。出典は、IPA の公開問題なら IPA の
 求める形、自作の問題なら「オリジナル問題」ともとにしたシラバスの項目。
 
-- 出題は、投稿できる問題（eligible_questions）から重みなしで毎回1問を引く。
+- 出題は、科目Aの固定問題から毎回1問を引く。OFFICIAL_SHARE（3回に1回）の割合で
+  IPA の公開問題から、それ以外はオリジナル問題から、それぞれ重みなしで引く。
   前に出た問題も同じように引くので、近いうちに同じ問題が出ることもある。
+- 1件に収まらない長い問題文は途中で切り、続きは解答ページで見せる。図のある
+  問題も、図は解答ページで見せる。そのため科目Aの固定問題はすべて投稿できる。
 - 投稿のときに問題の中身を XPost に写す。解答ページはこの写しから描く。
 - 投稿から settings.FE_X_KEEP_DAYS 日たった XPost は、行ごと消す（purge_old）。
 - 日付と時間帯の組は1つだけ。同じ時間帯に何度呼ばれても投稿は1回で、
@@ -47,6 +50,12 @@ URL_WEIGHT = 23
 HEADER = '【基本情報 今日の問題】'
 LINK_LABEL = '▶選択肢と解答はこちら'
 LINK_LABEL_FIGURE = '▶図・選択肢と解答はこちら'
+# 問題文を途中で切ったときの案内
+LINK_LABEL_CUT = '▶問題の続き・選択肢と解答はこちら'
+LINK_LABEL_CUT_FIGURE = '▶問題の続き・図・選択肢と解答はこちら'
+ELLIPSIS = '…'
+# IPA の公開問題を出す割合。公開問題は問題集の1割ほどしかないので、多めに出す
+OFFICIAL_SHARE = 1 / 3
 TAGS = '#基本情報技術者 #FE #IPA'
 EXAM_NAME = '基本情報技術者試験'
 CODE_LENGTH = 10
@@ -111,27 +120,44 @@ def page_url(code):
     return settings.FE_SITE_URL.rstrip('/') + reverse('fe:x_answer', args=[code])
 
 
+def _compose(stem, source, label, url):
+    return '\n'.join([HEADER, stem, source_line(source), label, url, TAGS])
+
+
 def build_text(stem, source, has_figures, url):
-    lines = [HEADER, stem, source_line(source)]
-    lines += [LINK_LABEL_FIGURE if has_figures else LINK_LABEL, url, TAGS]
-    return '\n'.join(lines)
-
-
-def fits(question):
-    """URL を入れて1件に収まるか。URL は長さによらず同じに数えるので、仮の URL で測る。"""
-    text = build_text(question.stem, question.source, bool(question.figures),
-                      page_url('x' * CODE_LENGTH))
-    return weight(text) <= LIMIT
+    """投稿の文面。収まらなければ問題文を後ろから切り、「…」と続きの案内を付ける。"""
+    text = _compose(stem, source, LINK_LABEL_FIGURE if has_figures else LINK_LABEL, url)
+    if weight(text) <= LIMIT:
+        return text
+    label = LINK_LABEL_CUT_FIGURE if has_figures else LINK_LABEL_CUT
+    # 切った問題文の長さを、収まる最長に二分探索で決める
+    low, high = 0, len(stem)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if weight(_compose(stem[:mid].rstrip() + ELLIPSIS, source, label, url)) <= LIMIT:
+            low = mid
+        else:
+            high = mid - 1
+    return _compose(stem[:low].rstrip() + ELLIPSIS, source, label, url)
 
 
 def eligible_questions():
-    """投稿できる問題。科目Aの固定問題（計算テンプレートの問題は除く）で、1件に収まるもの。"""
-    return [
-        q for q in Question.objects.active()
+    """投稿できる問題。科目Aの固定問題（計算テンプレートの問題は除く）。"""
+    return list(
+        Question.objects.active()
         .filter(subject=SUBJECT_A, template__isnull=True)
         .select_related('category')
-        if fits(q)
-    ]
+    )
+
+
+def pick(pool, rng=None):
+    """OFFICIAL_SHARE の割合で公開問題から、それ以外はオリジナル問題から1問を引く。"""
+    rng = rng or random
+    official = [q for q in pool if is_official(q.source)]
+    original = [q for q in pool if not is_official(q.source)]
+    if official and (not original or rng.random() < OFFICIAL_SHARE):
+        return rng.choice(official)
+    return rng.choice(original)
 
 
 def new_code():
@@ -167,7 +193,7 @@ def post_slot(slot, today=None, rng=None):
         pool = eligible_questions()
         if not pool:
             return {'status': 'empty'}
-        question = (rng or random).choice(pool)
+        question = pick(pool, rng)
         try:
             with transaction.atomic():
                 post = _create(today, slot, question)

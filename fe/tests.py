@@ -3159,15 +3159,50 @@ class XPostTests(TestCase):
 
     # ---- 投稿できる問題と文面 ----
 
-    def test_eligible_questions_are_short_fixed_subject_a(self):
+    def test_eligible_questions_are_fixed_subject_a(self):
         from . import x_post
         short = self._question()
-        self._question(stem='長い' * 200)
+        long = self._question(stem='長い' * 200)
         self._question(stem='科目Bの問題', code=101, choices=['ア', 'イ', 'ウ', 'エ', 'オ', 'カ'])
         template = QuestionTemplate.objects.first()
         self._question(stem='テンプレートの問題', template=template)
         self._question(stem='使わない問題', is_active=False)
-        self.assertEqual(x_post.eligible_questions(), [short])
+        self.assertEqual(set(x_post.eligible_questions()), {short, long})
+
+    def test_long_stem_is_cut_and_points_to_the_page(self):
+        from . import x_post
+        post = self._post(stem='長い問題文' * 80, source='令和7年度 科目A 問30 ／ シラバス')
+        self.assertLessEqual(x_post.weight(post.text), x_post.LIMIT)
+        self.assertIn('…\n（出典：令和7年度 基本情報技術者試験 科目A 問30）', post.text)
+        self.assertIn('▶問題の続き・選択肢と解答はこちら', post.text)
+        # 切るのは問題文だけで、URL とタグは残す。ページには問題文の全文を写す
+        self.assertIn('https://example.jp/fe/x/{}/'.format(post.code), post.text)
+        self.assertTrue(post.text.endswith('#基本情報技術者 #FE #IPA'))
+        self.assertEqual(post.stem, '長い問題文' * 80)
+        # 収まる範囲で、できるだけ長く残す
+        self.assertGreater(x_post.weight(post.text), x_post.LIMIT - 12)
+
+    def test_long_figure_question_mentions_the_figure(self):
+        post = self._post(stem='長い' * 200, figures=[{'src': 'data:image/png;base64,AAAA', 'alt': '図'}])
+        self.assertIn('▶問題の続き・図・選択肢と解答はこちら', post.text)
+
+    def test_official_questions_come_about_one_in_three(self):
+        from . import x_post
+        official = self._question(stem='公開問題', source='令和7年度 科目A 問1')
+        originals = [self._question(stem='オリジナル{}'.format(i)) for i in range(9)]
+        pool = [official] + originals
+        rng = random.Random(7)
+        picks = [x_post.pick(pool, rng) for _ in range(900)]
+        share = picks.count(official) / len(picks)
+        self.assertAlmostEqual(share, 1 / 3, delta=0.05)
+
+    def test_pick_falls_back_when_one_side_is_empty(self):
+        from . import x_post
+        official = self._question(stem='公開問題', source='令和7年度 科目A 問1')
+        original = self._question(stem='オリジナル')
+        rng = random.Random(1)
+        self.assertEqual({x_post.pick([official], rng) for _ in range(20)}, {official})
+        self.assertEqual({x_post.pick([original], rng) for _ in range(20)}, {original})
 
     def test_text_fits_the_limit_and_has_url_and_tags(self):
         from . import x_post
