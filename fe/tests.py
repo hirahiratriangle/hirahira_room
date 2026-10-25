@@ -30,8 +30,8 @@ from .importer import (ImportError_, needs_confirmation, parse, preview, sync,
                        validate)
 from .learning import note_menu, pick_note
 from .models import (Attempt, Category, CategoryProgress, DailyProgress, Learner,
-                     LearningNote, LearningRound, PassReport,
-                     Question, QuestionTemplate, StudySession)
+                     LearningNote, LearningRound, OpenProgress, PassReport,
+                     Question, QuestionTemplate, StudySession, XPost)
 from .selection import (REVIEW_DUE_GAP, _due_for_review,
                         _last_result_map, _recent_answer_times, pick_question)
 from .stats import (WEAK_MIN_ATTEMPTS, category_options, category_stats,
@@ -3130,3 +3130,273 @@ class MailTests(TestCase):
             response = self.client.post(url, HTTP_X_FE_MAIL_TOKEN='secret')
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json(), {'marathon': 0, 'training': 0, 'failed': 0})
+
+
+@override_settings(FE_X_DRY_RUN=True, FE_X_KEEP_DAYS=30,
+                   FE_SITE_URL='https://example.jp')
+class XPostTests(TestCase):
+    """X への投稿と、投稿ごとの解答ページ。ID なし・ログインなしで使う。"""
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+
+    def _question(self, stem='SSID の役割はどれか。', code=10, **fields):
+        category = Category.objects.get(code=code)
+        values = dict(
+            subject=category.subject, category=category, stem=stem,
+            choices=['周波数', '暗号鍵', 'ネットワークの名前', '製造番号'],
+            answer_index=2, explanation='SSID はネットワークの名前。', source='自作',
+        )
+        values.update(fields)
+        return Question.objects.create(**values)
+
+    def _post(self, slot='morning', **fields):
+        from . import x_post
+        self._question(**fields)
+        x_post.post_slot(slot)
+        return XPost.objects.get(date=timezone.localdate(), slot=slot)
+
+    # ---- 投稿できる問題と文面 ----
+
+    def test_eligible_questions_are_short_fixed_subject_a(self):
+        from . import x_post
+        short = self._question()
+        self._question(stem='長い' * 200)
+        self._question(stem='科目Bの問題', code=101, choices=['ア', 'イ', 'ウ', 'エ', 'オ', 'カ'])
+        template = QuestionTemplate.objects.first()
+        self._question(stem='テンプレートの問題', template=template)
+        self._question(stem='使わない問題', is_active=False)
+        self.assertEqual(x_post.eligible_questions(), [short])
+
+    def test_text_fits_the_limit_and_has_url_and_tags(self):
+        from . import x_post
+        post = self._post()
+        self.assertLessEqual(x_post.weight(post.text), x_post.LIMIT)
+        self.assertIn('https://example.jp/fe/x/{}/'.format(post.code), post.text)
+        self.assertIn('#基本情報技術者試験 #FE', post.text)
+        self.assertIn('▶選択肢と解答はこちら', post.text)
+        # 選択肢と正解は投稿に入れない
+        self.assertNotIn('ネットワークの名前', post.text)
+
+    def test_figure_question_points_to_the_page(self):
+        post = self._post(figures=[{'src': 'data:image/png;base64,AAAA', 'alt': '図'}])
+        self.assertIn('▶図・選択肢と解答はこちら', post.text)
+
+    def test_citation_follows_ipa_form(self):
+        from .x_post import citation
+        self.assertEqual(
+            citation('令和7年度 科目A 問2 ／ シラバス Ver.8.0 中分類1 応用数学'),
+            '出典：令和7年度 基本情報技術者試験 科目A 問2',
+        )
+        self.assertEqual(
+            citation('サンプル問題 科目A 問12'),
+            '出典：基本情報技術者試験 サンプル問題 科目A 問12',
+        )
+        self.assertEqual(citation('シラバス Ver.8.0 中分類10'), '')
+
+    def test_weight_counts_full_width_and_url(self):
+        from .x_post import weight
+        self.assertEqual(weight('abc'), 3)
+        self.assertEqual(weight('あい'), 4)
+        self.assertEqual(weight('https://example.jp/' + 'x' * 100), 23)
+
+    # ---- 投稿の流れ ----
+
+    def test_same_slot_is_posted_once(self):
+        from . import x_post
+        self._question()
+        first = x_post.post_slot('morning')
+        self.assertEqual(first['status'], 'posted')
+        self.assertEqual(x_post.post_slot('morning')['status'], 'already')
+        self.assertEqual(XPost.objects.count(), 1)
+
+    def test_each_slot_gets_its_own_post(self):
+        from . import x_post
+        self._question()
+        for slot in ('morning', 'noon', 'evening'):
+            x_post.post_slot(slot)
+        self.assertEqual(XPost.objects.count(), 3)
+        self.assertEqual(len(set(XPost.objects.values_list('code', flat=True))), 3)
+
+    def test_pick_is_uniform_random_with_repeats(self):
+        """重みなしで毎回引くので、前に出た問題も出る。"""
+        from . import x_post
+        self._question()
+        self._question(stem='DNS の役割はどれか。')
+        rng = random.Random(1)
+        stems = []
+        for day in range(20):
+            date = timezone.localdate() - timezone.timedelta(days=day)
+            x_post.post_slot('morning', today=date, rng=rng)
+            stems.append(XPost.objects.get(date=date, slot='morning').stem)
+        self.assertEqual(len(set(stems)), 2)
+
+    def test_failed_post_is_retried_with_the_same_question(self):
+        from . import x_post
+        self._question()
+        self._question(stem='DNS の役割はどれか。')
+        with mock.patch.object(x_post, 'send', side_effect=x_post.PostError('503')):
+            with self.assertRaises(x_post.PostError):
+                x_post.post_slot('noon')
+        failed = XPost.objects.get()
+        self.assertEqual(failed.status, XPost.STATUS_FAILED)
+        result = x_post.post_slot('noon')
+        self.assertEqual(result['status'], 'posted')
+        retried = XPost.objects.get()
+        self.assertEqual((retried.code, retried.stem), (failed.code, failed.stem))
+        self.assertEqual(retried.error, '')
+
+    def test_no_question_means_no_post(self):
+        from . import x_post
+        self.assertEqual(x_post.post_slot('morning'), {'status': 'empty'})
+        self.assertFalse(XPost.objects.exists())
+
+    def test_post_keeps_a_copy_of_the_question(self):
+        """投稿のあとに問題を直しても消しても、解答ページは投稿のときのまま。"""
+        post = self._post()
+        Question.objects.all().delete()
+        response = self.client.get(reverse('fe:x_answer', args=[post.code]))
+        self.assertContains(response, 'SSID の役割はどれか。')
+        self.assertContains(response, 'ネットワークの名前')
+
+    def test_send_without_keys_fails_when_not_dry_run(self):
+        from . import x_post
+        with override_settings(FE_X_DRY_RUN=False, X_API_KEY='', X_API_SECRET='',
+                               X_ACCESS_TOKEN='', X_ACCESS_SECRET=''):
+            with self.assertRaises(x_post.PostError):
+                x_post.send('text')
+
+    # ---- 期限 ----
+
+    def test_old_posts_are_deleted_after_keep_days(self):
+        from . import x_post
+        self._question()
+        today = timezone.localdate()
+        for days in (29, 30, 31):
+            x_post.post_slot('morning', today=today - timezone.timedelta(days=days))
+        self.assertEqual(x_post.purge_old(), 2)
+        self.assertEqual(list(XPost.objects.values_list('date', flat=True)),
+                         [today - timezone.timedelta(days=29)])
+
+    def test_expired_post_shows_the_notice(self):
+        from . import x_post
+        self._question()
+        x_post.post_slot('morning', today=timezone.localdate() - timezone.timedelta(days=30))
+        post = XPost.objects.get()
+        response = self.client.get(reverse('fe:x_answer', args=[post.code]))
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, 'この問題の公開は終わりました', status_code=404)
+        self.assertNotContains(response, 'SSID', status_code=404)
+
+    def test_unknown_code_shows_the_same_notice(self):
+        response = self.client.get(reverse('fe:x_answer', args=['nothing1']))
+        self.assertContains(response, 'この問題の公開は終わりました', status_code=404)
+        self.assertContains(response, 'https://example.jp/fe/', status_code=404)
+
+    def test_unposted_post_is_not_shown(self):
+        from . import x_post
+        self._question()
+        with mock.patch.object(x_post, 'send', side_effect=x_post.PostError('x')):
+            with self.assertRaises(x_post.PostError):
+                x_post.post_slot('morning')
+        post = XPost.objects.get()
+        response = self.client.get(reverse('fe:x_answer', args=[post.code]))
+        self.assertEqual(response.status_code, 404)
+
+    # ---- 解答ページ ----
+
+    def test_page_needs_no_login_or_id(self):
+        post = self._post()
+        self.client.logout()
+        response = self.client.get(reverse('fe:x_answer', args=[post.code]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'SSID の役割はどれか。')
+        self.assertContains(response, 'noindex')
+        # 答える前は正解も解説も出さない
+        self.assertNotContains(response, 'SSID はネットワークの名前。')
+        self.assertNotContains(response, '基本情報の対策アプリで')
+
+    def test_wrong_answer_shows_result_explanation_and_guide(self):
+        post = self._post()
+        response = self.client.post(reverse('fe:x_answer', args=[post.code]), {'choice': 0})
+        self.assertContains(response, '不正解')
+        self.assertContains(response, '正解は ウ')
+        self.assertContains(response, 'あなたの答え')
+        self.assertContains(response, 'SSID はネットワークの名前。')
+        self.assertContains(response, '学習モード')
+        self.assertContains(response, 'https://example.jp/fe/')
+        self.assertContains(response, 'オリジナル問題')
+
+    def test_official_question_shows_citation(self):
+        post = self._post(source='令和7年度 科目A 問2 ／ シラバス Ver.8.0 中分類10')
+        response = self.client.post(reverse('fe:x_answer', args=[post.code]), {'choice': 2})
+        self.assertContains(response, '○ 正解！')
+        self.assertContains(response, '出典：令和7年度 基本情報技術者試験 科目A 問2')
+        self.assertNotContains(response, 'シラバス Ver.8.0')
+
+    def test_invalid_choice_asks_again(self):
+        post = self._post()
+        response = self.client.post(reverse('fe:x_answer', args=[post.code]), {'choice': 9})
+        self.assertContains(response, '選択肢を選んでください。')
+        self.assertFalse(OpenProgress.objects.exists())
+
+    # ---- 全体の集計への加算 ----
+
+    def test_answers_are_counted_once_per_browser(self):
+        post = self._post()
+        url = reverse('fe:x_answer', args=[post.code])
+        self.client.post(url, {'choice': 2})
+        self.client.post(url, {'choice': 0})
+        progress = OpenProgress.objects.get()
+        self.assertEqual((progress.answered, progress.correct), (1, 1))
+        # 別のブラウザなら数える
+        other = self.client_class()
+        other.post(url, {'choice': 0})
+        progress.refresh_from_db()
+        self.assertEqual((progress.answered, progress.correct), (2, 1))
+
+    def test_open_answers_are_added_to_site_summary_but_not_learners(self):
+        post = self._post()
+        self.client.post(reverse('fe:x_answer', args=[post.code]), {'choice': 2})
+        summary = site_summary()
+        self.assertEqual((summary['total'], summary['correct']), (1, 1))
+        self.assertEqual(summary['learners'], 0)
+        subject_a = summary['subjects'][0]
+        network = next(r for r in subject_a['rows'] if r['category'].code == 10)
+        self.assertEqual((network['total'], network['correct']), (1, 1))
+
+    def test_open_answers_are_not_in_any_learners_record(self):
+        learner = make_learner('someone')
+        enter(self.client, learner)
+        post = self._post()
+        self.client.post(reverse('fe:x_answer', args=[post.code]), {'choice': 2})
+        self.assertFalse(Attempt.objects.exists())
+        self.assertFalse(CategoryProgress.objects.exists())
+
+    # ---- 起動口 ----
+
+    def test_task_endpoint_needs_token_and_slot(self):
+        url = reverse('fe:post_x')
+        self._question()
+        with override_settings(FE_X_TOKEN=''):
+            self.assertEqual(self.client.post(url, {'slot': 'morning'}).status_code, 503)
+        with override_settings(FE_X_TOKEN='secret'):
+            self.assertEqual(
+                self.client.post(url, {'slot': 'morning'}, HTTP_X_FE_X_TOKEN='wrong').status_code, 403)
+            self.assertEqual(
+                self.client.post(url, {'slot': 'night'}, HTTP_X_FE_X_TOKEN='secret').status_code, 400)
+            response = self.client.post(url, {'slot': 'morning'}, HTTP_X_FE_X_TOKEN='secret')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['status'], 'posted')
+            again = self.client.post(url, {'slot': 'morning'}, HTTP_X_FE_X_TOKEN='secret')
+            self.assertEqual(again.json()['status'], 'already')
+
+    def test_task_endpoint_reports_failure(self):
+        from . import x_post
+        self._question()
+        with override_settings(FE_X_TOKEN='secret'), \
+                mock.patch.object(x_post, 'send', side_effect=x_post.PostError('429')):
+            response = self.client.post(reverse('fe:post_x'), {'slot': 'noon'},
+                                        HTTP_X_FE_X_TOKEN='secret')
+        self.assertEqual(response.status_code, 502)

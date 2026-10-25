@@ -187,6 +187,20 @@ FE_MAIL_CONFIRM_MAX_AGE = 60 * 60
 # 確認・解除のメールを、同じ ID から続けて送らせない間隔（秒）
 FE_MAIL_LINK_INTERVAL = 5 * 60
 
+# ---- 基本情報の X 投稿（fe/x_post.py） ----
+# 朝・昼・夜の投稿を起こす呼び出し（/fe/tasks/post-x/）の共有トークン。
+# 未設定なら入口は 503 を返し、何も投稿しない。GitHub の Secrets の FE_X_TOKEN と同じ値。
+FE_X_TOKEN = os.environ.get('FE_X_TOKEN', '')
+# X API のキー（OAuth 1.0a のユーザーコンテキスト）
+X_API_KEY = os.environ.get('X_API_KEY', '')
+X_API_SECRET = os.environ.get('X_API_SECRET', '')
+X_ACCESS_TOKEN = os.environ.get('X_ACCESS_TOKEN', '')
+X_ACCESS_SECRET = os.environ.get('X_ACCESS_SECRET', '')
+# True なら X に投稿せず、文面をログに出すだけにする。本番だけ False にする。
+FE_X_DRY_RUN = os.environ.get('FE_X_DRY_RUN', 'True') == 'True'
+# 解答ページを出しておく日数。過ぎたら投稿の記録を行ごと消し、案内ページにする。
+FE_X_KEEP_DAYS = 30
+
 
 # ==================================
 # アップロードの上限

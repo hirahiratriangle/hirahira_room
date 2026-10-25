@@ -40,10 +40,10 @@ from .forms import LearnerForm, PassReportForm, QuestionUploadForm
 from .importer import (ImportError_, needs_confirmation, parse,
                        preview, sync, validate)
 from .learning import current_item, focus_category, grade, note_menu, start_round
-from . import mail, speech
+from . import mail, speech, x_post
 from .models import (Attempt, Category, CategoryProgress, Learner, LearningNote,
                      LearningRound, MailSubscription, PassReport, Question,
-                     QuestionTemplate, StudySession)
+                     QuestionTemplate, StudySession, XPost)
 from .selection import pick_question
 from .stats import (categories_for, category_options, category_stats, daily_counts,
                     field_stats, overall_stats, record_progress, site_summary,
@@ -1087,4 +1087,106 @@ class SendMailsView(generic.View):
             return JsonResponse({'detail': '認証できません。'}, status=403)
         result = mail.send_daily()
         logger.info('問題メールを送りました（%s）', result)
+        return JsonResponse(result)
+
+
+# X の解答ページで答えた投稿の code を覚える Cookie。同じブラウザの2回目以降は数えない。
+X_ANSWERED_COOKIE = 'fe_x_answered'
+X_ANSWERED_SALT = 'fe.x_answered'
+# 覚えておく投稿の数。投稿は FE_X_KEEP_DAYS 日で消えるので、その間の分が入れば足りる
+X_ANSWERED_LIMIT = 120
+
+
+@method_decorator(login_not_required, name='dispatch')
+class XAnswerView(generic.View):
+    """X に投稿した問題の解答ページ。ID なし・ログインなしで、誰でも開ける。
+
+    GET で問題と選択肢を出し、POST で採点して正誤・解説・出典・fe への案内を出す。
+    中身は投稿のときに写した XPost から描く。期限を過ぎた投稿と存在しない code には、
+    同じ案内ページを出す。
+
+    答えは誰のものかを残さず、全 ID を合わせた集計（OpenProgress）にだけ足す。
+    """
+
+    template_name = 'fe/x_answer.html'
+
+    def dispatch(self, request, code, *args, **kwargs):
+        self.post_obj = XPost.objects.filter(code=code).select_related('category').first()
+        if self.post_obj is None or not x_post.is_open(self.post_obj):
+            return render(request, self.template_name, self.base_context(None), status=404)
+        return super().dispatch(request, code, *args, **kwargs)
+
+    def base_context(self, post):
+        return {
+            'post': post,
+            'fe_url': settings.FE_SITE_URL.rstrip('/') + reverse('fe:index'),
+            'citation': x_post.citation(post.source) if post else '',
+        }
+
+    def get(self, request, code):
+        return render(request, self.template_name, self.base_context(self.post_obj))
+
+    def post(self, request, code):
+        post = self.post_obj
+        context = self.base_context(post)
+        selected = request.POST.get('choice', '')
+        if not selected.isdigit() or int(selected) >= len(post.choices):
+            context['error'] = '選択肢を選んでください。'
+            return render(request, self.template_name, context)
+        selected = int(selected)
+
+        answered = request.get_signed_cookie(
+            X_ANSWERED_COOKIE, default='', salt=X_ANSWERED_SALT,
+        ).split()
+        if post.code in answered:
+            is_correct = selected == post.answer_index
+        else:
+            is_correct = x_post.record_answer(post, selected)
+            answered = (answered + [post.code])[-X_ANSWERED_LIMIT:]
+
+        context.update({
+            'answered': True,
+            'selected': selected,
+            'selected_label': Question.choice_label(selected),
+            'is_correct': is_correct,
+        })
+        response = render(request, self.template_name, context)
+        response.set_signed_cookie(
+            X_ANSWERED_COOKIE, ' '.join(answered), salt=X_ANSWERED_SALT,
+            max_age=settings.FE_X_KEEP_DAYS * 24 * 60 * 60,
+            secure=request.is_secure(), httponly=True, samesite='Lax',
+        )
+        return response
+
+
+@method_decorator(login_not_required, name='dispatch')
+@method_decorator(csrf_exempt, name='dispatch')
+class PostXView(generic.View):
+    """X への投稿を、GitHub Actions の定期実行から起こす入口（朝・昼・夜）。
+
+    共有トークン（settings.FE_X_TOKEN）で確かめ、時間帯（slot）を受け取る。
+    期限を過ぎた投稿の削除も、ここで一緒に行う。SendMailsView と同じ形。
+    """
+
+    def post(self, request):
+        expected = settings.FE_X_TOKEN
+        if not expected:
+            logger.error('FE_X_TOKEN が未設定のため、X に投稿できません。')
+            return JsonResponse({'detail': 'X 投稿用のトークンが未設定です。'}, status=503)
+        provided = request.headers.get('X-Fe-X-Token', '')
+        if not hmac.compare_digest(provided, expected):
+            logger.warning('X への投稿が、不正なトークンで試みられました。')
+            return JsonResponse({'detail': '認証できません。'}, status=403)
+        slot = request.POST.get('slot') or request.GET.get('slot', '')
+        if slot not in dict(XPost.SLOT_CHOICES):
+            return JsonResponse({'detail': '時間帯（slot）が正しくありません。'}, status=400)
+
+        purged = x_post.purge_old()
+        try:
+            result = x_post.post_slot(slot)
+        except x_post.PostError as e:
+            logger.error('X への投稿に失敗しました（%s）: %s', slot, e)
+            return JsonResponse({'detail': 'X への投稿に失敗しました。', 'error': str(e)}, status=502)
+        result['purged'] = purged
+        logger.info('X への投稿（%s）: %s', slot, result)
         return JsonResponse(result)

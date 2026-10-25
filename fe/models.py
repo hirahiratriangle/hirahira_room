@@ -735,3 +735,109 @@ class PassReport(models.Model):
 
     def __str__(self):
         return '{} {}'.format(self.learner, self.passed_on)
+
+
+class XPost(models.Model):
+    """X に投稿した1問と、その解答ページ（/fe/x/<code>/）。fe.x_post が受け持つ。
+
+    投稿のときに問題の中身を写して持ち、解答ページはこの写しから描く。あとで問題を
+    直しても、取り込みで消えても、X に出した問題とページの中身は食い違わない。
+    投稿から X_POST_KEEP_DAYS 日たったら行ごと消す（fe.x_post.purge_old）。消えた投稿や
+    存在しない code のページには、同じ案内ページを出す。
+
+    1日3回（朝・昼・夜）で、日付と時間帯の組は1つだけ。定期実行が遅れて二重に
+    呼ばれても、二重には投稿しない。
+    """
+
+    SLOT_MORNING = 'morning'
+    SLOT_NOON = 'noon'
+    SLOT_EVENING = 'evening'
+    SLOT_CHOICES = [(SLOT_MORNING, '朝'), (SLOT_NOON, '昼'), (SLOT_EVENING, '夜')]
+
+    STATUS_PENDING = 'pending'
+    STATUS_POSTED = 'posted'
+    STATUS_FAILED = 'failed'
+    STATUS_CHOICES = [(STATUS_PENDING, '投稿前'), (STATUS_POSTED, '投稿済み'), (STATUS_FAILED, '失敗')]
+
+    date = models.DateField(verbose_name='日付')
+    slot = models.CharField(verbose_name='時間帯', max_length=10, choices=SLOT_CHOICES)
+    # 解答ページの URL に使う記号。連番にすると、番号をずらして過去の投稿を
+    # たどれてしまうので、ランダムにする。
+    code = models.CharField(verbose_name='URL の記号', max_length=16, unique=True)
+
+    # 投稿したときの問題の写し
+    subject = models.CharField(verbose_name='科目', max_length=1, choices=SUBJECT_CHOICES)
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='x_posts'
+    )
+    stem = models.TextField(verbose_name='問題文')
+    choices = models.JSONField(verbose_name='選択肢')
+    figures = models.JSONField(verbose_name='図', default=list, blank=True)
+    choice_figures = models.JSONField(verbose_name='選択肢の図', null=True, blank=True)
+    answer_index = models.PositiveSmallIntegerField(verbose_name='正解の選択肢番号（0始まり）')
+    explanation = models.TextField(verbose_name='解説', blank=True)
+    source = models.CharField(verbose_name='出典・根拠', max_length=255, blank=True)
+
+    text = models.TextField(verbose_name='投稿の文面')
+    status = models.CharField(
+        verbose_name='状態', max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING
+    )
+    tweet_id = models.CharField(verbose_name='X の投稿 ID', max_length=32, blank=True)
+    error = models.TextField(verbose_name='失敗の内容', blank=True)
+    created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
+    posted_at = models.DateTimeField(verbose_name='投稿日時', null=True, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE X の投稿'
+        ordering = ['-date', '-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['date', 'slot'], name='fe_unique_x_post_slot'),
+        ]
+
+    def __str__(self):
+        return '{} {} {}'.format(self.date, self.get_slot_display(), self.stem[:30])
+
+    def choice_figure(self, index):
+        figures = self.choice_figures or []
+        return figures[index] if 0 <= index < len(figures) else None
+
+    def choice_rows(self):
+        """(番号, 記号, 本文, 図) のリスト。Question.choice_rows と同じ形。"""
+        return [
+            (i, Question.choice_label(i), text, self.choice_figure(i))
+            for i, text in enumerate(self.choices)
+        ]
+
+    @property
+    def answer_label(self):
+        return Question.choice_label(self.answer_index)
+
+    @property
+    def is_official(self):
+        return self.source.strip().startswith(IPA_PUBLISHED_PREFIXES + (IPA_SAMPLE_PREFIX,))
+
+
+class OpenProgress(models.Model):
+    """ID なしで答えた解答の数え上げ。X の解答ページで答えた分がここに積もる。
+
+    誰の解答かは持たない。全 ID を合わせた集計（fe.stats.site_summary）の、
+    中分類ごとの解答数・正解数に足す。CategoryProgress と同じく問題とは
+    切り離して持つので、問題を取り込み直しても数字は消えない。
+    """
+
+    category = models.ForeignKey(
+        Category, verbose_name='中分類', on_delete=models.PROTECT, related_name='open_progress'
+    )
+    subject = models.CharField(verbose_name='科目', max_length=1, choices=SUBJECT_CHOICES)
+    answered = models.PositiveIntegerField(verbose_name='解答数', default=0)
+    correct = models.PositiveIntegerField(verbose_name='正解数', default=0)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE ID なしの解答数'
+        ordering = ['category__code']
+        constraints = [
+            models.UniqueConstraint(fields=['category', 'subject'], name='fe_unique_open_progress'),
+        ]
+
+    def __str__(self):
+        return '{} {}/{}'.format(self.category.name, self.correct, self.answered)

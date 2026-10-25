@@ -16,7 +16,7 @@ from django.db.models import Count, F, Sum
 from django.utils import timezone
 
 from .models import (Attempt, Category, CategoryProgress, DailyProgress,
-                     PassReport, Question)
+                     OpenProgress, PassReport, Question)
 
 # ベイズ平滑化のパラメータ。SMOOTHING_PRIOR は科目基準点（600/1000）に
 # 対応させ、SMOOTHING_STRENGTH 問ぶんの「仮の解答」を上乗せして扱う。
@@ -307,14 +307,23 @@ def site_summary():
 
     履歴を残さない利用（ID のない記録）は数えない。いずれ消える記録なので、
     数えると、あとで総数が減って辻褄が合わなくなるため。
+
+    X の解答ページで ID なしに答えた分（OpenProgress）は、消えない記録なので
+    解答数・正解数に足す。誰の解答か分からないので、人数には足さない。
     """
     registered = CategoryProgress.objects.filter(learner__code__isnull=False)
     per_category = {
-        row['category']: row
+        row['category']: dict(row)
         for row in registered.values('category').annotate(
             total=Sum('answered'), correct=Sum('correct'),
         )
     }
+    for row in OpenProgress.objects.values('category').annotate(
+        total=Sum('answered'), correct=Sum('correct'),
+    ):
+        agg = per_category.setdefault(row['category'], {'total': 0, 'correct': 0})
+        agg['total'] = (agg.get('total') or 0) + (row['total'] or 0)
+        agg['correct'] = (agg.get('correct') or 0) + (row['correct'] or 0)
 
     subjects = []
     for value, label in Question.SUBJECT_CHOICES:
