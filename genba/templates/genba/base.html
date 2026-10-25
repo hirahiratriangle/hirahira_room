@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}{% block genba_title %}genba{% endblock %} - genba | HirahiraRoom{% endblock %}
+
+{% block head %}
+<style>
+    .genba-tabs .nav-link { color: #2c5aa0; }
+    .genba-tabs .nav-link.active { background-color: #2c5aa0; color: #fff; }
+    .genba-stall { color: #b02a37; font-weight: 600; }
+    .genba-alert-cell { background-color: #fff3cd; }
+    .genba-pre { white-space: pre-wrap; }
+</style>
+{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0; padding-top: 5rem;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h3 fw-bold mb-2"><a href="{% url 'genba:portal' %}" class="text-white text-decoration-none">genba</a></h1>
+            <p class="mb-0 small">書くのはメンバー、読むのは4つの立場 ― 1現場1リポジトリ</p>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-4">
+    {% if roles %}
+    <ul class="nav nav-pills genba-tabs mb-4">
+        {% if 'member' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'member' %}active{% endif %}" href="{% url 'genba:member_home' %}"><i class="fas fa-user me-1"></i>メンバー</a></li>{% endif %}
+        {% if 'leader' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'leader' %}active{% endif %}" href="{% url 'genba:leader_home' %}"><i class="fas fa-user-friends me-1"></i>リーダー</a></li>{% endif %}
+        {% if 'management' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'management' %}active{% endif %}" href="{% url 'genba:management' %}"><i class="fas fa-chart-bar me-1"></i>マネジメント</a></li>{% endif %}
+        {% if 'company' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'company' %}active{% endif %}" href="{% url 'genba:company' %}"><i class="fas fa-building me-1"></i>会社</a></li>{% endif %}
+    </ul>
+    {% endif %}
+
+    {% block genba_contents %}{% endblock %}
+
+    <p class="text-muted small mt-5 mb-0 border-top pt-3">
+        <i class="fas fa-shield-alt me-1"></i>
+        ここに書いた内容は人事評価の材料にしません。指標は現場単位で集計し、個人の記述量や作業量は測りません。
+        単価・契約金額・顧客の成果物・個人情報は置かないでください。
+    </p>
+</div>
+{% endblock %}

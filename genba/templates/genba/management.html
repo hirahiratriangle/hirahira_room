@@ -1,0 +1,40 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}マネジメント{% endblock %}
+
+{% block genba_contents %}
+<h2 class="h5 mb-2" style="color: #2c5aa0;">現場の健全度</h2>
+<p class="small text-muted">すべて現場単位の集計値です。原文や個人別の数字は出しません。目安を超えた値を色付けし、手を打つ候補の現場から並べています。</p>
+
+<div class="table-responsive"><table class="table table-sm align-middle">
+    <thead class="small text-muted"><tr>
+        <th>現場</th>
+        <th title="未解決の確認事項が作成されてからの平均経過日数">確認事項の滞留<br><span class="fw-normal">目安 {{ thresholds.stall_days }}日</span></th>
+        <th>約束と実際のズレ<br><span class="fw-normal">目安 {{ thresholds.promise_gaps }}件</span></th>
+        <th>スコープ外作業<br><span class="fw-normal">目安 {{ thresholds.scope_out }}件</span></th>
+        <th>用語のズレ<br><span class="fw-normal">目安 {{ thresholds.term_gaps }}件</span></th>
+        <th>週報の提出率<br><span class="fw-normal">直近{{ weekly_window }}週・目安 {{ weekly_rate_min }}%</span></th>
+        <th>気づけること</th>
+    </tr></thead>
+    <tbody>
+        {% for m in rows %}
+        <tr>
+            <td><strong>{{ m.site.name }}</strong><div class="small text-muted">{{ m.site.industry }}</div></td>
+            <td class="{% if m.stall_days >= thresholds.stall_days %}genba-alert-cell{% endif %}">{% if m.stall_days is None %}―{% else %}{{ m.stall_days }}日{% endif %}<div class="small text-muted">{{ m.open_questions }}件未解決</div></td>
+            <td class="{% if m.promise_gaps >= thresholds.promise_gaps %}genba-alert-cell{% endif %}">{{ m.promise_gaps }}件</td>
+            <td class="{% if m.scope_out >= thresholds.scope_out %}genba-alert-cell{% endif %}">{{ m.scope_out }}件</td>
+            <td class="{% if m.term_gaps >= thresholds.term_gaps %}genba-alert-cell{% endif %}">{{ m.term_gaps }}件</td>
+            <td class="{% if m.weekly_rate is not None and m.weekly_rate < weekly_rate_min %}genba-alert-cell{% endif %}">{% if m.weekly_rate is None %}―{% else %}{{ m.weekly_rate }}%{% endif %}<div class="small text-muted">{{ m.weekly_weeks }}週中</div></td>
+            <td class="small">{% for a in m.alerts %}<div><i class="fas fa-exclamation-circle text-warning me-1"></i>{{ a }}</div>{% empty %}<span class="text-success"><i class="fas fa-check me-1"></i>目立った兆候なし</span>{% endfor %}</td>
+        </tr>
+        {% empty %}<tr><td colspan="7" class="text-muted small">現場がありません</td></tr>{% endfor %}
+    </tbody>
+</table></div>
+
+<h3 class="h6 mt-4">使わない指標</h3>
+<ul class="small text-muted">
+    <li>個人のコミット数、Issue作成数、記述量（書くほど不利に見える指標は、記録そのものを止めます）</li>
+    <li>個人別の稼働時間の比較（勤怠は勤怠システムで扱います）</li>
+    <li>振り返りの文章を使った個人の評価</li>
+</ul>
+{% endblock %}

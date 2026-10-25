@@ -1,0 +1,15 @@
+{# 公開レビューの状態とボタン。obj / model（doc|term）/ is_leader / next を渡す #}
+{% if obj.is_publishable %}
+<span class="d-inline-flex flex-wrap align-items-center gap-1">
+    {% if obj.is_public %}<span class="badge bg-success">会社公開</span>
+    {% elif obj.knowledge_status == 'candidate' %}<span class="badge bg-warning text-dark">ナレッジ候補</span>
+    {% elif obj.knowledge_status == 'reviewed' %}<span class="badge bg-info text-dark">一般化確認済み</span>{% endif %}
+    {% if obj.author_id == user.pk %}
+        {% if obj.knowledge_status == 'none' %}{% include 'genba/_knowledge_button.html' with action='candidate' label='ナレッジ候補にする' style='outline-secondary' %}{% endif %}
+        {% if obj.knowledge_status == 'reviewed' and not obj.is_public %}{% include 'genba/_knowledge_button.html' with action='publish' label='会社に公開する' style='success' %}{% endif %}
+        {% if obj.is_public %}{% include 'genba/_knowledge_button.html' with action='unpublish' label='公開をやめる' style='outline-secondary' %}{% endif %}
+        {% if obj.knowledge_status != 'none' and not obj.is_public %}{% include 'genba/_knowledge_button.html' with action='withdraw' label='候補から外す' style='outline-secondary' %}{% endif %}
+    {% endif %}
+    {% if is_leader and obj.knowledge_status == 'candidate' %}{% include 'genba/_knowledge_button.html' with action='review' label='一般化を確認した' style='outline-primary' %}{% endif %}
+</span>
+{% endif %}

@@ -1,0 +1,49 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}会社{% endblock %}
+
+{% block genba_contents %}
+<h2 class="h5 mb-2" style="color: #2c5aa0;">ナレッジ資産</h2>
+<p class="small text-muted">書いた本人が会社公開に切り替えた記録だけを表示します。顧客名の代わりに業界を出します。</p>
+<form method="get" class="d-flex gap-2 mb-4">{{ search_form.q }}<button class="btn btn-primary text-nowrap">検索</button>{% if query %}<a href="{% url 'genba:company' %}" class="btn btn-outline-secondary text-nowrap">クリア</a>{% endif %}</form>
+
+<div class="row g-4">
+    <section class="col-lg-6">
+        <h3 class="h6"><i class="fas fa-book me-1"></i>横断の用語集（業界別）</h3>
+        {% for industry, terms in terms_by_industry.items %}
+        <div class="mb-3">
+            <div class="small fw-bold text-muted">{{ industry }}</div>
+            <dl class="small mb-0">
+                {% for t in terms %}<dt>{{ t.term }}</dt><dd class="mb-1">{{ t.meaning }}{% if t.has_gap %}<br><span class="text-warning-emphasis">一般的な意味との違い：{{ t.general_difference }}</span>{% endif %}</dd>{% endfor %}
+            </dl>
+        </div>
+        {% empty %}<p class="small text-muted">公開された用語はまだありません</p>{% endfor %}
+    </section>
+
+    <section class="col-lg-6">
+        <h3 class="h6"><i class="fas fa-drafting-compass me-1"></i>設計判断の先例</h3>
+        <ul class="list-group mb-4">
+            {% for d in designs %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a> <span class="text-muted">／ {{ d.site.industry }}</span></li>
+            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+        </ul>
+
+        <h3 class="h6"><i class="fas fa-redo me-1"></i>振り返り</h3>
+        <ul class="list-group mb-4">
+            {% for d in retros %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a> <span class="text-muted">／ {{ d.site.industry }}{% if d.skill_item %} ・ {{ d.skill_item }}{% endif %}</span></li>
+            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+        </ul>
+
+        <h3 class="h6"><i class="fas fa-comments me-1"></i>面談メモ・言葉のズレ</h3>
+        <ul class="list-group mb-4">
+            {% for d in interviews %}<li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a> <span class="text-muted">／ {{ d.site.industry }}</span></li>
+            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+        </ul>
+
+        <h3 class="h6"><i class="fas fa-tags me-1"></i>スキル対応（基本設計スキルセット）</h3>
+        <ul class="list-group">
+            {% for item, n in skills %}<li class="list-group-item small d-flex justify-content-between"><span>{{ item }}</span><span class="badge bg-secondary">{{ n }}件</span></li>
+            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+        </ul>
+    </section>
+</div>
+{% endblock %}

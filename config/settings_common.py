@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'fe',
     'ap',
     'bk_houmu3',
+    'genba',
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,4 @@
+<form method="post" action="{% url 'genba:knowledge_action' model obj.pk action %}" class="d-inline">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+    <button type="submit" class="btn btn-{{ style }} btn-sm py-0">{{ label }}</button>
+</form>

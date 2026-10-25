@@ -1,0 +1,90 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}{{ site.name }}{% endblock %}
+
+{% block genba_contents %}
+<div class="mb-3">
+    <h2 class="h5 mb-1" style="color: #2c5aa0;">{{ site.name }}</h2>
+    <p class="small text-muted mb-1"><i class="fab fa-github me-1"></i>{{ site.repo_name }} ・ {{ site.industry }} ・ {{ site.started_on|date:"Y年n月j日" }}開始{% if is_leader %} ・ <span class="badge bg-primary">リーダー</span>{% endif %}</p>
+    {% if site.description %}<p class="small mb-0 genba-pre">{{ site.description }}</p>{% endif %}
+</div>
+
+{% with path=request.path %}
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link {% if tab == 'questions' %}active{% endif %}" href="{{ path }}?tab=questions">確認事項・課題 <span class="badge bg-secondary">{{ open_questions|length }}</span></a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'terms' %}active{% endif %}" href="{{ path }}?tab=terms">用語集</a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'docs' %}active{% endif %}" href="{{ path }}?tab=docs">文書</a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'promises' %}active{% endif %}" href="{{ path }}?tab=promises">約束と実際</a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'members' %}active{% endif %}" href="{{ path }}?tab=members">メンバー</a></li>
+</ul>
+{% endwith %}
+
+{% if tab == 'questions' %}
+<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:question_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a></div>
+<div class="table-responsive"><table class="table table-sm align-middle">
+    <thead><tr class="small text-muted"><th>未解決</th><th>誰に聞くか</th><th>書いた人</th><th>経過</th><th></th></tr></thead>
+    <tbody>
+        {% for q in open_questions %}{% include 'genba/_question_row.html' %}
+        {% empty %}<tr><td colspan="5" class="text-muted small">未解決のものはありません</td></tr>{% endfor %}
+    </tbody>
+</table></div>
+{% if closed_questions %}
+<h3 class="h6 text-muted mt-4">最近解決したもの</h3>
+<div class="table-responsive"><table class="table table-sm align-middle text-muted">
+    <tbody>{% for q in closed_questions %}{% include 'genba/_question_row.html' %}{% endfor %}</tbody>
+</table></div>
+{% endif %}
+
+{% elif tab == 'terms' %}
+<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:term_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a></div>
+<div class="list-group">
+    {% for t in terms %}
+    <div class="list-group-item">
+        <div class="d-flex flex-wrap justify-content-between gap-2">
+            <div><strong>{{ t.term }}</strong> <span class="small text-muted">／ {{ t.author.username }}</span></div>
+            {% include 'genba/_knowledge.html' with obj=t model='term' next=request.get_full_path %}
+        </div>
+        <div class="small genba-pre">{{ t.meaning }}</div>
+        {% if t.has_gap %}<div class="small text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>一般的な意味との違い：{{ t.general_difference }}</div>{% endif %}
+    </div>
+    {% empty %}<p class="text-muted small">まだありません</p>{% endfor %}
+</div>
+
+{% elif tab == 'docs' %}
+{% for kind, label, docs in doc_groups %}
+<div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h3 class="h6 mb-0">{{ label }}</h3>
+        <a class="btn btn-outline-primary btn-sm py-0" href="{% url 'genba:document_create' site.pk kind %}"><i class="fas fa-pen me-1"></i>書く</a>
+    </div>
+    <ul class="list-group">
+        {% for d in docs %}
+        <li class="list-group-item small d-flex flex-wrap justify-content-between gap-2">
+            <span><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a>
+                <span class="text-muted">／ {{ d.author.username }} ・ {% if d.week_of %}{{ d.week_of|date:"n/j" }}の週{% else %}{{ d.created_at|date:"n/j" }}{% endif %}</span></span>
+            {% include 'genba/_knowledge.html' with obj=d model='doc' next=request.get_full_path %}
+        </li>
+        {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+    </ul>
+</div>
+{% endfor %}
+
+{% elif tab == 'promises' %}
+<p class="small text-muted">振り返りの「約束と実際」表。食い違っている行の数がマネジメントの指標になります（個人名は出ません）。</p>
+<div class="d-flex justify-content-end mb-2"><a class="btn btn-primary btn-sm" href="{% url 'genba:promise_create' site.pk %}"><i class="fas fa-plus me-1"></i>追加</a></div>
+<div class="table-responsive"><table class="table table-sm">
+    <thead><tr class="small text-muted"><th>約束（営業・面談時の説明）</th><th>実際</th><th>ズレ</th></tr></thead>
+    <tbody>
+        {% for p in promise_checks %}
+        <tr class="small {% if p.is_gap %}genba-alert-cell{% endif %}"><td>{{ p.promise }}</td><td>{{ p.actual }}</td><td>{% if p.is_gap %}<span class="badge bg-warning text-dark">あり</span>{% endif %}</td></tr>
+        {% empty %}<tr><td colspan="3" class="text-muted small">まだありません</td></tr>{% endfor %}
+    </tbody>
+</table></div>
+
+{% elif tab == 'members' %}
+<table class="table table-sm">
+    <thead><tr class="small text-muted"><th>名前</th><th>立場</th><th>役割</th></tr></thead>
+    <tbody>{% for m in memberships %}<tr class="small"><td>{{ m.user.username }}</td><td>{{ m.get_role_display }}</td><td>{{ m.duty|default:"―" }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+<tr>
+    <td>
+        <span class="badge bg-light text-dark border">{{ q.get_kind_display }}</span>
+        {% if q.scope_out %}<span class="badge bg-danger">スコープ外</span>{% endif %}
+        <strong>{{ q.title }}</strong>
+        {% if show_site %}<span class="text-muted small">／ <a href="{% url 'genba:site_detail' q.site_id %}">{{ q.site.name }}</a></span>{% endif %}
+        {% if q.body %}<div class="small text-muted genba-pre">{{ q.body|truncatechars:120 }}</div>{% endif %}
+    </td>
+    <td class="small text-nowrap">{{ q.ask_to|default:"―" }}</td>
+    <td class="small text-nowrap">{{ q.author.username }}</td>
+    <td class="small text-nowrap {% if q.is_open and q.days_open >= 7 %}genba-stall{% endif %}">{{ q.days_open }}日</td>
+    <td class="text-end">
+        <form method="post" action="{% url 'genba:question_toggle' q.pk %}">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button class="btn btn-sm py-0 {% if q.is_open %}btn-outline-success{% else %}btn-outline-secondary{% endif %}">{% if q.is_open %}解決した{% else %}未解決に戻す{% endif %}</button>
+        </form>
+    </td>
+</tr>

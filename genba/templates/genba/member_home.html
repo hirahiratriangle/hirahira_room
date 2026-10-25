@@ -1,0 +1,78 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}メンバー{% endblock %}
+
+{% block genba_contents %}
+<section class="mb-4">
+    <h2 class="h5 mb-3" style="color: #2c5aa0;">自分の現場</h2>
+    <div class="row g-3">
+        {% for site in sites %}
+        <div class="col-md-4"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:site_detail' site.pk %}"><div class="card-body">
+            <h3 class="h6 fw-bold mb-1">{{ site.name }}</h3>
+            <p class="small text-muted mb-0"><i class="fab fa-github me-1"></i>{{ site.repo_name }} ・ {{ site.industry }}</p>
+        </div></a></div>
+        {% empty %}
+        <p class="text-muted">まだどの現場にも入っていません。</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="mb-4">
+    <h2 class="h5 mb-3" style="color: #2c5aa0;"><i class="fas fa-search me-2"></i>過去の現場の類似ナレッジ</h2>
+    <form method="get" class="d-flex gap-2 mb-3">{{ search_form.q }}<button class="btn btn-primary text-nowrap">検索</button></form>
+    {% if query %}
+    <p class="small text-muted">「{{ query }}」― 自分の現場の全文と、会社公開された記録から</p>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <h3 class="h6">文書</h3>
+            <ul class="list-group">
+                {% for d in found_docs %}
+                <li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a>
+                    <span class="text-muted">／ {{ d.get_kind_display }} ・ {% if d.site in sites %}{{ d.site.name }}{% else %}{{ d.site.industry }}（会社公開）{% endif %}</span></li>
+                {% empty %}<li class="list-group-item small text-muted">見つかりませんでした</li>{% endfor %}
+            </ul>
+        </div>
+        <div class="col-md-6">
+            <h3 class="h6">用語</h3>
+            <ul class="list-group">
+                {% for t in found_terms %}
+                <li class="list-group-item small"><strong>{{ t.term }}</strong>：{{ t.meaning|truncatechars:60 }}
+                    <span class="text-muted">／ {% if t.site in sites %}{{ t.site.name }}{% else %}{{ t.site.industry }}（会社公開）{% endif %}</span></li>
+                {% empty %}<li class="list-group-item small text-muted">見つかりませんでした</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+</section>
+
+<section class="mb-4">
+    <h2 class="h5 mb-3" style="color: #2c5aa0;">未解決の確認事項・課題</h2>
+    <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr class="small text-muted"><th>内容</th><th>誰に聞くか</th><th>書いた人</th><th>経過</th><th></th></tr></thead>
+        <tbody>
+            {% for q in open_questions %}{% include 'genba/_question_row.html' with show_site=True %}
+            {% empty %}<tr><td colspan="5" class="text-muted small">未解決のものはありません</td></tr>{% endfor %}
+        </tbody>
+    </table></div>
+</section>
+
+<div class="row g-4">
+    <section class="col-md-6">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">用語集</h2>
+        <dl class="small">
+            {% for t in terms %}
+            <dt>{{ t.term }} <span class="text-muted fw-normal">／ {{ t.site.name }}</span></dt>
+            <dd class="mb-2">{{ t.meaning }}{% if t.has_gap %}<br><span class="text-warning-emphasis"><i class="fas fa-exclamation-triangle me-1"></i>一般的な意味との違い：{{ t.general_difference }}</span>{% endif %}</dd>
+            {% empty %}<p class="text-muted">まだありません</p>{% endfor %}
+        </dl>
+    </section>
+    <section class="col-md-6">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">最近の議事録</h2>
+        <ul class="list-group">
+            {% for d in minutes %}
+            <li class="list-group-item small"><a href="{% url 'genba:document_detail' d.pk %}">{{ d.title }}</a> <span class="text-muted">／ {{ d.site.name }} ・ {{ d.created_at|date:"n/j" }}</span></li>
+            {% empty %}<li class="list-group-item small text-muted">まだありません</li>{% endfor %}
+        </ul>
+    </section>
+</div>
+{% endblock %}
