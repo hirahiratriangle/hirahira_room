@@ -142,6 +142,54 @@ class SummaryForm(BootstrapMixin, forms.ModelForm):
         }
 
 
+class SupportForm(BootstrapMixin, forms.ModelForm):
+    """リーダーが「読めない」に説明の時間を割り当てる"""
+
+    class Meta:
+        model = Question
+        fields = ['support_on', 'support_note']
+        widgets = {'support_on': forms.DateInput(attrs={'type': 'date'})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['support_on'].required = True
+
+
+class ResponseForm(BootstrapMixin, forms.ModelForm):
+    """リーダーが懸念を受け取り、返事を書く"""
+
+    class Meta:
+        model = Question
+        fields = ['response']
+        widgets = {'response': forms.Textarea(attrs={'rows': 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['response'].required = True
+
+
+class FeedbackForm(BootstrapMixin, forms.ModelForm):
+    """リーダーがまとめに差と次の作業を返す"""
+
+    class Meta:
+        model = Summary
+        fields = ['feedback']
+        widgets = {'feedback': forms.Textarea(attrs={'rows': 4})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['feedback'].required = True
+
+
+class LineForm(BootstrapMixin, forms.ModelForm):
+    """裁量の線"""
+
+    class Meta:
+        model = Membership
+        fields = ['line_self', 'line_consult']
+        widgets = {'line_self': forms.Textarea(attrs={'rows': 3}), 'line_consult': forms.Textarea(attrs={'rows': 3})}
+
+
 class SummaryReviewForm(BootstrapMixin, forms.ModelForm):
     class Meta:
         model = Summary

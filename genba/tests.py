@@ -420,6 +420,9 @@ class SeedCommandTests(TestCase):
             self.assertEqual(self.client.get(reverse('genba:site_detail', args=[site.pk])).status_code, 200)
             self.assertEqual(self.client.get(reverse('genba:growth', args=[site.pk])).status_code, 200)
         self.client.force_login(user)
+        for site in Site.objects.filter(memberships__user=user):
+            for name in ('weekly_board', 'lines', 'summary'):
+                self.assertEqual(self.client.get(reverse(f'genba:{name}', args=[site.pk])).status_code, 200, name)
         for goal in Goal.objects.filter(author=user):
             self.assertEqual(self.client.get(reverse('genba:goal_reach', args=[goal.pk])).status_code, 200)
 
@@ -608,3 +611,105 @@ class AgreementTests(GenbaTestBase):
         self.assertTrue(any('週報A' in t and '方針を示した' in t for t in titles))
         self.assertFalse(any('週報B' in t for t in titles))
         self.assertTrue(rows[0]['matches'])
+
+
+class LeaderTests(GenbaTestBase):
+    def test_leader_home_sections_and_weekly_gap(self):
+        Question.objects.create(site=self.site, author=self.member, title='止まっている確認事項',
+                                created_at=timezone.now() - timedelta(days=9))
+        self.client.force_login(self.leader)
+        res = self.client.get(reverse('genba:leader_home'))
+        for text in ('詰まりの一覧', '「読めない」の受け取り', '1週目のまとめ確認', '週次共有の一覧', '裁量の線', '懸念の受け取り'):
+            self.assertContains(res, text)
+        self.assertContains(res, '止まっている確認事項')
+        self.assertContains(res, '週報が途切れている')
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_WEEKLY, title='w',
+                                week_of=week_start(self.today) - timedelta(weeks=1))
+        self.assertNotContains(self.client.get(reverse('genba:leader_home')), '週報が途切れている')
+
+    def test_leader_home_shows_no_workload_counts(self):
+        kit.create_checklist(self.site, self.member)
+        Term.objects.create(site=self.site, author=self.member, term='t', meaning='m')
+        self.client.force_login(self.leader)
+        res = self.client.get(reverse('genba:leader_home'))
+        self.assertNotContains(res, '/45')
+        self.assertNotContains(res, '入場時チェックリスト')
+
+    def test_support_time_for_unreadable(self):
+        q = Question.objects.create(site=self.site, author=self.member, title='読めない', unreadable=True)
+        url = reverse('genba:issue_detail', args=[q.pk])
+        data = {'form': 'support', 'support_on': self.today.isoformat(), 'support_note': '15分'}
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(url, data).status_code, 403)
+        self.client.force_login(self.leader)
+        self.client.post(url, data)
+        q.refresh_from_db()
+        self.assertEqual(q.support_on, self.today)
+        self.client.force_login(self.member)
+        self.assertContains(self.client.get(url), '15分')
+
+    def test_response_to_concern(self):
+        q = Question.objects.create(site=self.site, author=self.member, kind=Question.KIND_PROBLEM, title='懸念', fact='f')
+        url = reverse('genba:issue_detail', args=[q.pk])
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(url, {'form': 'response', 'response': 'x'}).status_code, 403)
+        self.client.force_login(self.leader)
+        self.client.post(url, {'form': 'response', 'response': '受け取りました。業務部に確認します'})
+        q.refresh_from_db()
+        self.assertIsNotNone(q.received_at)
+        self.client.force_login(self.member)
+        self.assertContains(self.client.get(url), '業務部に確認します')
+
+    def test_feedback_on_summary(self):
+        Summary.objects.create(site=self.site, author=self.member, submitted_at=timezone.now(), overview='理解')
+        Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=3, target_text='目標の文')
+        url = reverse('genba:summary', args=[self.site.pk])
+        self.client.force_login(self.leader)
+        res = self.client.get(url, {'user': self.member.pk})
+        self.assertContains(res, '目標の文')
+        self.assertContains(res, '画面標準・データモデル・IF方針をチームに示し、レビューで整合させる')
+        self.client.post(url, {'action': 'feedback', 'user': self.member.pk, 'feedback': '差は影響範囲'})
+        s = Summary.objects.get(author=self.member)
+        self.assertEqual((s.feedback, s.feedback_by), ('差は影響範囲', self.leader))
+        self.client.force_login(self.member)
+        self.assertContains(self.client.get(url), '差は影響範囲')
+        self.assertEqual(self.client.post(url, {'action': 'feedback', 'user': self.member.pk, 'feedback': 'x'}).status_code, 403)
+
+    def test_feedback_needs_submitted_summary(self):
+        Summary.objects.create(site=self.site, author=self.member, overview='書きかけ')
+        self.client.force_login(self.leader)
+        res = self.client.post(reverse('genba:summary', args=[self.site.pk]),
+                               {'action': 'feedback', 'user': self.member.pk, 'feedback': 'x'})
+        self.assertEqual(res.status_code, 404)
+
+    def test_weekly_board(self):
+        other = self.make_site('現場B', 'genba-b')
+        week = week_start(self.today) - timedelta(weeks=1)
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_WEEKLY, title='w', week_of=week,
+                                done='この現場でやったこと', stuck='この現場の詰まり')
+        Document.objects.create(site=other, author=self.member, kind=Document.KIND_WEEKLY, title='w', week_of=week,
+                                done='他の現場でやったこと')
+        self.client.force_login(self.member)
+        url = reverse('genba:weekly_board', args=[self.site.pk])
+        res = self.client.get(url)
+        self.assertContains(res, 'この現場でやったこと')
+        self.assertNotContains(res, '他の現場でやったこと')
+        res = self.client.get(url, {'week': (week - timedelta(weeks=1)).isoformat()})
+        self.assertNotContains(res, 'この現場でやったこと')
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_lines_editable_by_self_and_leader_only(self):
+        third = CustomUser.objects.create_user('third', 't@example.com', 'pass12345')
+        Membership.objects.create(site=self.site, user=third, joined_on=self.today)
+        m = Membership.objects.get(site=self.site, user=self.member)
+        url = reverse('genba:lines', args=[self.site.pk])
+        data = {'membership': m.pk, 'line_self': '画面項目', 'line_consult': '業務ルール'}
+        self.client.force_login(third)
+        self.assertEqual(self.client.post(url, data).status_code, 403)
+        for user in (self.member, self.leader):
+            self.client.force_login(user)
+            self.assertEqual(self.client.post(url, data).status_code, 302)
+        m.refresh_from_db()
+        self.assertEqual(m.line_self, '画面項目')
+        self.assertIsNotNone(m.line_updated_at)

@@ -75,6 +75,12 @@ def _no_summary(user, site, joined_on, today):
     return True, f'入場から{days}日、まとめをまだ出していない', ('まとめ', target_url(site.pk, 'summary'))
 
 
+def missing_last_weekly(membership, today=None):
+    """前週の週報が出ていない（リーダー画面の「週報が途切れている」）"""
+    today = today or timezone.localdate()
+    return _no_weekly(membership.user, membership.site, membership.joined_on, today)[0]
+
+
 def unreadable_needs_question(question):
     """2日経っても進まない「読めない」は、一覧を持って質問の時間をもらう"""
     return question.unreadable and question.is_open and question.days_open >= UNREADABLE_ASK_DAYS

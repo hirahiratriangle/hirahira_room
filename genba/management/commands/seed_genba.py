@@ -183,7 +183,30 @@ class Command(BaseCommand):
                         stuck='確定後の取消可否の回答待ちで、受注画面の遷移が決められない。' if n <= 1 else '',
                         next_step='回答を受けて受注画面の遷移を確定する。',
                         goal_action='3人の設計チームの課題とリスクを週次で棚卸しし、レビューに出した。' if n in (0, 3) else '')
+        # リーダー画面で見せる：週報の途切れ、読めない、まとめの確認、裁量の線、懸念
+        for n in (0, 1):
+            self.weekly(site, sato, n, done='受注画面の項目定義を進めた。', learned='引当は受注確定時に行う。',
+                        stuck='確定後の取消可否が決まらず、遷移図が描けない。' if n == 0 else '', next_step='遷移図の初版を出す。')
+        self.weekly(site, suzuki, 3, done='帳票一覧を作った。', next_step='集約区分の意味を確認する。')
+        Question.objects.create(site=site, author=sato, unreadable=True, title='引当仕様書の「仮引当」が読めない',
+                                source='引当仕様書 v2', location='2.3 仮引当', reason='premise', created_at=self.ago(3))
+        Question.objects.create(site=site, author=sato, unreadable=True, title='在庫テーブルの図がない',
+                                source='DB定義書', location='在庫系テーブル', reason='figure', created_at=self.ago(5),
+                                support_on=self.today + timedelta(days=1), support_note='木曜の定例後に15分、情シスの担当から')
+        Question.objects.create(site=site, author=suzuki, kind=Question.KIND_PROBLEM, title='帳票の本数が契約時の想定を超えている',
+                                created_at=self.ago(2), fact='棚卸しで帳票が35本見つかった。契約時の想定は20本。',
+                                interpretation='新帳票の設計工数が足りなくなる可能性がある。',
+                                unconfirmed='35本すべてが刷新の対象か（業務部に未確認）。',
+                                impact='帳票設計が2週遅れる見込み。スコープの再確認が要る。')
+        Summary.objects.create(site=site, author=suzuki, submitted_at=self.ago(50),
+                               overview='受注〜請求の帳票とバッチの全体像。', functions='担当：帳票。入力＝伝票、出力＝PDF帳票。')
+        Membership.objects.filter(site=site, user=sato).update(
+            line_self='画面項目の並び、入力チェックの細かいルール', line_consult='画面遷移の変更、業務ルールの解釈、他機能への影響',
+            line_updated_at=self.ago(60))
         Summary.objects.create(site=site, author=sato, submitted_at=self.ago(65),
+                               feedback='業務システム構築のレベル3「担当機能の業務フローを自分で追い、業務ルールと例外を漏れなく設計する」に対して、'
+                                        '業務フローは追えているが、例外（確定後の取消・訂正）がまだ書かれていない。2週目は例外の一覧を作る。',
+                               feedback_by=me, feedback_at=self.ago(64),
                                overview='受注〜請求の基幹業務を刷新。利用者は業務部と倉庫。業務フローは 03_業務理解 を参照。',
                                functions='担当：受注画面。入力＝受注明細、処理＝引当、出力＝出荷指示。つながる機能：在庫引当・請求。',
                                review_note='担当範囲は受注・訂正まで。期待値との差は帳票の理解。2週目は帳票一覧を読む。')

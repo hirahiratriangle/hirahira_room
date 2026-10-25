@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -14,13 +14,13 @@ from django.views import View, generic
 
 from . import growth, kit, kit_data, roles, signals, skillset_data
 from .forms import (
-    DocumentForm, GoalForm, GoalPickForm, IssueForm, PromiseCheckForm, ReachForm, SearchForm, SiteForm, SummaryForm,
-    SummaryReviewForm, TaskProgressForm, TermForm,
+    DocumentForm, FeedbackForm, GoalForm, GoalPickForm, IssueForm, LineForm, PromiseCheckForm, ReachForm,
+    ResponseForm, SearchForm, SiteForm, SummaryForm, SummaryReviewForm, SupportForm, TaskProgressForm, TermForm,
 )
 from .metrics import THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_REVIEWED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Goal, GoalEvidence, Question, Site, Summary, Term, week_start,
+    ChecklistItem, Document, Goal, GoalEvidence, Membership, Question, Site, Summary, Term, week_start,
 )
 
 
@@ -340,6 +340,11 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
         context['writable'] = not q.site.is_archived
         if q.kind == Question.KIND_TASK:
             context['progress_form'] = kwargs.get('progress_form') or TaskProgressForm(instance=q)
+        context['is_leader'] = is_leader = roles.is_leader(self.request.user, q.site) and not q.site.is_archived
+        if is_leader and q.unreadable:
+            context['support_form'] = kwargs.get('support_form') or SupportForm(instance=q)
+        if is_leader and q.kind == Question.KIND_PROBLEM:
+            context['response_form'] = kwargs.get('response_form') or ResponseForm(instance=q)
         context['needs_question'] = signals.unreadable_needs_question(q)
         if q.unreadable:
             context['phrase'] = kit.phrase('読めない資料を上げる')
@@ -351,16 +356,32 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
             context['phrase'] = kit.phrase('期待値を聞く')
         return context
 
+    # フォームの種類 → (フォーム, リーダーだけか, 保存したときの知らせ)
+    FORMS = {
+        'progress': (TaskProgressForm, False, '予定と実績を保存しました。'),
+        'support': (SupportForm, True, '説明の時間を割り当てました。メンバーの Issue に出ます。'),
+        'response': (ResponseForm, True, '懸念を受け取り、返事を書きました。メンバーの Issue に出ます。'),
+    }
+
     def post(self, request, *args, **kwargs):
-        """作業の予定と実績を保存する"""
+        """作業の予定と実績（同じ現場の人）、説明の時間・懸念の返事（リーダー）を保存する"""
         self.object = q = self.get_object()
         check_writable(request.user, q.site)
-        form = TaskProgressForm(request.POST, instance=q)
+        name = request.POST.get('form', 'progress')
+        if name not in self.FORMS:
+            raise Http404
+        form_class, leader_only, msg = self.FORMS[name]
+        if leader_only and not roles.is_leader(request.user, q.site):
+            raise PermissionDenied
+        form = form_class(request.POST, instance=q)
         if form.is_valid():
-            form.save()
-            messages.success(request, '予定と実績を保存しました。')
+            q = form.save(commit=False)
+            if name == 'response':
+                q.received_at = timezone.now()
+            q.save()
+            messages.success(request, msg)
             return redirect(q)
-        return self.render_to_response(self.get_context_data(progress_form=form))
+        return self.render_to_response(self.get_context_data(**{f'{name}_form': form}))
 
 
 class QuestionToggleView(LoginRequiredMixin, View):
@@ -412,7 +433,12 @@ class SummaryView(SiteMixin, generic.TemplateView):
         context = super().get_context_data(**kwargs)
         summary, mine = kwargs.get('summary_pair') or self.get_summary()
         site = self.site
+        is_leader = roles.is_leader(self.request.user, site)
+        goals = site.goals.filter(author=summary.author)
         context.update(
+            goals=[(g, growth.level_descriptions(g.skill_item)) for g in goals],
+            feedback_form=kwargs.get('feedback_form') or FeedbackForm(instance=summary),
+            can_feedback=is_leader and not mine and summary.submitted_at and not site.is_archived,
             summary=summary, mine=mine, writable=mine and not site.is_archived,
             form=kwargs.get('form') or SummaryForm(instance=summary),
             review_form=kwargs.get('review_form') or SummaryReviewForm(instance=summary),
@@ -425,8 +451,10 @@ class SummaryView(SiteMixin, generic.TemplateView):
 
     def post(self, request, *args, **kwargs):
         check_writable(request.user, self.site)
-        summary, _ = Summary.objects.get_or_create(site=self.site, author=request.user)
         action = request.POST.get('action')
+        if action == 'feedback':
+            return self.post_feedback(request)
+        summary, _ = Summary.objects.get_or_create(site=self.site, author=request.user)
         if action == 'review':
             form = SummaryReviewForm(request.POST, instance=summary)
         else:
@@ -446,6 +474,75 @@ class SummaryView(SiteMixin, generic.TemplateView):
         summary.save()
         messages.success(request, msg)
         return redirect('genba:summary', site_pk=self.site.pk)
+
+    def post_feedback(self, request):
+        """リーダーが、出されたまとめに差と次の作業を返す"""
+        summary = get_object_or_404(Summary, site=self.site, author_id=request.POST.get('user'),
+                                    submitted_at__isnull=False)
+        if not roles.is_leader(request.user, self.site) or summary.author_id == request.user.pk:
+            raise PermissionDenied
+        form = FeedbackForm(request.POST, instance=summary)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(summary_pair=(summary, False), feedback_form=form))
+        summary = form.save(commit=False)
+        summary.feedback_by, summary.feedback_at = request.user, timezone.now()
+        summary.save()
+        messages.success(request, f'{summary.author.username} さんのまとめに返しました。')
+        return redirect(reverse('genba:summary', args=[self.site.pk]) + f'?user={summary.author_id}')
+
+
+class WeeklyBoardView(SiteMixin, generic.TemplateView):
+    """週次共有の一覧：週ごとに、メンバーの週報4欄を横に並べる（現場チーム）"""
+    template_name = 'genba/weekly_board.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            week = week_start(date.fromisoformat(self.request.GET['week']))
+        except (KeyError, ValueError):
+            week = week_start(timezone.localdate()) - timedelta(weeks=1)
+        reports = {d.author_id: d for d in self.site.documents.filter(kind=Document.KIND_WEEKLY, week_of=week)}
+        context['week'] = week
+        context['prev_week'] = week - timedelta(weeks=1)
+        context['next_week'] = week + timedelta(weeks=1)
+        context['rows'] = [
+            (m, reports.get(m.user_id))
+            for m in self.site.memberships.select_related('user').order_by('joined_on')
+            if week_start(m.joined_on) <= week
+        ]
+        return context
+
+
+class LinesView(SiteMixin, generic.TemplateView):
+    """裁量の線：「自分で決める範囲」と「相談して決める範囲」。本人とリーダーが書く"""
+    template_name = 'genba/lines.html'
+
+    def can_edit(self, membership):
+        user = self.request.user
+        return not self.site.is_archived and (membership.user_id == user.pk or roles.is_leader(user, self.site))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        invalid = kwargs.get('invalid')
+        context['rows'] = [
+            (m, (invalid if invalid and invalid.instance.pk == m.pk else LineForm(instance=m)) if self.can_edit(m) else None)
+            for m in self.site.memberships.select_related('user').order_by('joined_on')
+        ]
+        context['phrase'] = kit.phrase('裁量の線を引く')
+        return context
+
+    def post(self, request, *args, **kwargs):
+        membership = get_object_or_404(Membership, site=self.site, pk=request.POST.get('membership'))
+        if not self.can_edit(membership):
+            raise PermissionDenied
+        form = LineForm(request.POST, instance=membership)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(invalid=form))
+        membership = form.save(commit=False)
+        membership.line_updated_at = timezone.now()
+        membership.save()
+        messages.success(request, f'{membership.user.username} さんの裁量の線を残しました。')
+        return redirect('genba:lines', site_pk=self.site.pk)
 
 
 class TermCreateView(SiteCreateMixin, generic.CreateView):
@@ -704,6 +801,7 @@ class GoalReachView(GenbaMixin, generic.UpdateView):
 # ---------------------------------------------------------------------------
 
 class LeaderHomeView(GenbaMixin, generic.TemplateView):
+    """担当現場ごとに：詰まり、読めない、まとめ確認、週次共有、裁量の線、懸念、ナレッジ候補"""
     template_name = 'genba/leader_home.html'
     role_name = 'leader'
 
@@ -714,21 +812,33 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        since = week_start(timezone.localdate()) - timedelta(weeks=1)
+        user = self.request.user
         panels = []
-        for site in roles.leader_sites(self.request.user):
+        for site in roles.leader_sites(user):
+            memberships = site.memberships.exclude(user=user).select_related('user').order_by('joined_on')
             by_member = defaultdict(list)
             for q in open_issues([site]):
-                by_member[q.author].append(q)
-            members = sorted(
-                ({'user': u, 'questions': qs, 'max_days': max(q.days_open for q in qs)}
-                 for u, qs in by_member.items()),
-                key=lambda m: -m['max_days'],
-            )
+                by_member[q.author_id].append(q)
+            members = []
+            for m in memberships:
+                qs = by_member.get(m.user_id, [])
+                members.append({
+                    'membership': m, 'questions': qs, 'max_days': max((q.days_open for q in qs), default=0),
+                    'weekly_missing': signals.missing_last_weekly(m),
+                })
+            members.sort(key=lambda r: (-r['weekly_missing'], -r['max_days']))
+            unreadable = site.questions.filter(unreadable=True, is_open=True).select_related('author')
             panels.append({
                 'site': site,
                 'members': members,
-                'weekly': site.documents.filter(kind=Document.KIND_WEEKLY, week_of__gte=since)
+                'unreadable': [(q, signals.unreadable_needs_question(q)) for q in unreadable],
+                'summaries': site.summaries.filter(submitted_at__isnull=False).exclude(author=user)
+                .select_related('author').order_by('feedback_at', 'submitted_at'),
+                'lines_missing': [m for m in memberships if not m.line_updated_at],
+                'concerns': site.questions.filter(kind=Question.KIND_PROBLEM, is_open=True).exclude(author=user)
+                .select_related('author').order_by('received_at', 'created_at'),
+                'weekly': site.documents.filter(kind=Document.KIND_WEEKLY,
+                                                week_of__gte=week_start(timezone.localdate()) - timedelta(weeks=1))
                 .exclude(stuck='').select_related('author').order_by('-week_of'),
                 'candidates': [
                     *site.documents.filter(knowledge_status=KNOWLEDGE_CANDIDATE).select_related('author'),
@@ -737,6 +847,7 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
             })
         context['panels'] = panels
         context['stall_days'] = THRESHOLDS['stall_days']
+        context['ask_days'] = signals.UNREADABLE_ASK_DAYS
         return context
 
 

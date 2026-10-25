@@ -69,6 +69,10 @@ class Membership(models.Model):
     role = models.CharField(verbose_name='立場', max_length=10, choices=ROLE_CHOICES, default=ROLE_MEMBER)
     duty = models.CharField(verbose_name='役割', max_length=60, blank=True)
     joined_on = models.DateField(verbose_name='入場日')
+    # 裁量の線（本人とリーダーが一度言葉にする）
+    line_self = models.TextField(verbose_name='自分で決める範囲', blank=True)
+    line_consult = models.TextField(verbose_name='相談して決める範囲', blank=True)
+    line_updated_at = models.DateTimeField(verbose_name='裁量の線を書いた日時', null=True, blank=True)
 
     class Meta:
         verbose_name = verbose_name_plural = '現場メンバー'
@@ -199,11 +203,15 @@ class Question(models.Model):
     source = models.CharField(verbose_name='どの資料', max_length=100, blank=True)
     location = models.CharField(verbose_name='どこが', max_length=100, blank=True)
     reason = models.CharField(verbose_name='なぜ読めないか', max_length=10, choices=REASON_CHOICES, blank=True)
+    support_on = models.DateField(verbose_name='説明の時間', null=True, blank=True)
+    support_note = models.CharField(verbose_name='説明のメモ', max_length=200, blank=True)
     # 課題：懸念の型
     fact = models.TextField(verbose_name='事実', blank=True)
     interpretation = models.TextField(verbose_name='自分の解釈', blank=True)
     unconfirmed = models.TextField(verbose_name='未確認のこと', blank=True)
     impact = models.TextField(verbose_name='影響', blank=True)
+    received_at = models.DateTimeField(verbose_name='リーダーが受け取った日時', null=True, blank=True)
+    response = models.TextField(verbose_name='リーダーの返事', blank=True)
     # 作業：進捗表
     due_on = models.DateField(verbose_name='予定日', null=True, blank=True)
     done_on = models.DateField(verbose_name='完了日', null=True, blank=True)
@@ -305,6 +313,13 @@ class Summary(models.Model):
         verbose_name='リーダーと確かめた結果', blank=True,
         help_text='期待値との差と、2週目の作業。',
     )
+    feedback = models.TextField(
+        verbose_name='リーダーからの返し', blank=True,
+        help_text='スキルの具体記述に沿った差と、次の作業。',
+    )
+    feedback_by = models.ForeignKey(CustomUser, verbose_name='返したリーダー', on_delete=models.PROTECT,
+                                    null=True, blank=True, related_name='genba_summary_feedbacks')
+    feedback_at = models.DateTimeField(verbose_name='返した日時', null=True, blank=True)
     updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
 
     class Meta:

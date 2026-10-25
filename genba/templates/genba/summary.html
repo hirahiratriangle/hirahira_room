@@ -46,7 +46,31 @@
     </div>
 </div>
 
-<h3 class="h6">リーダーと確かめた結果</h3>
+<h3 class="h6">リーダーからの返し</h3>
+<p class="small text-muted">スキルの具体記述に沿って、差と次の作業を返します。点数は付けません。</p>
+{% if goals %}
+<div class="row g-2 mb-2">
+    {% for g, levels in goals %}
+    <div class="col-md-6"><div class="card h-100"><div class="card-body py-2 small">
+        <div class="text-muted">{{ summary.author.username }} の目標：{{ g.skill_item }}（レベル{{ g.current_level }} → {{ g.target_level }}）</div>
+        <div class="fw-bold mb-1">{{ g.target_text }}</div>
+        {% for n, text in levels %}<div class="{% if n == g.target_level %}fw-bold{% elif n != g.current_level %}text-muted{% endif %}">レベル{{ n }}：{{ text|default:"—" }}</div>{% endfor %}
+    </div></div></div>
+    {% endfor %}
+</div>
+{% endif %}
+{% if can_feedback %}
+<form method="post" class="card border-primary mb-4"><div class="card-body">
+    {% csrf_token %}<input type="hidden" name="action" value="feedback"><input type="hidden" name="user" value="{{ summary.author_id }}">
+    {{ feedback_form.feedback }}<div class="form-text">{{ feedback_form.feedback.help_text }}</div>
+    {% for e in feedback_form.feedback.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    <button class="btn btn-primary btn-sm mt-2">返す</button>
+</div></form>
+{% elif summary.feedback %}
+<div class="card border-success mb-4"><div class="card-body small"><div class="text-muted mb-1">{{ summary.feedback_by.username }} ・ {{ summary.feedback_at|date:"n/j" }}</div><div class="genba-pre">{{ summary.feedback }}</div></div></div>
+{% else %}<p class="small text-muted mb-4">まだ返しはありません。</p>{% endif %}
+
+<h3 class="h6">リーダーと確かめた結果（本人のメモ）</h3>
 <p class="small text-muted">リーダーに15分もらい「この理解で合っていますか」と確かめ、期待値との差と2週目の作業を書きます。</p>
 {% if writable %}
 <form method="post" class="card"><div class="card-body">

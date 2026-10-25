@@ -29,7 +29,20 @@
     <dt class="col-sm-3">どの資料</dt><dd class="col-sm-9">{{ q.source|default:"―" }}</dd>
     <dt class="col-sm-3">どこが</dt><dd class="col-sm-9">{{ q.location|default:"―" }}</dd>
     <dt class="col-sm-3">なぜ読めないか</dt><dd class="col-sm-9">{{ q.get_reason_display|default:"―" }}</dd>
+    <dt class="col-sm-3">説明の時間</dt><dd class="col-sm-9">{% if q.support_on %}<span class="badge bg-success">{{ q.support_on|date:"n/j" }}</span> {{ q.support_note }}{% else %}<span class="text-muted">まだ割り当てられていません</span>{% endif %}</dd>
 </dl>
+{% if support_form %}
+<form method="post" class="card border-primary mb-3"><div class="card-body py-2">
+    {% csrf_token %}<input type="hidden" name="form" value="support">
+    <div class="small fw-bold mb-1">リーダー：説明の時間を割り当てる</div>
+    <div class="row g-2">
+        <div class="col-md-4">{{ support_form.support_on }}</div>
+        <div class="col-md-6">{{ support_form.support_note }}</div>
+        <div class="col-md-2"><button class="btn btn-primary btn-sm w-100">割り当てる</button></div>
+    </div>
+    {% for e in support_form.support_on.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+</div></form>
+{% endif %}
 {% endif %}
 
 {% if q.kind == 'problem' %}
@@ -38,6 +51,19 @@
     <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">自分の解釈</div><div class="genba-pre">{{ q.interpretation|default:"―" }}</div></div></div></div>
     <div class="col-md-6"><div class="card h-100"><div class="card-body py-2"><div class="fw-bold">未確認のこと</div><div class="genba-pre">{{ q.unconfirmed|default:"―" }}</div></div></div></div>
     <div class="col-md-6"><div class="card h-100 border-warning"><div class="card-body py-2"><div class="fw-bold">影響</div><div class="genba-pre">{{ q.impact|default:"―" }}</div></div></div></div>
+</div>
+<div id="response">
+{% if q.received_at %}<div class="alert alert-success small py-2"><strong>リーダーが受け取りました（{{ q.received_at|date:"n/j" }}）</strong><br><span class="genba-pre">{{ q.response }}</span></div>
+{% else %}<p class="small text-muted">リーダーはまだ受け取っていません。</p>{% endif %}
+{% if response_form %}
+<form method="post" class="card border-primary mb-3"><div class="card-body py-2">
+    {% csrf_token %}<input type="hidden" name="form" value="response">
+    <div class="small fw-bold mb-1">リーダー：懸念を受け取り、返事を書く</div>
+    {{ response_form.response }}
+    {% for e in response_form.response.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    <button class="btn btn-primary btn-sm mt-2">受け取った</button>
+</div></form>
+{% endif %}
 </div>
 {% endif %}
 
@@ -65,7 +91,7 @@
 <h3 class="h6 mt-4">予定と実績（進捗表）</h3>
 {% if writable %}
 <form method="post" class="card"><div class="card-body">
-    {% csrf_token %}
+    {% csrf_token %}<input type="hidden" name="form" value="progress">
     <div class="row g-2">
         {% for field in progress_form %}
         <div class="{% if field.name == 'delay_note' %}col-12{% else %}col-md-6{% endif %}">

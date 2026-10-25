@@ -12,6 +12,8 @@
     <div class="d-flex gap-2">
         <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:summary' site.pk %}"><i class="fas fa-file-alt me-1"></i>1週目のまとめ</a>
         <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:growth' site.pk %}"><i class="fas fa-seedling me-1"></i>自分の成長</a>
+        <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:weekly_board' site.pk %}"><i class="fas fa-columns me-1"></i>週次共有</a>
+        <a class="btn btn-outline-primary btn-sm" href="{% url 'genba:lines' site.pk %}"><i class="fas fa-ruler-horizontal me-1"></i>裁量の線</a>
         {% if is_leader %}
         <form method="post" action="{% url 'genba:site_archive' site.pk %}">{% csrf_token %}
             <button class="btn btn-outline-secondary btn-sm">{% if site.is_archived %}Archive を戻す{% else %}Archive する{% endif %}</button>
