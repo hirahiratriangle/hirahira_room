@@ -518,9 +518,9 @@ class GoalTests(GenbaTestBase):
         self.client.force_login(self.member)
         self.client.post(reverse('genba:goal_reach', args=[g.pk]), {
             'reached_level': 3, 'explanation': 'やった', 'role': 'member', 'team_size': 5,
-            'complexity': ['1', '4'], 'agreed': 'on', 'evidence': [f'issue:{q.pk}', f'issue:{other.pk}']})
+            'complexity': ['1', '4'], 'request_agreement': 'on', 'evidence': [f'issue:{q.pk}', f'issue:{other.pk}']})
         g.refresh_from_db()
-        self.assertEqual((g.reached_level, g.complexity, g.agreed_on), (3, '1,4', self.today))
+        self.assertEqual((g.reached_level, g.complexity, g.agreement_status), (3, '1,4', 'requested'))
         self.assertEqual(list(g.evidence.values_list('record_id', flat=True)), [q.pk])
         res = self.client.get(reverse('genba:goal_reach', args=[g.pk]))
         self.assertContains(res, 'スキルシート（基本設計）の評価の目安：B')
@@ -545,3 +545,66 @@ class GoalTests(GenbaTestBase):
         res = self.client.get(reverse('genba:skillset'))
         self.assertContains(res, '業務アプリケーション開発 基本設計スキルセット')
         self.assertContains(res, '読めない資料の早期の共有')
+
+
+class AgreementTests(GenbaTestBase):
+    def setUp(self):
+        super().setUp()
+        self.manager = CustomUser.objects.create_user('manager', 'k@example.com', 'pass12345')
+        self.add_group(self.manager, GROUP_MANAGEMENT)
+        self.goal = Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=3,
+                                        target_text='目標', reached_level=4, explanation='説明',
+                                        agreement_requested_at=timezone.now())
+
+    def test_only_requested_goals_reach_management(self):
+        Goal.objects.create(site=self.site, author=self.leader, skill_item='デザイン', current_level=3,
+                            target_text='依頼していない目標', explanation='依頼していない説明')
+        self.client.force_login(self.manager)
+        res = self.client.get(reverse('genba:management'))
+        self.assertContains(res, '説明を読んで合意する')
+        self.assertNotContains(res, '依頼していない')
+        self.assertContains(self.client.get(reverse('genba:goal_agreement', args=[self.goal.pk])), '説明')
+
+    def test_agree_and_return(self):
+        self.client.force_login(self.manager)
+        url = reverse('genba:goal_agreement', args=[self.goal.pk])
+        self.client.post(url, {'action': 'agree', 'comment': 'よい'})
+        self.goal.refresh_from_db()
+        self.assertEqual((self.goal.agreed_on, self.goal.agreed_by), (self.today, self.manager))
+        self.goal.agreed_on = None
+        self.goal.save()
+        self.client.post(url, {'action': 'return', 'comment': '証拠を足して'})
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.agreement_status, '')
+        self.assertEqual(self.goal.agreement_comment, '証拠を足して')
+
+    def test_not_requested_or_not_management_or_own(self):
+        self.client.force_login(self.leader)
+        self.assertEqual(self.client.get(reverse('genba:goal_agreement', args=[self.goal.pk])).status_code, 403)
+        self.add_group(self.member, GROUP_MANAGEMENT)
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(reverse('genba:goal_agreement', args=[self.goal.pk])).status_code, 403)
+        self.goal.agreement_requested_at = None
+        self.goal.save()
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.get(reverse('genba:goal_agreement', args=[self.goal.pk])).status_code, 403)
+
+    def test_changing_reach_resets_agreement(self):
+        self.goal.agreed_on, self.goal.agreed_by = self.today, self.manager
+        self.goal.save()
+        self.client.force_login(self.member)
+        self.client.post(reverse('genba:goal_reach', args=[self.goal.pk]), {
+            'reached_level': 3, 'explanation': '説明', 'request_agreement': 'on'})
+        self.goal.refresh_from_db()
+        self.assertEqual(self.goal.agreement_status, 'requested')
+
+    def test_weekly_with_goal_action_is_candidate(self):
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_WEEKLY, title='週報A',
+                                week_of=self.today, goal_action='方針を示した')
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_WEEKLY, title='週報B',
+                                week_of=self.today - timedelta(weeks=1))
+        rows = growth.candidates(self.goal)
+        titles = [r['title'] for r in rows]
+        self.assertTrue(any('週報A' in t and '方針を示した' in t for t in titles))
+        self.assertFalse(any('週報B' in t for t in titles))
+        self.assertTrue(rows[0]['matches'])

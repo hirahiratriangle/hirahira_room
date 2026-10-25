@@ -335,7 +335,8 @@ class PromiseCheck(models.Model):
 
 class Goal(models.Model):
     """現場ごとの成長の目標と到達（基本設計スキルセット）。
-    目標は現場チームに見せる。到達の説明は本人だけが見る。"""
+    目標は現場チームに見せる。到達の説明は本人だけが見る。
+    本人が合意を依頼したときだけ、マネジメント（課長）が到達の説明を読んで合意する。"""
 
     ROLE_CHOICES = [('member', 'メンバー'), ('leader', 'リーダー'), ('owner', '責任者')]
     LEVEL_CHOICES = [(n, f'レベル{n}') for n in range(1, 6)]
@@ -355,7 +356,11 @@ class Goal(models.Model):
     role = models.CharField(verbose_name='立場（責任性）', max_length=10, choices=ROLE_CHOICES, blank=True)
     team_size = models.PositiveIntegerField(verbose_name='ピーク時のチーム人数', null=True, blank=True)
     complexity = models.CharField(verbose_name='複雑性（該当する番号）', max_length=30, blank=True)
-    agreed_on = models.DateField(verbose_name='課長と合意した日', null=True, blank=True)
+    agreement_requested_at = models.DateTimeField(verbose_name='合意を依頼した日時', null=True, blank=True)
+    agreed_on = models.DateField(verbose_name='合意した日', null=True, blank=True)
+    agreed_by = models.ForeignKey(CustomUser, verbose_name='合意した人（マネジメント）', on_delete=models.PROTECT,
+                                  null=True, blank=True, related_name='genba_agreed_goals')
+    agreement_comment = models.TextField(verbose_name='マネジメントからのコメント', blank=True)
     created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
     updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
 
@@ -369,6 +374,14 @@ class Goal(models.Model):
     @property
     def target_level(self):
         return self.current_level + 1
+
+    @property
+    def agreement_status(self):
+        if self.agreed_on:
+            return 'agreed'
+        if self.agreement_requested_at:
+            return 'requested'
+        return ''
 
     @property
     def complexity_numbers(self):

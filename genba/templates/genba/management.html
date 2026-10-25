@@ -31,6 +31,18 @@
     </tbody>
 </table></div>
 
+<h3 class="h6 mt-4">到達の合意（本人から依頼されたもの）</h3>
+<p class="small text-muted">本人が「合意を依頼する」としたときだけ、到達の説明が届きます。人どうしを並べて比べることはしません。</p>
+<ul class="list-group mb-2">
+    {% for g in agreement_requests %}
+    <li class="list-group-item small d-flex flex-wrap justify-content-between gap-2">
+        <span><strong>{{ g.author.username }}</strong>　{{ g.skill_item }}（レベル{{ g.reached_level|default:"―" }}に当たる）<span class="text-muted"> ／ {{ g.site.name }} ・ {{ g.agreement_requested_at|date:"n/j" }}に依頼</span></span>
+        <a class="btn btn-outline-primary btn-sm py-0" href="{% url 'genba:goal_agreement' g.pk %}">説明を読んで合意する</a>
+    </li>
+    {% empty %}<li class="list-group-item small text-muted">依頼はありません</li>{% endfor %}
+</ul>
+{% if agreed_recently %}<p class="small text-muted mb-0">最近30日に合意したもの：{% for g in agreed_recently %}{{ g.author.username }}（{{ g.skill_item }}）{% if not forloop.last %}、{% endif %}{% endfor %}</p>{% endif %}
+
 <h3 class="h6 mt-4">使わない指標</h3>
 <ul class="small text-muted">
     <li>個人のコミット数、Issue作成数、記述量（書くほど不利に見える指標は、記録そのものを止めます）</li>

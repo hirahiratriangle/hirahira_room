@@ -8,7 +8,8 @@
 
 筋書き：
 - 受発注（リーダー）：入場から10週。チェックリストはほぼ済み、まとめはリーダーと確認済み。
-  目標（プロジェクトマネジメント レベル3→4）の到達を説明し、課長と合意済み
+  目標（プロジェクトマネジメント レベル3→4）の到達を説明し、課長（demo_kacho）と合意済み。
+  demo_sato からの合意の依頼が、マネジメントの画面に届いている
 - 保険金請求（メンバー）：入場から6日。1週目の途中で、3日止まっている「読めない」があり、
   まとめはまだ出していない → 危険信号が2つ出る。目標（デザイン レベル3→4）を立てている
 - 店舗在庫（入っていない）：マネジメント・会社の画面でだけ見える
@@ -29,7 +30,7 @@ from genba.models import (
 from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
 DEMO_PREFIX = 'genba-demo-'
-DEMO_USERS = ['demo_sato', 'demo_suzuki', 'demo_tanaka', 'demo_ito']
+DEMO_USERS = ['demo_sato', 'demo_suzuki', 'demo_tanaka', 'demo_ito', 'demo_kacho']
 
 # チェックリストの段階ごとの予定日（入場日からの日数）
 STAGE_DUE = {'pre': -1, 'day1': 0, 'week1': 4, 'week2': 14}
@@ -56,9 +57,10 @@ class Command(BaseCommand):
                 u.set_unusable_password()
                 u.save()
             users[name] = u
-        sato, suzuki, tanaka, ito = (users[n] for n in DEMO_USERS)
+        sato, suzuki, tanaka, ito, self.kacho = (users[n] for n in DEMO_USERS)
         for g in (GROUP_MANAGEMENT, GROUP_COMPANY):
             me.groups.add(Group.objects.get_or_create(name=g)[0])
+        self.kacho.groups.add(Group.objects.get(name=GROUP_MANAGEMENT))
 
         self.now = timezone.now()
         self.today = timezone.localdate()
@@ -198,9 +200,18 @@ class Command(BaseCommand):
             preparation='マスタースケジュールの読み方と、課題管理表の運用を確認しておく。', created_at=self.ago(71),
             reached_level=4, mentored=True, role='leader', team_size=3, complexity='1,4',
             explanation='3人の設計チームの課題とリスクを週次で棚卸しし、レビュー計画に組み込んだ。仕様書が最新でない課題は、影響と見込みを添えて上げた。',
-            agreed_on=self.today - timedelta(days=2))
+            agreement_requested_at=self.ago(4), agreed_on=self.today - timedelta(days=2), agreed_by=self.kacho,
+            agreement_comment='チームの課題管理が回っていた。次はレベル4の「デザイン」も視野に。')
         problem = site.questions.get(title='旧システムの仕様書が最新でない')
         GoalEvidence.objects.create(goal=goal, record_type='issue', record_id=problem.pk, title=f'課題：{problem.title}')
+        sato_goal = Goal.objects.create(
+            site=site, author=sato, skill_item='業務システム構築', concrete_skill='業務フローの把握と可視化',
+            current_level=2, target_text='担当機能の業務フローを自分で追い、業務ルールと例外を漏れなく設計する',
+            created_at=self.ago(70), reached_level=3, role='member', team_size=3,
+            explanation='受注から請求までの業務フローを自分で追って資料にし、受注画面の業務ルールと例外を設計した。',
+            agreement_requested_at=self.ago(1))
+        flow = site.documents.get(title='受注から請求までの業務フロー')
+        GoalEvidence.objects.create(goal=sato_goal, record_type='doc', record_id=flow.pk, title=f'03_業務理解：{flow.title}')
 
     # ---- 現場2: 保険金請求の基本設計（自分はメンバー。入場から6日） ----
 

@@ -28,7 +28,7 @@
         </div>
         <div class="text-end small">
             <div>この項目に付いた記録 <strong>{{ g.matches }}</strong> 件</div>
-            {% if g.goal.reached_level %}<div>到達：レベル{{ g.goal.reached_level }}（評価の目安 {{ g.grade }}）{% if g.goal.agreed_on %} <span class="badge bg-success">課長と合意</span>{% endif %}</div>{% endif %}
+            {% if g.goal.reached_level %}<div>到達：レベル{{ g.goal.reached_level }}（評価の目安 {{ g.grade }}）{% if g.goal.agreement_status == 'agreed' %} <span class="badge bg-success">合意済み</span>{% elif g.goal.agreement_status == 'requested' %} <span class="badge bg-info text-dark">合意を依頼中</span>{% endif %}</div>{% endif %}
             <a class="btn btn-outline-primary btn-sm mt-1" href="{% url 'genba:goal_reach' g.goal.pk %}">到達を説明する</a>
         </div>
     </div>

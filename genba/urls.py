@@ -23,6 +23,7 @@ urlpatterns = [
     path('sites/<int:site_pk>/growth/', views.GrowthView.as_view(), name='growth'),
     path('sites/<int:site_pk>/goals/create/', views.GoalCreateView.as_view(), name='goal_create'),
     path('goals/<int:pk>/reach/', views.GoalReachView.as_view(), name='goal_reach'),
+    path('goals/<int:pk>/agreement/', views.GoalAgreementView.as_view(), name='goal_agreement'),
     path('sites/<int:site_pk>/issues/create/<str:kind>/', views.IssueCreateView.as_view(), name='issue_create'),
     path('sites/<int:site_pk>/terms/create/', views.TermCreateView.as_view(), name='term_create'),
     path('sites/<int:site_pk>/promises/create/', views.PromiseCheckCreateView.as_view(), name='promise_create'),

@@ -185,7 +185,7 @@ class ReachForm(BootstrapMixin, forms.ModelForm):
         label='複雑性（当てはまるもの）', required=False, widget=forms.CheckboxSelectMultiple,
         choices=[(str(i), f'{i}. {text}') for i, text in enumerate(growth.data.COMPLEXITY, 1)],
     )
-    agreed = forms.BooleanField(label='この到達を課長と合意した', required=False)
+    request_agreement = forms.BooleanField(label='この到達について、マネジメント（課長）に合意を依頼する', required=False)
 
     class Meta:
         model = Goal
@@ -196,15 +196,18 @@ class ReachForm(BootstrapMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['complexity'].initial = [str(n) for n in self.instance.complexity_numbers]
         self.fields['complexity'].widget.attrs = {}
-        self.fields['agreed'].initial = bool(self.instance.agreed_on)
+        self.fields['request_agreement'].initial = bool(self.instance.agreement_requested_at)
 
     def save(self, commit=True):
         goal = super().save(commit=False)
         goal.complexity = ','.join(sorted(self.cleaned_data['complexity'], key=int))
-        if not self.cleaned_data['agreed']:
-            goal.agreed_on = None
-        elif not goal.agreed_on:
-            goal.agreed_on = timezone.localdate()
+        # 合意したあとで到達の中身を変えたら、合意はやり直し
+        if goal.agreed_on and set(self.changed_data) - {'request_agreement'}:
+            goal.agreed_on, goal.agreed_by = None, None
+        if not self.cleaned_data['request_agreement']:
+            goal.agreement_requested_at, goal.agreed_on, goal.agreed_by = None, None, None
+        elif not goal.agreement_requested_at:
+            goal.agreement_requested_at = timezone.now()
         if commit:
             goal.save()
         return goal

@@ -83,9 +83,9 @@ def record_title(record):
 
 
 def own_records(user, site):
-    """その現場の本人の記録（証拠の候補）"""
+    """その現場の本人の記録（証拠の候補）。週報は「目標に近づいた行動」を書いた週だけ"""
     records = [
-        *site.documents.filter(author=user),
+        *site.documents.filter(author=user).exclude(kind=Document.KIND_WEEKLY, goal_action=''),
         *site.terms.filter(author=user),
         *site.questions.filter(author=user, stage='').exclude(kind=Question.KIND_TASK, due_on__isnull=True),
         *site.summaries.filter(author=user).exclude(submitted_at__isnull=True),
@@ -100,9 +100,13 @@ def candidates(goal):
     for r in own_records(goal.author, goal.site):
         skill = auto_skill(r)
         key = (record_type(r), r.pk)
+        # 週報の「目標に近づいた行動」は、目標に向けて書いたものなので候補の上に出す
+        toward_goal = key[0] == 'doc' and r.kind == Document.KIND_WEEKLY
         rows.append({
-            'key': f'{key[0]}:{key[1]}', 'type': key[0], 'id': r.pk, 'title': record_title(r),
-            'skill': skill, 'matches': bool(skill and skill[0] == goal.skill_item), 'chosen': key in chosen,
+            'key': f'{key[0]}:{key[1]}', 'type': key[0], 'id': r.pk,
+            'title': f'{record_title(r)}（{r.goal_action}）' if toward_goal else record_title(r),
+            'skill': skill, 'matches': toward_goal or bool(skill and skill[0] == goal.skill_item),
+            'chosen': key in chosen,
         })
     rows.sort(key=lambda row: (not row['matches'], not row['chosen'], row['title']))
     return rows

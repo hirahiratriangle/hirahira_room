@@ -758,10 +758,51 @@ class ManagementView(GenbaMixin, generic.TemplateView):
         rows = [site_metrics(s) for s in Site.objects.all()]
         rows.sort(key=lambda m: (-len(m.alerts), m.site.name))
         context['rows'] = rows
+        # 到達の合意は、本人が依頼したものだけ（自分の目標は自分で合意しない）
+        requested = Goal.objects.filter(agreement_requested_at__isnull=False).exclude(author=self.request.user)
+        context['agreement_requests'] = requested.filter(agreed_on__isnull=True).select_related('author', 'site')
+        context['agreed_recently'] = (
+            requested.filter(agreed_on__gte=timezone.localdate() - timedelta(days=30))
+            .select_related('author', 'site').order_by('-agreed_on')
+        )
         context['thresholds'] = THRESHOLDS
         context['weekly_rate_min'] = WEEKLY_RATE_MIN
         context['weekly_window'] = WEEKLY_WINDOW
         return context
+
+
+class GoalAgreementView(GenbaMixin, generic.DetailView):
+    """マネジメント（課長）が、本人から依頼された到達の説明を読んで合意する／差し戻す"""
+    model = Goal
+    template_name = 'genba/goal_agreement.html'
+    context_object_name = 'goal'
+    role_name = 'management'
+
+    def get_object(self, queryset=None):
+        goal = super().get_object(queryset)
+        user = self.request.user
+        if not roles.is_management(user) or goal.author_id == user.pk or not goal.agreement_requested_at:
+            raise PermissionDenied
+        return goal
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        goal = self.object
+        context['paste'] = growth.paste_text(goal, [e.title for e in goal.evidence.all()])
+        context['evidence'] = goal.evidence.all()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        goal = self.get_object()
+        goal.agreement_comment = request.POST.get('comment', '')
+        if request.POST.get('action') == 'agree':
+            goal.agreed_on, goal.agreed_by = timezone.localdate(), request.user
+            messages.success(request, f'{goal.author.username} さんの到達に合意しました。')
+        else:
+            goal.agreement_requested_at, goal.agreed_on, goal.agreed_by = None, None, None
+            messages.success(request, f'{goal.author.username} さんに差し戻しました。コメントが本人に見えます。')
+        goal.save()
+        return redirect('genba:management')
 
 
 # ---------------------------------------------------------------------------
