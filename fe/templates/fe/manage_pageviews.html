@@ -1,0 +1,68 @@
+{% extends 'fe/base.html' %}
+
+{% comment %}
+学習の画面のページビュー（PageViewListView）。views は fe.pageviews.summary の結果。
+件数だけを数えていて、誰が見たかは持たない。巡回ロボットは数えていない。
+{% endcomment %}
+
+{% block title %}ページビュー - FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+{% include 'fe/_console_header.html' with page_title='ページビュー' current='pageviews' %}
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+
+    <section class="mb-5">
+        <h2 class="h5 mb-3">直近{{ views.days }}日の合計 <span class="text-muted fs-6">{{ views.grand_total }} 件</span></h2>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                <tr class="small text-muted">
+                    <th>画面</th>
+                    <th class="text-end">合計</th>
+                    <th class="text-end">ID あり</th>
+                    <th class="text-end">ID なし</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in views.totals %}
+                <tr>
+                    <td>{{ row.label }}</td>
+                    <td class="text-end">{{ row.total }}</td>
+                    <td class="text-end">{{ row.with_id }}</td>
+                    <td class="text-end">{{ row.without_id }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section>
+        <h2 class="h5 mb-3">日別</h2>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle small">
+                <thead>
+                <tr class="text-muted">
+                    <th class="text-nowrap">日付</th>
+                    <th class="text-end">合計</th>
+                    {% for page in views.pages %}<th class="text-end">{{ page.label }}</th>{% endfor %}
+                </tr>
+                </thead>
+                <tbody>
+                {% for day in views.daily %}
+                <tr>
+                    <td class="text-nowrap">{{ day.date|date:"n/j（D）" }}</td>
+                    <td class="text-end fw-bold">{{ day.total }}</td>
+                    {% for count in day.counts %}<td class="text-end{% if not count %} text-muted{% endif %}">{{ count }}</td>{% endfor %}
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+{% endblock %}

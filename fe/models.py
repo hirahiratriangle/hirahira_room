@@ -27,7 +27,7 @@ SUBJECT_CHOICES = [(SUBJECT_A, '科目A'), (SUBJECT_B, '科目B')]
 class Learner(models.Model):
     """成績を持つ単位。ID を登録した人と、登録せずに使う人の両方を表す。
 
-    ID を登録すると code が入り、成績が残る。ダッシュボードは /fe/<ID>/ で開く。
+    ID を登録すると code が入り、成績が残る。ダッシュボードは /fe/mypage/ で開く（ID は URL に出さない）。
     hirahira_room のアカウントとは紐づけない。ID は本人が決め、入力した人を
     本人として扱う（合言葉などの確認はしない）。大文字小文字は区別せず、
     小文字にそろえて持つ。
@@ -841,3 +841,27 @@ class OpenProgress(models.Model):
 
     def __str__(self):
         return '{} {}/{}'.format(self.category.name, self.correct, self.answered)
+
+
+class PageViewCount(models.Model):
+    """学習の画面のページビューを、日付・画面・ID の有無ごとに数えたもの（fe.pageviews）。
+
+    1回ごとの記録は残さず、件数だけを足していく。IP アドレス・ID・ブラウザの
+    情報は持たないので、誰が見たかは分からない。問題の管理（/fe/console/）で、
+    直近30日の日別・画面別の表にして出す。
+    """
+
+    date = models.DateField(verbose_name='日付')
+    page = models.CharField(verbose_name='画面', max_length=30)
+    with_id = models.BooleanField(verbose_name='ID あり')
+    count = models.PositiveIntegerField(verbose_name='件数', default=0)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'FE ページビュー'
+        ordering = ['-date', 'page']
+        constraints = [
+            models.UniqueConstraint(fields=['date', 'page', 'with_id'], name='fe_unique_page_view'),
+        ]
+
+    def __str__(self):
+        return '{} {} {}'.format(self.date, self.page, self.count)

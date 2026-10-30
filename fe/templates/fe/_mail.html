@@ -8,7 +8,7 @@ mail_marathon_total を受け取る（fe.views.mail_context）。
     <div class="border rounded p-3">
         {% if learner.is_temporary %}
         <div class="small text-muted mb-0">
-            問題メールには ID の登録が必要です。<a href="{% url 'fe:enter' %}">ID を登録する</a>と使えます。
+            問題メールには ID の登録が必要です。<a href="{% url 'fe:mypage' %}">ID を登録する</a>と使えます。
         </div>
         {% else %}
         <p class="small text-muted">

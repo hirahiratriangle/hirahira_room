@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'fe/base.html' %}
 
 {% block title %}分野別正答率 - FE 基本情報対策 | HirahiraRoom{% endblock %}
 
@@ -79,6 +79,21 @@
         本番の出題比率（＝本番想定の問数）を土台に，苦手なほど最大で約 2.3 倍まで重みを上げ，
         得意な分野は 0.3 倍まで下げています。本番で8問出るセキュリティを軽視しないための設計です。
     </div>
+
+    <!-- 直近の学習量（ダッシュボードから移した） -->
+    <section class="mt-5">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">直近14日の解答数</h2>
+        <div class="d-flex align-items-end gap-1 border rounded p-3" style="height:120px;">
+            {% for day in daily %}
+            <div class="flex-fill d-flex flex-column justify-content-end align-items-center h-100"
+                 title="{{ day.date|date:'n月j日' }} {{ day.total }}問（正解 {{ day.correct }}）">
+                <div class="w-100 rounded-top"
+                     style="background-color:#2c5aa0; height: {% widthratio day.total max_daily 100 %}%; min-height:{% if day.total %}4{% else %}0{% endif %}px;"></div>
+                <div class="small text-muted mt-1" style="font-size:0.65rem;">{{ day.date|date:'j' }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
 
 </div>
 {% endblock %}

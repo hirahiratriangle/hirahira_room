@@ -1,14 +1,17 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from . import views
 
 app_name = 'fe'
 
 urlpatterns = [
-    # 入口。ID を入力して入る（入っていれば自分のダッシュボードへ送る）
+    # ID なしの入口。そのままダッシュボードになる（ID で入っていれば /fe/mypage/ へ送る）
     path('', views.IndexView.as_view(), name='index'),
-    # 入っていても開ける入口。別の ID に切り替えるときに使う
-    path('enter/', views.EnterView.as_view(), name='enter'),
+    # ID ありの入口。ID で入る・作る・切り替える。入っていればここがダッシュボード
+    path('mypage/', views.MyPageView.as_view(), name='mypage'),
+    # このアプリについて（試験の概要・使い方・対応していない問題・ID と記録）
+    path('guide/', views.GuideView.as_view(), name='guide'),
     path('quiz/', views.QuizView.as_view(), name='quiz'),
     path('quiz/settings/', views.QuizSettingsView.as_view(), name='quiz_settings'),
     # 学習モード（先に解説を読み、そのあと同じ範囲を解く）
@@ -37,10 +40,11 @@ urlpatterns = [
     path('tasks/post-x/', views.PostXView.as_view(), name='post_x'),
     path('x/<str:code>/', views.XAnswerView.as_view(), name='x_answer'),
 
-    # 問題の管理（全 ID で共有する問題集。管理用の ID だけが使え、登録は JSON の一括差し替えで行う）
-    path('manage/', views.ManageListView.as_view(), name='manage_list'),
-    path('manage/upload/', views.QuestionUploadView.as_view(), name='manage_upload'),
-
-    # ダッシュボード（マイページ）。ほかの画面の URL と重ならないよう最後に置く
-    path('<str:code>/', views.DashboardView.as_view(), name='dashboard'),
+    # 問題の管理（全 ID で共有する問題集。学習の画面とは別ページで、スタッフのログインが要る。
+    # 登録は JSON の一括差し替えで行う）
+    path('console/', RedirectView.as_view(pattern_name='fe:manage_list'), name='console'),
+    path('console/questions/', views.ManageListView.as_view(), name='manage_list'),
+    path('console/upload/', views.QuestionUploadView.as_view(), name='manage_upload'),
+    # 学習の画面のページビュー（直近30日）
+    path('console/pageviews/', views.PageViewListView.as_view(), name='manage_pageviews'),
 ]

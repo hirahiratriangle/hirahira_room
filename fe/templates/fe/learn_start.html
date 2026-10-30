@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'fe/base.html' %}
 
 {% block title %}学習モード - FE 基本情報対策 | HirahiraRoom{% endblock %}
 
@@ -96,8 +96,7 @@
         </div>
         {% else %}
         <div class="alert alert-warning">
-            技術解説はまだ用意されていません。
-            {% if request.fe_learner.is_admin %}<a href="{% url 'fe:manage_upload' %}">解説を含む JSON を取り込んで</a>ください。{% endif %}
+            解説がありません。
         </div>
         {% endif %}
 

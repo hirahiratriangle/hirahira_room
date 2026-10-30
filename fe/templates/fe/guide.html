@@ -1,0 +1,75 @@
+{% extends 'fe/base.html' %}
+
+{% comment %}
+このアプリについて。ダッシュボードと入口から外した説明をここにまとめる。
+始めていなくても読める（learner は None のことがある）。
+{% endcomment %}
+
+{% block title %}このアプリについて - FE 基本情報対策 | HirahiraRoom{% endblock %}
+
+{% block header %}
+{% include 'fe/_header.html' with page_title='このアプリについて' current='guide' %}
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+
+    <!-- 試験と収録問題 -->
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">試験と収録問題</h2>
+        <p class="mb-2">
+            {{ exam.name }}は、科目A 60問／90分・科目B 20問／100分。合格には両科目とも 600点／1,000点 以上が必要です。
+        </p>
+        <p class="mb-0">
+            収録問題は {{ question_total }} 問。ほかに計算問題が {{ template_total }} 型あり、毎回数値が変わります。
+        </p>
+    </section>
+
+    <!-- 苦手の判定と出題 -->
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">苦手分野の判定</h2>
+        <p class="mb-2">
+            3問以上解いた分野のうち，60％ に寄せて平滑化した正答率が 60％ を下回るものを苦手と判定し，ダッシュボードに苦手な順で並べます。
+            解答数が少ないうちに極端な判定にならないよう，平滑化してから比較しています。
+        </p>
+        <p class="mb-0">
+            「おまかせ」モードでは，苦手分野が本番の出題比率より高い頻度で出ます。
+            まだ手を付けていない分野も，実力が分からないので優先的に出題されます。
+        </p>
+    </section>
+
+    <!-- 対応していない問題 -->
+    <section class="mb-5">
+        {% include 'fe/_notice.html' %}
+    </section>
+
+    <!-- ID と記録 -->
+    <section class="mb-5" id="id">
+        <h2 class="h5 mb-3" style="color:#2c5aa0;">ID と記録</h2>
+        <p class="mb-2">
+            ID なしでそのまま使えます。苦手を重点的に出題し、学習モードも分野別の正答率も使えますが、
+            記録はこのブラウザの中だけで、ブラウザを閉じたり、しばらく使わなかったりすると消えます。
+        </p>
+        <p class="mb-2">
+            ID を作ると、解答の記録と分野ごとの理解度がその ID に残り、別の端末でも同じ ID を入れれば続きから使えます。
+            問題メールと合格の申告は ID があるときだけ使えます。ID を作る前の解答は引き継がれません。
+        </p>
+        <p class="mb-2">
+            ID をお持ちの方の入口は <a href="{% url 'fe:mypage' %}">マイページ（/fe/mypage/）</a> です。
+            ブックマークしておくと、次から ID を入れるだけで続きを開けます。URL に ID は入りません。
+        </p>
+        <p class="mb-2">
+            ID は hirahira_room のアカウントとは別のもので、合言葉はありません。
+            ID を知っている人は誰でもその ID で入れるので、人と同じ ID は使わないでください。
+            成績と出題設定は ID ごとに分かれ、問題集は全員で共通です。
+        </p>
+        <p class="mb-0">
+            解答の記録は、ID ごとの成績が分からない形に集計して、みんなの集計の表示と問題の改善に使います。運営は ID ごとの記録を見られます。
+        </p>
+        {% if not learner or learner.is_temporary %}
+        <a href="{% url 'fe:mypage' %}" class="btn btn-primary btn-sm mt-3">ID を作って記録を残す</a>
+        {% endif %}
+    </section>
+
+</div>
+{% endblock %}

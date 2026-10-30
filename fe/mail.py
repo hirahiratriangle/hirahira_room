@@ -363,7 +363,7 @@ def build_message(subscription, mode, questions, progress, today):
         'rows': rows,
         'stats': stats,
         'learner': learner,
-        'dashboard_url': absolute(reverse('fe:dashboard', args=[learner.code])),
+        'dashboard_url': absolute(reverse('fe:mypage')),
         'stop_url': absolute(reverse('fe:mail_stop', args=[make_stop_token(subscription)])),
         'site_name': settings.SITE_DISPLAY_NAME,
     }

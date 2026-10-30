@@ -27,7 +27,8 @@
 
 <body>
 <div id="wrapper">
-    <!-- Navigation -->
+    <!-- Navigation（アプリ側で消せるよう block にしてある。fe は出さない） -->
+    {% block site_nav %}
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom fixed-top">
         <div class="container px-5">
             <a class="navbar-brand" href="{% url 'home:home' %}">{% block brand_name %}HIRAHIRAROOM{% endblock %}</a>
@@ -45,7 +46,7 @@
                     {% if request.fe_learner %}
                     <!-- FE 対策アプリで入っている ID（アプリ内の ID で、アカウントとは別） -->
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'fe:enter' %}" title="FE 対策アプリの ID を切り替える">
+                        <a class="nav-link" href="{% url 'fe:mypage' %}?switch" title="FE 対策アプリの ID を切り替える">
                             <i class="fas fa-id-badge"></i> FE {% if request.fe_learner.code %}ID: {{ request.fe_learner.code }} ▸ 切り替える{% else %}履歴なしで利用中 ▸ ID を登録{% endif %}
                         </a>
                     </li>
@@ -88,6 +89,7 @@
             </div>
         </div>
     </nav>
+    {% endblock %}
 
     {% block header%}{% endblock %}
 
@@ -111,6 +113,7 @@
     <!-- Footer -->
     <footer class="py-5 bg-black">
         <div class="container px-5">
+            {% block footer_note %}{% endblock %}
             <p class="m-0 text-center text-white small">Copyright &copy; {% block footer_text %}HirahiraRoom{% endblock %} {% now "Y" %}</p>
         </div>
     </footer>

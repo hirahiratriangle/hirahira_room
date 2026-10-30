@@ -1,0 +1,27 @@
+{% comment %}
+問題の管理（/fe/console/）のヘッダー。学習の画面とは別ページなので、学習のメニューは並べない。
+page_title に見出し、current に居場所（list / pageviews / upload）を渡す。
+{% endcomment %}
+<header style="background-color: #3a3f47;">
+    <div class="container px-5 py-4">
+        <div class="d-flex justify-content-between align-items-center text-white flex-wrap gap-3">
+            <div class="d-flex align-items-baseline flex-wrap gap-3">
+                <h1 class="h5 fw-bold mb-0">{{ page_title }}</h1>
+                <span class="small" style="color:#c8ccd2;">FE 問題の管理</span>
+            </div>
+            <nav class="small d-flex flex-wrap gap-3 align-items-center">
+                {% if current != 'list' %}<a class="text-white text-decoration-none" href="{% url 'fe:manage_list' %}">問題の一覧</a>
+                {% else %}<span style="color:#9aa1ab;">問題の一覧</span>{% endif %}
+
+                {% if current != 'pageviews' %}<a class="text-white text-decoration-none" href="{% url 'fe:manage_pageviews' %}">ページビュー</a>
+                {% else %}<span style="color:#9aa1ab;">ページビュー</span>{% endif %}
+
+                {% if current != 'upload' %}<a class="text-white text-decoration-none" href="{% url 'fe:manage_upload' %}">JSONを取り込む</a>
+                {% else %}<span style="color:#9aa1ab;">JSONを取り込む</span>{% endif %}
+
+                <span style="color:#c8ccd2;"><i class="fas fa-user-circle"></i> {{ request.user.username }}</span>
+                <a class="btn btn-outline-light btn-sm py-0" href="{% url 'account_logout' %}">ログアウト</a>
+            </nav>
+        </div>
+    </div>
+</header>

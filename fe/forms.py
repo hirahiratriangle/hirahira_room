@@ -143,9 +143,9 @@ class PassReportForm(forms.Form):
         return passed_on
 
 
-# /fe/ 直下のほかの画面と同じ名前は、ダッシュボードの URL（/fe/<ID>/）と
-# ぶつかるので ID にできない。
-RESERVED_CODES = {'quiz', 'learn', 'stats', 'history', 'pass', 'manage', 'enter'}
+# 画面の名前と同じ ID は紛らわしいので作れないようにしておく
+# （ID は URL に出さないので、ぶつかりはしない）。
+RESERVED_CODES = {'quiz', 'learn', 'stats', 'history', 'pass', 'manage', 'enter', 'guide', 'console', 'mypage'}
 
 
 class LearnerForm(forms.Form):

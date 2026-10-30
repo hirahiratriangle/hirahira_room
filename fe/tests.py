@@ -30,7 +30,7 @@ from .importer import (ImportError_, needs_confirmation, parse, preview, sync,
                        validate)
 from .learning import note_menu, pick_note
 from .models import (Attempt, Category, CategoryProgress, DailyProgress, Learner,
-                     LearningNote, LearningRound, OpenProgress, PassReport,
+                     LearningNote, LearningRound, OpenProgress, PageViewCount, PassReport,
                      Question, QuestionTemplate, StudySession, XPost)
 from .selection import (REVIEW_DUE_GAP, _due_for_review,
                         _last_result_map, _recent_answer_times, pick_question)
@@ -62,20 +62,21 @@ def make_learner(code, is_admin=False):
 
 
 def enter(client, learner):
-    """hirahira_room にログインし、その ID で入った状態にする。
+    """その ID で入った状態にする。ID はアカウントとつながないので、ログインはしない。"""
+    put_learner(client, learner.pk)
 
-    ID はアカウントと紐づかないので、学習の画面はどのアカウントでも同じに動く。
-    """
-    # 管理画面はスタッフ権限のあるアカウントにしか開けないので、付けておく
+
+def login_staff(client):
+    """問題の管理（/fe/console/）を開けるよう、スタッフのアカウントでログインする。ID は問わない。"""
     account, _ = CustomUser.objects.get_or_create(
         username='hirahira', defaults={'is_staff': True},
     )
     client.force_login(account)
-    put_learner(client, learner.pk)
 
 
 def dashboard(learner):
-    return reverse('fe:dashboard', args=[learner.code])
+    """ダッシュボードの場所。ID なしは /fe/、ID ありは /fe/mypage/。URL に ID は出さない。"""
+    return reverse('fe:index') if learner.is_temporary else reverse('fe:mypage')
 
 
 def build_questions(per_category=4):
@@ -593,8 +594,8 @@ class ViewTests(TestCase):
         enter(self.client, self.learner)
 
     def test_unsupported_formats_are_stated_up_front(self):
-        """対応していない問題形式の注意書きを、ダッシュボードと入口に畳まずに出す。"""
-        for url in (dashboard(self.learner), reverse('fe:enter')):
+        """対応していない問題形式の注意書きを、「このアプリについて」に畳まずに出す。"""
+        for url in (reverse('fe:guide'),):
             with self.subTest(url=url):
                 html = self.client.get(url).content.decode('utf-8')
                 self.assertIn('このアプリが対応していない問題・問題形式', html)
@@ -604,8 +605,7 @@ class ViewTests(TestCase):
 
     def test_import_screen_states_what_cannot_be_rendered(self):
         """取り込み画面では、作る側が踏む制約も併せて示す。"""
-        admin = make_learner('noticeadmin', is_admin=True)
-        enter(self.client, admin)
+        login_staff(self.client)
         html = self.client.get(reverse('fe:manage_upload')).content.decode('utf-8')
         self.assertIn('このアプリで出せない問題', html)
         for word in ('図は公開問題を転記するときだけ使えます', '上付き', '組合せを1つの選択肢'):
@@ -805,16 +805,15 @@ class ViewTests(TestCase):
         """学習の画面は、hirahira_room にログインしていなくても使える。"""
         self.client.logout()
         self.assertEqual(self.client.get(reverse('fe:index')).status_code, 200)
-        self.client.post(reverse('fe:index'), {'action': 'temporary'})
-        for name in ('fe:index', 'fe:enter', 'fe:quiz', 'fe:learn_start',
+        self.client.get(reverse('fe:index'))
+        for name in ('fe:index', 'fe:mypage', 'fe:quiz', 'fe:learn_start',
                      'fe:stats', 'fe:history'):
             with self.subTest(page=name):
                 self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
     def test_login_is_still_required_to_manage(self):
-        """管理用の ID で入っていても、ログインしていなければ管理画面は開けない。"""
+        """ログインしていなければ管理画面は開けず、ログイン画面へ送る。"""
         self.client.logout()
-        put_learner(self.client, make_learner('boss', is_admin=True).pk)
         for name in ('fe:manage_list', 'fe:manage_upload'):
             with self.subTest(page=name):
                 response = self.client.get(reverse(name))
@@ -944,22 +943,19 @@ class NewModeSettingsTests(TestCase):
 
 
 class LearnerIdTests(TestCase):
-    """本アプリの ID。入口で入り、ダッシュボードは /fe/<ID>/ で本人だけが開ける。"""
+    """本アプリの ID。入口で入り、ダッシュボードは /fe/<ID>/ で本人だけが開ける。
+    ID はアカウントとつながないので、ログインせずに確かめる。"""
 
     @classmethod
     def setUpTestData(cls):
         seed_masters()
-        cls.account = CustomUser.objects.create_user(username='someone', password='pass12345')
-
-    def setUp(self):
-        self.client.force_login(self.account)
 
     def _post(self, code, action):
-        return self.client.post(reverse('fe:index'), {'code': code, 'action': action})
+        return self.client.post(reverse('fe:mypage'), {'code': code, 'action': action})
 
     def test_the_entrance_says_how_the_records_are_used(self):
-        """記録を本人の機能以外に何に使うかを、入口と切り替え画面に書いておく。"""
-        for name in ('fe:index', 'fe:enter'):
+        """記録を本人の機能以外に何に使うかを、「このアプリについて」に書いておく。"""
+        for name in ('fe:guide',):
             with self.subTest(page=name):
                 response = self.client.get(reverse(name))
                 self.assertContains(response, 'ID ごとの成績が分からない形に集計して')
@@ -977,48 +973,55 @@ class LearnerIdTests(TestCase):
         self.assertEqual(cookie['max-age'], '')
         self.assertEqual(cookie['expires'], '')
         self.assertTrue(cookie['httponly'])
-        self.assertRedirects(response, reverse('fe:dashboard', args=['closer']))
+        self.assertRedirects(response, reverse('fe:mypage'))
 
         # ブラウザを閉じると、期限の無い Cookie だけが消え、セッションは残る
         del self.client.cookies[LEARNER_COOKIE]
         response = self.client.get(reverse('fe:quiz'))
-        self.assertRedirects(response, reverse('fe:index'))
+        self.assertRedirects(response, reverse('fe:index'), fetch_redirect_response=False)
         self.assertNotIn(SESSION_LEARNER, self.client.session)
 
     def test_starting_without_an_id_is_also_forgotten(self):
         """履歴を残さずに始めた場合も同じ。閉じたら入口からになる。"""
-        response = self.client.post(reverse('fe:index'), {'action': 'temporary'})
+        response = self.client.get(reverse('fe:index'))
         self.assertIn(LEARNER_COOKIE, response.cookies)
         self.assertEqual(self.client.get(reverse('fe:quiz')).status_code, 200)
         del self.client.cookies[LEARNER_COOKIE]
-        self.assertRedirects(self.client.get(reverse('fe:quiz')), reverse('fe:index'))
+        self.assertRedirects(
+            self.client.get(reverse('fe:quiz')), reverse('fe:index'), fetch_redirect_response=False
+        )
 
-    def test_without_an_id_the_entrance_is_shown(self):
+    def test_without_an_id_the_dashboard_opens_at_once(self):
+        """ID なしが基本。入口を開くと、選ばせずにそのままダッシュボードになる。"""
         response = self.client.get(reverse('fe:index'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'この ID で入る')
-
-    def test_top_page_offers_both_ways_to_start(self):
-        """トップでは、履歴を残すかどうかを選べる。"""
-        html = self.client.get(reverse('fe:index')).content.decode('utf-8')
-        self.assertIn('履歴を残さずに始める', html)
-        self.assertIn('履歴を残す（ID を登録）', html)
-
-    def test_can_start_without_registering_an_id(self):
-        """ID を登録せずに始められ、そのままダッシュボードが開く。"""
-        response = self.client.post(reverse('fe:index'), {'action': 'temporary'})
-        self.assertRedirects(response, reverse('fe:index'))
+        self.assertTemplateUsed(response, 'fe/index.html')
         learner = Learner.objects.get(code__isnull=True)
         self.assertTrue(learner.is_temporary)
-        # 入口がそのままダッシュボードになる（URL に ID は出ない）
+        # 開き直しても記録は増えない
+        self.client.get(reverse('fe:index'))
+        self.assertEqual(Learner.objects.filter(code__isnull=True).count(), 1)
+
+    def test_dashboard_without_an_id_invites_to_make_one(self):
+        """ID なしのダッシュボードには、記録を残したくなったら ID を作る案内を出す。
+        ID あり／なしの2つを並べて選ばせることはしない。"""
         html = self.client.get(reverse('fe:index')).content.decode('utf-8')
-        self.assertIn('履歴なし', html)
+        self.assertIn('ID を作って記録を残す', html)
+        self.assertIn(reverse('fe:mypage'), html)
         self.assertNotIn('履歴を残さずに始める', html)
+        self.assertNotIn('id="mail"', html)
+
+    def test_dashboard_with_an_id_has_no_invitation(self):
+        learner = make_learner('invited')
+        enter(self.client, learner)
+        html = self.client.get(dashboard(learner)).content.decode('utf-8')
+        self.assertNotIn('ID を作って記録を残す', html)
+        self.assertIn('id="mail"', html)
 
     def test_temporary_use_can_answer_and_keeps_stats_while_in_use(self):
         """使っている間は、ふつうに解けて成績も積み上がる。"""
         build_questions()
-        self.client.post(reverse('fe:index'), {'action': 'temporary'})
+        self.client.get(reverse('fe:index'))
         learner = Learner.objects.get(code__isnull=True)
         question = Question.objects.first()
         answer(learner, question, correct=True)
@@ -1030,7 +1033,7 @@ class LearnerIdTests(TestCase):
     def test_registering_an_id_later_starts_from_zero(self):
         """履歴なしで使ったあとに ID を登録しても、それまでの解答は引き継がない。"""
         build_questions()
-        self.client.post(reverse('fe:index'), {'action': 'temporary'})
+        self.client.get(reverse('fe:index'))
         temp = Learner.objects.get(code__isnull=True)
         answer(temp, Question.objects.first(), correct=True)
 
@@ -1043,7 +1046,7 @@ class LearnerIdTests(TestCase):
     def test_temporary_use_is_excluded_from_the_site_summary(self):
         """消える記録は全体集計に数えない。"""
         build_questions()
-        self.client.post(reverse('fe:index'), {'action': 'temporary'})
+        self.client.get(reverse('fe:index'))
         temp = Learner.objects.get(code__isnull=True)
         answer(temp, Question.objects.first(), correct=True)
         self.assertEqual(site_summary()['total'], 0)
@@ -1054,7 +1057,7 @@ class LearnerIdTests(TestCase):
 
     def test_temporary_use_cannot_report_a_pass(self):
         """履歴を残さない利用からは合格申告できない。"""
-        self.client.post(reverse('fe:index'), {'action': 'temporary'})
+        self.client.get(reverse('fe:index'))
         response = self.client.post(
             reverse('fe:pass_report'), {'passed_on': '2026-04-01'}
         )
@@ -1079,10 +1082,12 @@ class LearnerIdTests(TestCase):
     def test_create_opens_the_new_dashboard(self):
         response = self._post('Hira_01', 'create')
         # 大文字小文字は区別せず、小文字にそろえる
-        self.assertRedirects(response, '/fe/hira_01/')
-        self.assertTrue(Learner.objects.filter(code='hira_01').exists())
-        # 入ったあとは、入口を開いてもダッシュボードへ直行する
-        self.assertRedirects(self.client.get(reverse('fe:index')), '/fe/hira_01/')
+        self.assertRedirects(response, reverse('fe:mypage'))
+        created = Learner.objects.get(code='hira_01')
+        # 入ったあとは、マイページがその ID のダッシュボードになる（URL に ID は出ない）
+        self.assertEqual(self.client.get(reverse('fe:mypage')).context['learner'], created)
+        # ID なしの入口を開いても、マイページへ送る
+        self.assertRedirects(self.client.get(reverse('fe:index')), reverse('fe:mypage'))
 
     def test_create_refuses_a_taken_or_bad_id(self):
         make_learner('taken')
@@ -1101,45 +1106,58 @@ class LearnerIdTests(TestCase):
 
     def test_anyone_with_the_id_can_enter(self):
         """合言葉は無い。ID を入力した人を本人として扱う。"""
-        make_learner('shared')
-        self.assertRedirects(self._post('shared', 'enter'), '/fe/shared/')
+        shared = make_learner('shared')
+        self.assertRedirects(self._post('shared', 'enter'), reverse('fe:mypage'))
+        self.assertEqual(self.client.session[SESSION_LEARNER], shared.pk)
 
-    def test_only_the_current_id_can_open_its_dashboard(self):
+    def test_mypage_asks_for_an_id_when_not_entered(self):
+        """ID で入っていなければ、マイページは ID の入力欄を出す。"""
+        response = self.client.get(reverse('fe:mypage'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'fe/enter.html')
+        self.assertContains(response, '作った ID で入る')
+        self.assertEqual(self.client.get('/fe/enter/').status_code, 404)
+
+    def test_the_id_never_appears_in_the_url(self):
+        """ID は URL に使わない。ID ありの入口は誰でも /fe/mypage/ で、/fe/<ID>/ は無い。"""
         mine = make_learner('mine')
-        make_learner('theirs')
         enter(self.client, mine)
-        self.assertEqual(self.client.get('/fe/mine/').status_code, 200)
-        self.assertEqual(self.client.get('/fe/MINE/').status_code, 200)
-        self.assertEqual(self.client.get('/fe/theirs/').status_code, 404)
-        self.assertEqual(self.client.get('/fe/nobody/').status_code, 404)
+        response = self.client.get(reverse('fe:mypage'))
+        self.assertEqual(response.context['learner'], mine)
+        self.assertNotContains(response, '/fe/mine/')
+        for url in ('/fe/mine/', '/fe/MINE/', '/fe/nobody/'):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_without_an_id_other_pages_go_to_the_entrance(self):
-        make_learner('someone')
-        self.assertEqual(self.client.get('/fe/someone/').status_code, 302)
-        for name in ('fe:quiz', 'fe:stats', 'fe:history', 'fe:learn_start', 'fe:manage_list'):
+        for name in ('fe:quiz', 'fe:stats', 'fe:history', 'fe:learn_start'):
             with self.subTest(page=name):
-                self.assertRedirects(self.client.get(reverse(name)), reverse('fe:index'))
+                self.assertRedirects(
+                    self.client.get(reverse(name)), reverse('fe:index'),
+                    fetch_redirect_response=False,
+                )
 
     def test_the_enter_page_switches_ids_any_time(self):
-        """入ったあとでも入口を開け、別の ID を入力すれば何度でも切り替わる。"""
+        """入ったあとでも ?switch で入力欄を開け、別の ID を入力すれば何度でも切り替わる。"""
         first, second = make_learner('first'), make_learner('second')
         enter(self.client, first)
-        response = self.client.get(reverse('fe:enter'))
+        self.assertEqual(self.client.get(reverse('fe:mypage')).context['learner'], first)
+        response = self.client.get(reverse('fe:mypage') + '?switch')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'いまは ID「<strong>first</strong>」で入っています')
 
         self.assertRedirects(
-            self.client.post(reverse('fe:enter'), {'code': 'second', 'action': 'enter'}),
+            self.client.post(reverse('fe:mypage'), {'code': 'second', 'action': 'enter'}),
             dashboard(second),
         )
-        self.assertEqual(self.client.get(dashboard(first)).status_code, 404)
+        self.assertEqual(self.client.get(dashboard(second)).context['learner'], second)
         self.assertRedirects(
-            self.client.post(reverse('fe:enter'), {'code': 'first', 'action': 'enter'}),
+            self.client.post(reverse('fe:mypage'), {'code': 'first', 'action': 'enter'}),
             dashboard(first),
         )
         self.assertRedirects(
-            self.client.post(reverse('fe:enter'), {'code': 'third', 'action': 'create'}),
-            '/fe/third/',
+            self.client.post(reverse('fe:mypage'), {'code': 'third', 'action': 'create'}),
+            reverse('fe:mypage'),
         )
 
     def test_every_page_links_to_the_enter_page(self):
@@ -1147,7 +1165,7 @@ class LearnerIdTests(TestCase):
         enter(self.client, learner)
         for url in (dashboard(learner), reverse('fe:stats'), reverse('fe:quiz')):
             with self.subTest(url=url):
-                self.assertContains(self.client.get(url), reverse('fe:enter'))
+                self.assertContains(self.client.get(url), reverse('fe:mypage'))
 
     def test_ids_in_the_same_account_are_separate(self):
         """同じアカウントでも、ID が違えば成績は別。問題集は共有。"""
@@ -1157,21 +1175,32 @@ class LearnerIdTests(TestCase):
         enter(self.client, second)
         response = self.client.get(dashboard(second))
         self.assertEqual(response.context['question_total'], Question.objects.count())
+        response = self.client.get(reverse('fe:stats'))
         self.assertEqual(response.context['overall']['total'], 0)
 
-    def test_only_an_admin_id_can_manage_questions(self):
+    def test_managing_is_a_separate_page(self):
+        """問題の管理は /fe/console/ の下の別ページ。学習の画面のヘッダーには入口を出さない。"""
         build_questions()
-        enter(self.client, make_learner('plain'))
-        for name in ('fe:manage_list', 'fe:manage_upload'):
-            with self.subTest(page=name):
-                self.assertEqual(self.client.get(reverse(name)).status_code, 403)
-        response = self.client.post(reverse('fe:manage_upload'), {})
-        self.assertEqual(response.status_code, 403)
-        self.assertNotContains(self.client.get(reverse('fe:stats')), '問題の管理')
+        enter(self.client, make_learner('boss'))
+        self.assertNotContains(self.client.get(reverse('fe:stats')), reverse('fe:manage_list'))
+        login_staff(self.client)
+        self.assertEqual(reverse('fe:manage_list'), '/fe/console/questions/')
+        self.assertEqual(reverse('fe:manage_upload'), '/fe/console/upload/')
+        self.assertRedirects(self.client.get('/fe/console/'), reverse('fe:manage_list'))
 
-        enter(self.client, make_learner('boss', is_admin=True))
-        self.assertEqual(self.client.get(reverse('fe:manage_list')).status_code, 200)
-        self.assertContains(self.client.get(reverse('fe:stats')), '問題の管理')
+    def test_learning_pages_do_not_reveal_the_console(self):
+        """スタッフでログインしていても、学習の画面には管理のページがあることを出さない。"""
+        build_questions()
+        learner = make_learner('hider')
+        enter(self.client, learner)
+        for url in (dashboard(learner), reverse('fe:quiz'), reverse('fe:learn_start'),
+                    reverse('fe:stats'), reverse('fe:history'), reverse('fe:guide'),
+                    reverse('fe:mypage')):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode('utf-8')
+                self.assertNotIn('/fe/console/', html)
+                self.assertNotIn('問題の管理', html)
+                self.assertNotIn('取り込', html)
 
 
 class ManageTests(TestCase):
@@ -1180,11 +1209,11 @@ class ManageTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         seed_masters()
-        cls.learner = make_learner('owner', is_admin=True)
+        cls.learner = make_learner('owner')
         cls.other = make_learner('stranger')
 
     def setUp(self):
-        enter(self.client, self.learner)
+        login_staff(self.client)
 
     def _upload(self, n=3, prefix='問題'):
         """取り込みは JSON ファイルだけなので、テストもファイルで投げる。"""
@@ -1465,8 +1494,7 @@ class ImportNotesTests(TestCase):
 
     def test_both_files_can_be_uploaded_at_once(self):
         """問題と解説を別々の欄で選んで、1回で取り込める。"""
-        admin = make_learner('twofiles', is_admin=True)
-        enter(self.client, admin)
+        login_staff(self.client)
         questions = json.dumps({'questions': [
             {'category': 11, 'stem': 'まとめて取り込む問題',
              'choices': ['a', 'b', 'c', 'd'], 'answer': 0},
@@ -1485,8 +1513,7 @@ class ImportNotesTests(TestCase):
         """解説の欄だけ選んでも取り込める。問題には触らない。"""
         build_questions(per_category=1)
         before = Question.objects.count()
-        admin = make_learner('notesonly', is_admin=True)
-        enter(self.client, admin)
+        login_staff(self.client)
         notes = json.dumps({'notes': build_notes()}, ensure_ascii=False)
 
         response = self.client.post(reverse('fe:manage_upload'), {
@@ -1498,8 +1525,7 @@ class ImportNotesTests(TestCase):
 
     def test_upload_needs_at_least_one_file(self):
         """どの欄も選ばずに送ったら、理由を添えて止める。"""
-        admin = make_learner('nofile', is_admin=True)
-        enter(self.client, admin)
+        login_staff(self.client)
         response = self.client.post(reverse('fe:manage_upload'), {})
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '取り込むファイルを1つ以上選んでください')
@@ -1508,8 +1534,7 @@ class ImportNotesTests(TestCase):
         """欄と中身の側・科目が合わないファイルは、取り込む前に止める。"""
         build_questions(per_category=1)
         before = Question.objects.count()
-        admin = make_learner('wrongslot', is_admin=True)
-        enter(self.client, admin)
+        login_staff(self.client)
         a_questions = json.dumps({'questions': [
             {'category': 11, 'subject': 'A', 'stem': 'x', 'choices': ['a', 'b'], 'answer': 0},
         ]}, ensure_ascii=False).encode('utf-8')
@@ -1566,8 +1591,7 @@ class ImportNotesTests(TestCase):
 
     def test_four_files_can_be_uploaded_at_once(self):
         """4つの欄をまとめて選んで、1回で取り込める。"""
-        admin = make_learner('fourfiles', is_admin=True)
-        enter(self.client, admin)
+        login_staff(self.client)
         b = Category.objects.filter(subject='B').first()
         files = {
             'questions_a_file': {'questions': [
@@ -1629,8 +1653,7 @@ class ImportNotesTests(TestCase):
     def test_upload_screen_stops_before_a_large_removal(self):
         """画面でも、削除が多いファイルは一度で取り込まれない。"""
         build_questions(per_category=1)
-        admin = make_learner('uploader', is_admin=True)
-        enter(self.client, admin)
+        login_staff(self.client)
         before = Question.objects.count()
         kept = Question.objects.filter(template__isnull=True).first()
         payload = json.dumps({'questions': [{
@@ -1750,14 +1773,13 @@ class LearningModeTests(TestCase):
             )
 
     def test_a_round_needs_a_note(self):
-        """解説が無ければ始められない。管理用の ID なら取り込み画面へ案内する。"""
+        """解説が無ければ始められず、「解説がありません。」とだけ出す。スタッフでも同じ。"""
         build_questions()
-        response = self.client.post(reverse('fe:learn_start'), {'minutes': 5})
+        enter(self.client, make_learner('curator'))
+        response = self.client.post(reverse('fe:learn_start'), {'minutes': 5}, follow=True)
         self.assertRedirects(response, reverse('fe:learn_start'))
-
-        enter(self.client, make_learner('curator', is_admin=True))
-        response = self.client.post(reverse('fe:learn_start'), {'minutes': 5})
-        self.assertRedirects(response, reverse('fe:manage_upload'))
+        self.assertContains(response, '解説がありません。')
+        self.assertNotContains(response, reverse('fe:manage_upload'))
         self.assertEqual(LearningRound.objects.count(), 0)
 
     def test_reading_phase_shows_the_note_not_the_questions(self):
@@ -2449,6 +2471,7 @@ class SiteSummaryTests(TestCase):
         self.assertEqual(site_summary()['total'], 1)
 
     def test_dashboard_shows_summary(self):
+        """みんなの集計は、ダッシュボードの後半に出す。"""
         answer(self.bob, self._question(self.bob, 11), True)
         response = self.client.get(dashboard(self.alice))
         self.assertContains(response, 'みんなの集計')
@@ -2554,64 +2577,66 @@ class ExamDefinitionTests(TestCase):
         self.assertLess(weight[14], weight[11])
 
     def test_upload_screen_shows_the_materials(self):
-        learner = make_learner('materials', is_admin=True)
-        enter(self.client, learner)
+        login_staff(self.client)
         response = self.client.get(reverse('fe:manage_upload'))
         self.assertEqual(response.status_code, 200)
         for material in EXAM['materials']:
             self.assertContains(response, material['name'])
         self.assertContains(response, EXAM['url'])
 
-    def test_materials_are_only_for_an_admin_id(self):
-        """問題を作る資料の案内は、問題集を管理する管理用の ID にだけ出す。"""
-        learner = make_learner('materials_plain')
+    def test_dashboard_has_no_materials(self):
+        """問題を作る資料の案内は取り込み画面にだけ置き、ダッシュボードには出さない。"""
+        learner = make_learner('materials_dash')
         enter(self.client, learner)
         response = self.client.get(dashboard(learner))
         self.assertNotContains(response, '問題を作るのに必要な資料')
         self.assertContains(response, '問題集はまだ用意されていません')
 
-    def test_dashboard_shows_the_materials(self):
-        learner = make_learner('materials_dash', is_admin=True)
-        enter(self.client, learner)
-        response = self.client.get(dashboard(learner))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '問題を作るのに必要な資料')
-        for material in EXAM['materials']:
-            self.assertContains(response, material['name'])
-
 
 class ManageNeedsStaffTests(TestCase):
-    """問題の管理は、管理用の ID に加えて、スタッフ権限のあるアカウントが要る。"""
+    """問題の管理は、スタッフ権限のあるアカウントでのログインだけが要る。学習用の ID は問わない。"""
 
     PAGES = ('fe:manage_list', 'fe:manage_upload')
 
     @classmethod
     def setUpTestData(cls):
         seed_masters()
-        cls.admin_id = make_learner('gatekeeper', is_admin=True)
 
-    def _enter_as(self, username, is_staff):
+    def _login_as(self, username, is_staff):
         account = CustomUser.objects.create_user(
             username=username, password='pass12345', is_staff=is_staff,
         )
         self.client.force_login(account)
-        put_learner(self.client, self.admin_id.pk)
 
-    def test_an_ordinary_account_cannot_manage_even_with_the_admin_id(self):
-        """誰でも作れるアカウントでは、管理用の ID を知っていても開けない。"""
-        self._enter_as('visitor', is_staff=False)
+    def test_learning_pages_do_not_reveal_the_console(self):
+        """ダッシュボードや問題の画面には、管理ページの存在を出さない。"""
+        build_questions()
+        learner = make_learner('hidden')
+        enter(self.client, learner)
+        for url in (dashboard(learner), reverse('fe:quiz'), reverse('fe:learn_start'),
+                    reverse('fe:stats'), reverse('fe:history'), reverse('fe:guide'),
+                    reverse('fe:mypage')):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode('utf-8')
+                self.assertNotIn('/fe/console/', html)
+                self.assertNotIn('問題の管理', html)
+                self.assertNotIn('取り込', html)
+
+    def test_a_staff_account_can_manage_without_any_id(self):
+        self._login_as('noid', is_staff=True)
+        for name in self.PAGES:
+            with self.subTest(page=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+
+    def test_an_ordinary_account_cannot_manage(self):
+        """スタッフでないアカウントでは開けない。"""
+        self._login_as('visitor', is_staff=False)
         for name in self.PAGES:
             with self.subTest(page=name):
                 self.assertEqual(self.client.get(reverse(name)).status_code, 403)
         self.assertEqual(
             self.client.post(reverse('fe:manage_upload'), {}).status_code, 403
         )
-
-    def test_a_staff_account_can_manage_with_the_admin_id(self):
-        self._enter_as('keeper', is_staff=True)
-        for name in ('fe:manage_list', 'fe:manage_upload'):
-            with self.subTest(page=name):
-                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
 
 
 
@@ -3535,3 +3560,60 @@ class XPostTests(TestCase):
             response = self.client.post(reverse('fe:post_x'), {'slot': 'noon'},
                                         HTTP_X_FE_X_TOKEN='secret')
         self.assertEqual(response.status_code, 502)
+
+
+class PageViewTests(TestCase):
+    """学習の画面のページビュー。日付・画面・ID の有無ごとの件数だけを数える。"""
+
+    BROWSER = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1'
+
+    @classmethod
+    def setUpTestData(cls):
+        seed_masters()
+        build_questions()
+
+    def _count(self, page, with_id):
+        row = PageViewCount.objects.filter(page=page, with_id=with_id).first()
+        return row.count if row else 0
+
+    def test_counts_each_page_by_id(self):
+        self.client.get(reverse('fe:index'), HTTP_USER_AGENT=self.BROWSER)
+        self.client.get(reverse('fe:index'), HTTP_USER_AGENT=self.BROWSER)
+        self.client.get(reverse('fe:quiz'), HTTP_USER_AGENT=self.BROWSER)
+        self.assertEqual(self._count('index', False), 2)
+        self.assertEqual(self._count('quiz', False), 1)
+
+        enter(self.client, make_learner('counted'))
+        self.client.get(reverse('fe:mypage'), HTTP_USER_AGENT=self.BROWSER)
+        self.client.get(reverse('fe:stats'), HTTP_USER_AGENT=self.BROWSER)
+        self.assertEqual(self._count('mypage', True), 1)
+        self.assertEqual(self._count('stats', True), 1)
+        # 1回ごとの行は作らない
+        self.assertEqual(PageViewCount.objects.count(), 4)
+
+    def test_robots_and_redirects_are_not_counted(self):
+        for agent in ('', 'Googlebot/2.1 (+http://www.google.com/bot.html)', 'bingbot/2.0',
+                      'python-requests/2.32', 'curl/8.7.1'):
+            with self.subTest(agent=agent):
+                self.client.get(reverse('fe:index'), HTTP_USER_AGENT=agent)
+        # 入っていない人の 1問1答 は入口へ送られるだけなので数えない
+        self.client.logout()
+        self.client.cookies.clear()
+        self.client.get(reverse('fe:quiz'), HTTP_USER_AGENT=self.BROWSER)
+        self.assertFalse(PageViewCount.objects.exists())
+
+    def test_console_is_not_counted_and_shows_the_table(self):
+        self.client.get(reverse('fe:guide'), HTTP_USER_AGENT=self.BROWSER)
+        login_staff(self.client)
+        response = self.client.get(reverse('fe:manage_pageviews'), HTTP_USER_AGENT=self.BROWSER)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['views']['grand_total'], 1)
+        self.assertEqual(len(response.context['views']['daily']), 30)
+        self.assertContains(response, 'このアプリについて')
+        self.assertEqual(PageViewCount.objects.count(), 1)
+
+    def test_console_needs_a_staff_login(self):
+        self.assertEqual(self.client.get(reverse('fe:manage_pageviews')).status_code, 302)
+        account = CustomUser.objects.create_user(username='plain', password='pass12345')
+        self.client.force_login(account)
+        self.assertEqual(self.client.get(reverse('fe:manage_pageviews')).status_code, 403)

@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% comment %}
+fe の画面の土台。サイト共通の黒いナビゲーションバー（HIRAHIRAROOM）は出さず、
+各画面の青いヘッダー（fe/_header.html）だけにする。
+フッターには、IPA の問題の出典と、自作の問題・解説の扱いを書く。
+{% endcomment %}
+
+{% block site_nav %}{% endblock %}
+
+{% block footer_note %}
+<p class="mb-2 text-center small" style="color:#bbb;">
+    問題の一部は、独立行政法人情報処理推進機構（IPA）が公開している基本情報技術者試験の公開問題・サンプル問題を引用しています。
+</p>
+<p class="mb-3 text-center small" style="color:#bbb;">
+    それ以外の問題・解説は HirahiraRoom の自作です。無断転載を禁じます。
+</p>
+{% endblock %}
