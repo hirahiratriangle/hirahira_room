@@ -938,7 +938,7 @@ class AboutTests(TestCase):
         res = self.client.get(reverse('genba:about'))
         self.assertContains(res, '会社の成長は、人から始まる。')
         self.assertContains(res, f'href="{reverse("genba:portal")}"')
-        self.assertContains(res, 'プロトタイプ（現場）')
+        self.assertContains(res, 'デモ（genba）')
         self.assertContains(res, 'disabled">構想プレゼン</span>')
 
     def test_no_site_header_like_fe(self):

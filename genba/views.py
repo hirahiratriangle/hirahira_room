@@ -42,7 +42,7 @@ class AboutView(generic.TemplateView):
 
     genba の立場を使わないので GuestMixin は通さない（誰でも同じ内容）。
     文言は kit.ABOUT_* に持つ。説明を読んだあとに具体へ進めるよう、最下部に2つのボタンを並べる。
-    構想プレゼンは kit.CONCEPT_DECK_URL に URL を書くと押せる。プロトタイプ（現場）は genba 本体へ進む。
+    構想プレゼンは kit.CONCEPT_DECK_URL に URL を書くと押せる。デモ（genba）は genba 本体へ進む。
     """
     template_name = 'genba/about.html'
 
