@@ -1,6 +1,6 @@
 {% comment %}
 X に投稿した問題の解答ページ（XAnswerView）。X から開いた人がすぐ問題を読めるよう、
-サイト共通の大きなナビゲーションは出さず、細い見出しの帯だけにした単独のページ。
+ヘッダーを持たず、問題から始まる単独のページ。
 post が None のときは、期限切れ・存在しない投稿の案内ページになる。
 
 幅で3段に分ける。スマホ（〜767px）は画面いっぱい、タブレット（768〜1023px）は
@@ -21,19 +21,17 @@ post が None のときは、期限切れ・存在しない投稿の案内ペー
     <style>
         :root {
             --x-bg: #f3f5f8; --x-card: #ffffff; --x-text: #1f2933; --x-muted: #5f6b7a;
-            --x-border: #d9dee5; --x-accent: #2c5aa0; --x-bar: #2c5aa0; --x-hover: #eef3fa;
+            --x-border: #d9dee5; --x-accent: #2c5aa0; --x-hover: #eef3fa;
             --x-ok-bg: #e6f4ea; --x-ok: #1e7e34; --x-ng-bg: #fbe9eb; --x-ng: #b02a37;
         }
         @media (prefers-color-scheme: dark) {
             :root {
                 --x-bg: #15181d; --x-card: #1f242b; --x-text: #e6e9ee; --x-muted: #a3adba;
-                --x-border: #3a424d; --x-accent: #7fa6e0; --x-bar: #1f3f70; --x-hover: #27303b;
+                --x-border: #3a424d; --x-accent: #7fa6e0; --x-hover: #27303b;
                 --x-ok-bg: #173a24; --x-ok: #7fd49a; --x-ng-bg: #43191f; --x-ng: #f19aa4;
             }
         }
         body { background: var(--x-bg); color: var(--x-text); font-size: 16px; line-height: 1.8; }
-        .x-bar { background: var(--x-bar); color: #fff; font-size: .95rem; }
-        .x-bar a { color: #fff; text-decoration: none; }
         .x-wrap { margin: 0 auto; padding: 1rem 16px 3rem; }
         .x-card { background: var(--x-card); border: 1px solid var(--x-border); border-radius: .5rem; padding: 1rem; }
         .x-stem { white-space: pre-wrap; }
@@ -75,12 +73,6 @@ post が None のときは、期限切れ・存在しない投稿の案内ペー
     </style>
 </head>
 <body>
-<header class="x-bar">
-    <div class="x-wrap py-2" style="padding-bottom:.5rem;">
-        <span>基本情報 今日の問題</span>
-    </div>
-</header>
-
 <main class="x-wrap">
 {% if not post %}
     <div class="x-card">
