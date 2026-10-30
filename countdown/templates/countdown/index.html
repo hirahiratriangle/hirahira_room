@@ -15,8 +15,7 @@
                 <a href="{% url 'countdown:event_list' %}" class="btn btn-light me-2">一覧を見る</a>
                 <a href="{% url 'countdown:event_create' %}" class="btn btn-outline-light">新規登録</a>
                 {% else %}
-                <a href="{% url 'account_login' %}" class="btn btn-light me-2">ログイン</a>
-                <a href="{% url 'account_signup' %}" class="btn btn-outline-light">アカウント作成</a>
+                <a href="{% url 'account_login' %}" class="btn btn-light">ログイン</a>
                 {% endif %}
             </div>
         </div>

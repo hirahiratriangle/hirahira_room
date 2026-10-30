@@ -2,11 +2,21 @@ from django.contrib import admin
 from django.contrib.staticfiles.urls import static
 from django.urls import path, include
 from django.conf import settings
+from django.contrib.auth.decorators import login_not_required
+from django.http import Http404
+
+
+@login_not_required  # ログイン画面へ回さず、誰が開いても「ない」と返す
+def signup_removed(request):
+    """新規アカウント作成の画面はない。アカウントは管理画面で作る。"""
+    raise Http404
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
     # 認証（django-allauth）
+    # 新規アカウント作成はサイトから外した。allauth の signup より先に当てて 404 にする
+    path('accounts/signup/', signup_removed),
     path('accounts/', include('allauth.urls')),
 
     # ホーム画面（ログイン必須）
@@ -26,8 +36,6 @@ urlpatterns = [
 
     # 基本情報技術者試験（FE）対策アプリ
     path('fe/', include('fe.urls', namespace='fe')),
-    # 応用情報技術者試験（AP）対策アプリ
-    path('ap/', include('ap.urls', namespace='ap')),
     # 銀行業務検定 法務3級 対策アプリ
     path('bk_houmu3/', include('bk_houmu3.urls', namespace='bk_houmu3')),
     # genba（1現場1リポジトリの記録を4つの立場で使う）

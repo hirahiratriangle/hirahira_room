@@ -27,7 +27,6 @@ INSTALLED_APPS = [
     'jpcore',
     'countdown',
     'fe',
-    'ap',
     'bk_houmu3',
     'genba',
 ]
@@ -169,6 +168,11 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 # allauth のメール件名の接頭辞。未指定だと Site の名前（例: [example.com]）が
 # 使われてしまうため明示する。
 ACCOUNT_EMAIL_SUBJECT_PREFIX = f'[{SITE_DISPLAY_NAME}] '
+
+# 一般公開をやめたので、アカウントの新規作成を受け付けない。
+# /accounts/signup/ は config/urls.py で 404 にしてある。これは、それ以外の道筋
+# （ソーシャルログインからの作成など）でも作られないようにするための二重の止め。
+ACCOUNT_ADAPTER = 'accounts.adapter.ClosedSignupAdapter'
 
 # ==================================
 # カウントダウンのリマインド通知
