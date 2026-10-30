@@ -49,6 +49,8 @@ from genba.models import (
 )
 from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
+from ._seed_activity import seed_activity
+
 DEMO_PREFIX = 'genba-demo-'
 DEMO_USERS = ['demo_sato', 'demo_suzuki', 'demo_takahashi',
               'demo_tanaka', 'demo_ito', 'demo_watanabe', 'demo_yamamoto', 'demo_nakamura']
@@ -96,6 +98,13 @@ class Command(BaseCommand):
         self.seed_logistics(users['demo_takahashi'])
         self.seed_claims(me, *(users[n] for n in ('demo_tanaka', 'demo_ito', 'demo_watanabe', 'demo_yamamoto')))
         self.seed_stock(users['demo_nakamura'])
+        # 筋書きのあとに、過去の活動（週報・確認事項・作業・議事録など）を多めに足す。
+        # ゲスト本人は外す（本人の画面の筋書き：危険信号・出していない週を変えないため）
+        for key in ('order', 'logistics', 'claims', 'stock'):
+            site = Site.objects.get(repo_name=f'{DEMO_PREFIX}{key}')
+            members = [m.user for m in site.memberships.select_related('user')]
+            # 店舗在庫（ひとり現場）は直近8週の週報を足さない：見ている人がいないと週報が滞る、という筋書き
+            seed_activity(self, site, key, members, skip=(me,), quiet_weeks=8 if key == 'stock' else 0)
         self.stdout.write(self.style.SUCCESS(
             f'デモの現場を4つ（うちひとり現場2つ）作りました（{me.username} が4つの立場を兼ねます）。'))
 
