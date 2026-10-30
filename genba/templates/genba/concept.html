@@ -2,87 +2,233 @@
 
 {% block title %}構想プレゼン - genba | HirahiraRoom{% endblock %}
 
-{% comment %}fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRAROOM）は出さない{% endcomment %}
+{% comment %}
+構想プレゼンのページ。1枚ずつ送って読む。内容は concept_data.SLIDES、配色は下の CSS 変数で、どちらも「genba 構想.pptx」のまま。
+JavaScript が動かないときは、全スライドが縦に並ぶ（html.concept-paged のときだけ1枚に絞る）。
+fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRAROOM）は出さない。
+{% endcomment %}
 {% block site_nav %}{% endblock %}
 
 {% block head %}
 <style>
-    .concept-slide { border: 1px solid #dee2e6; border-radius: .5rem; background: #fff; padding: 2rem; margin-bottom: 1.5rem; }
-    .concept-solid { background: #2c5aa0; color: #fff; border-color: #2c5aa0; text-align: center; padding: 4rem 2rem; }
-    .concept-kicker { color: #2c5aa0; font-weight: 700; font-size: .85rem; }
-    .concept-title { color: #2c5aa0; font-size: 1.35rem; font-weight: 700; margin-bottom: 1.25rem; }
-    .concept-label { color: #2c5aa0; font-weight: 700; font-size: .85rem; margin-bottom: .25rem; }
-    .concept-sub { color: #2c5aa0; font-size: .85rem; margin-top: .5rem; }
-    .concept-no { color: #6c757d; font-size: .75rem; text-align: right; margin-top: 1rem; }
-    .concept-solid .concept-no { color: #dbe6f5; }
-    .concept-note { border-left: 4px solid #2c5aa0; background: #f3f6fb; padding: .5rem .75rem; font-size: .9rem; }
-    .concept-flow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem; font-size: .9rem; }
-    .concept-flow span { border: 1px solid #2c5aa0; color: #2c5aa0; border-radius: 2rem; padding: .25rem .75rem; }
-    .concept-step { flex: 1 1 9rem; min-width: 0; }
-    .concept-slide table { min-width: 32rem; }
-    .concept-slide th:first-child, .concept-slide td:first-child { white-space: nowrap; }
+    :root {
+        --deck-ink: #1F2A2E; --deck-dark: #1E2B2A; --deck-dark-text: #EEF2EE; --deck-dark-sub: #B9CBC5; --deck-dark-muted: #8FA49F;
+        --deck-dark-card: #3F5A55; --deck-paper: #F6F4EE; --deck-card: #FDFCF9; --deck-line: #DAD6CB; --deck-sand: #ECEAE2;
+        --deck-sand-line: #B9B4A6; --deck-rule: #BCBBB4; --deck-mint: #E3EEE9; --deck-green: #2F6B5E; --deck-green-light: #7CC1A9;
+        --deck-green-mid: #4FA58E; --deck-body: #4A5257; --deck-muted: #7A8288; --deck-part-kicker: #CFE6DD; --deck-part-sub: #DCEBE5;
+    }
+    body { background: var(--deck-dark); }
+    .deck { font-family: "Yu Gothic", YuGothic, "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; color: var(--deck-ink); }
+    .deck-wrap { max-width: 1120px; margin: 0 auto; padding: 1rem; }
+
+    /* 操作の帯 */
+    .deck-bar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; color: var(--deck-dark-sub); font-size: .85rem; padding: .25rem 0 .75rem; }
+    .deck-bar a { color: var(--deck-dark-sub); white-space: nowrap; }
+    .deck-pager { display: flex; align-items: center; gap: .5rem; }
+    .deck-btn { background: transparent; border: 1px solid var(--deck-green-light); color: var(--deck-green-light); border-radius: .25rem; padding: .3rem .85rem; }
+    .deck-btn:hover:not(:disabled) { background: var(--deck-green-light); color: var(--deck-dark); }
+    .deck-btn:disabled { opacity: .35; }
+    .deck-count { min-width: 3.5rem; text-align: center; }
+    .deck-progress { height: 3px; background: var(--deck-dark-card); margin-top: .75rem; }
+    .deck-progress div { height: 100%; width: 0; background: var(--deck-green-mid); }
+    .deck-demo { display: inline-block; background: var(--deck-green-light); color: var(--deck-dark) !important; border-radius: .25rem; padding: .3rem .85rem; text-decoration: none; font-weight: 700; }
+
+    /* スライド */
+    .slide { position: relative; display: flex; flex-direction: column; background: var(--deck-paper); padding: 2.25rem 3rem 2.75rem; margin-bottom: 1rem; }
+    .concept-paged .slide { display: none; margin-bottom: 0; }
+    .concept-paged .slide.is-current { display: flex; }
+    @media (min-width: 768px) { .concept-paged .slide { aspect-ratio: 16 / 9; overflow-y: auto; } }
+    .slide-kicker { color: var(--deck-green); font-weight: 700; font-size: .85rem; }
+    .slide-title { color: var(--deck-ink); font-size: 1.6rem; font-weight: 700; margin: .1rem 0 1.25rem; }
+    .slide-foot { position: absolute; left: 3rem; right: 3rem; bottom: .9rem; display: flex; justify-content: space-between; color: var(--deck-muted); font-size: .7rem; }
+    .slide-block { margin-bottom: .9rem; }
+
+    .slide-card { height: 100%; background: var(--deck-card); border: 1px solid var(--deck-line); border-radius: .35rem; padding: .85rem 1rem; }
+    .slide-card.tone-mint { background: var(--deck-mint); border-color: var(--deck-green); }
+    .slide-card.tone-sand { background: var(--deck-sand); border-color: var(--deck-sand-line); }
+    .slide-card h3 { color: var(--deck-ink); font-size: 1rem; font-weight: 700; margin-bottom: .35rem; }
+    .slide-card p, .slide-card ul { color: var(--deck-body); font-size: .85rem; margin-bottom: 0; }
+    .slide-card ul { padding-left: 1.1rem; }
+    .slide-label { color: var(--deck-green); font-weight: 700; font-size: .9rem; margin-bottom: .2rem; }
+    .slide-sub { color: var(--deck-green); font-size: .8rem; font-weight: 700; margin-top: .45rem; }
+    .slide-steps { display: flex; flex-wrap: wrap; gap: .6rem; }
+    .slide-steps > div { flex: 1 1 9rem; min-width: 0; }
+    .slide-heading { color: var(--deck-green); font-weight: 700; }
+    .slide-note { background: var(--deck-mint); border-left: 4px solid var(--deck-green); color: var(--deck-ink); padding: .5rem .75rem; font-size: .9rem; }
+    .slide-note.tone-sand { background: var(--deck-sand); border-left-color: var(--deck-sand-line); }
+    .slide-flow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .45rem; font-size: .85rem; color: var(--deck-green); }
+    .slide-flow span { background: var(--deck-mint); color: var(--deck-ink); border-radius: .25rem; padding: .25rem .7rem; }
+
+    .slide table { width: 100%; min-width: 32rem; border-collapse: collapse; font-size: .85rem; }
+    .slide th, .slide td { border: 1px solid var(--deck-rule); padding: .35rem .55rem; color: var(--deck-ink); background: var(--deck-card); vertical-align: middle; }
+    .slide th { background: var(--deck-sand); font-weight: 700; }
+    .slide th:first-child, .slide td:first-child { white-space: nowrap; }
+
+    /* 表紙・結び・濃い背景のスライド */
+    .slide-cover, .slide-end, .slide-dark { background: var(--deck-dark); }
+    .slide-cover { justify-content: center; border-left: 12px solid var(--deck-green-mid); }
+    .slide-cover .cover-kicker { color: var(--deck-green-light); font-weight: 700; letter-spacing: .15em; }
+    .slide-cover .cover-title { color: var(--deck-dark-text); font-size: 2.7rem; font-weight: 700; margin: 1.5rem 0; }
+    .slide-cover .cover-lead { color: var(--deck-green-light); font-size: 1.15rem; font-weight: 700; margin-bottom: .4rem; }
+    .slide-cover .cover-text { color: var(--deck-dark-sub); margin-bottom: 2rem; }
+    .slide-cover .cover-meta { color: var(--deck-dark-sub); font-size: .85rem; margin-bottom: 0; }
+    .slide-end { justify-content: center; }
+    .slide-end .end-title { color: var(--deck-dark-text); font-size: 2.2rem; font-weight: 700; margin: 0; }
+    .slide-dark .slide-kicker { color: var(--deck-green-light); }
+    .slide-dark .slide-title { color: var(--deck-dark-text); }
+    .slide-dark .slide-card { background: var(--deck-dark-card); border-color: var(--deck-dark-card); }
+    .slide-dark .slide-card p { color: var(--deck-dark-text); }
+    .slide-dark .slide-label { color: var(--deck-green-light); }
+    .slide-dark .slide-note { background: var(--deck-green-light); border-left: 0; color: var(--deck-dark); font-weight: 700; }
+    .slide-cover .slide-foot, .slide-end .slide-foot, .slide-dark .slide-foot { color: var(--deck-dark-muted); }
+
+    /* 章の扉 */
+    .slide-part { background: var(--deck-green); justify-content: center; }
+    .slide-part .part-kicker { color: var(--deck-part-kicker); font-weight: 700; }
+    .slide-part .part-title { color: var(--deck-paper); font-size: 2.7rem; font-weight: 700; margin: .75rem 0 1rem; }
+    .slide-part .part-text { color: var(--deck-part-sub); margin-bottom: 0; }
+    .slide-part .part-roles { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; padding: 0; margin: 1.5rem 0 0; }
+    .slide-part .part-roles li { border: 1px solid var(--deck-part-kicker); color: var(--deck-paper); border-radius: .25rem; padding: .25rem .7rem; font-size: .85rem; font-weight: 700; }
+    .slide-part .part-roles li:first-child { background: var(--deck-paper); border-color: var(--deck-paper); color: var(--deck-ink); }
+    .slide-part .slide-foot { color: var(--deck-part-sub); }
+
+    @media (max-width: 767.98px) {
+        .deck-wrap { padding: .75rem; }
+        .deck-bar { font-size: .75rem; gap: .35rem; }
+        .deck-btn, .deck-demo { padding: .25rem .55rem; }
+        .deck-count { min-width: 3rem; }
+        .slide { padding: 1.5rem 1.25rem 2.5rem; }
+        .slide-foot { left: 1.25rem; right: 1.25rem; }
+        .slide-title { font-size: 1.3rem; }
+        .slide-cover .cover-title, .slide-part .part-title { font-size: 1.8rem; }
+        .slide-end .end-title { font-size: 1.5rem; }
+    }
 </style>
 {% endblock %}
 
-{% block header %}
-<header style="background-color: #2c5aa0;">
-    <div class="container px-5 py-4 text-center text-white">
-        <h1 class="h3 fw-bold mb-2">構想プレゼン</h1>
-        <p class="mb-0 small"><a href="{% url 'genba:about' %}" class="text-white">案内へ戻る</a></p>
-    </div>
-</header>
-{% endblock %}
-
 {% block contents %}
-<div class="container px-3 px-md-5 py-4" style="max-width: 960px;">
+<div class="deck"><div class="deck-wrap">
+    <nav class="deck-bar">
+        <a href="{% url 'genba:about' %}">案内へ戻る</a>
+        <div class="deck-pager">
+            <button type="button" class="deck-btn" id="deck-prev" aria-label="前のスライド"><i class="fas fa-chevron-left"></i></button>
+            <span class="deck-count" id="deck-count" aria-live="polite">1 / {{ total }}</span>
+            <button type="button" class="deck-btn" id="deck-next" aria-label="次のスライド"><i class="fas fa-chevron-right"></i></button>
+        </div>
+        <a class="deck-demo" href="{% url 'genba:demo' %}">デモ（genba）</a>
+    </nav>
+
     {% for s in slides %}
-    <section id="slide-{{ forloop.counter }}" class="concept-slide {% if s.kind != 'slide' %}concept-solid{% endif %}">
+    <section id="slide-{{ forloop.counter }}" class="slide{% if s.kind == 'cover' %} slide-cover{% elif s.kind == 'part' %} slide-part{% elif s.kind == 'end' %} slide-end{% elif s.dark %} slide-dark{% endif %}">
         {% if s.kind == 'cover' %}
-            <p class="display-5 fw-bold mb-3">{{ s.kicker }}</p>
-            <p class="h3 mb-3">{{ s.title }}</p>
-            <p class="mb-2">{{ s.lead }}</p>
-            <p class="mb-4">{{ s.text }}</p>
-            <p class="small mb-0">{{ s.meta }}</p>
+            <div class="cover-kicker">{{ s.kicker }}</div>
+            <div class="cover-title">{{ s.title }}</div>
+            <p class="cover-lead">{{ s.lead }}</p>
+            <p class="cover-text">{{ s.text }}</p>
+            <p class="cover-meta">{{ s.meta }}</p>
         {% elif s.kind == 'part' %}
-            <p class="small fw-bold mb-2">{{ s.kicker }}</p>
-            <p class="h3 mb-3">{{ s.title }}</p>
-            <p class="mb-0">{{ s.text }}</p>
-            {% if s.lines %}<ul class="list-unstyled small mt-3 mb-0">{% for line in s.lines %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+            <div class="part-kicker">{{ s.kicker }}</div>
+            <div class="part-title">{{ s.title }}</div>
+            <p class="part-text">{{ s.text }}</p>
+            {% if s.lines %}<ul class="part-roles">{% for line in s.lines %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
         {% elif s.kind == 'end' %}
-            <p class="h4 mb-0">{{ s.title }}</p>
+            <p class="end-title">{{ s.title }}</p>
         {% else %}
-            <div class="concept-kicker">{{ s.kicker }}</div>
-            <h2 class="concept-title">{{ s.title }}</h2>
+            <div class="slide-kicker">{{ s.kicker }}</div>
+            <h2 class="slide-title">{{ s.title }}</h2>
             {% for b in s.blocks %}
-            <div class="mb-3">
+            <div class="slide-block">
                 {% if b.type == 'cards' %}
-                <div class="row g-3">
+                <div class="row g-2">
                     {% for c in b.items %}<div class="col-md-{{ b.width }}">{% include 'genba/_concept_card.html' %}</div>{% endfor %}
                 </div>
                 {% elif b.type == 'steps' %}
-                <div class="d-flex flex-wrap align-items-stretch gap-2">
-                    {% for c in b.items %}<div class="concept-step">{% include 'genba/_concept_card.html' %}</div>{% endfor %}
+                <div class="slide-steps">
+                    {% for c in b.items %}<div>{% include 'genba/_concept_card.html' %}</div>{% endfor %}
                 </div>
                 {% elif b.type == 'table' %}
-                <div class="table-responsive"><table class="table table-sm small align-middle mb-0">
-                    <thead class="text-muted"><tr>{% for h in b.head %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+                <div class="table-responsive"><table>
+                    <thead><tr>{% for h in b.head %}<th>{{ h }}</th>{% endfor %}</tr></thead>
                     <tbody>{% for row in b.rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% endfor %}</tbody>
                 </table></div>
                 {% elif b.type == 'flow' %}
-                <div class="concept-flow">
-                    {% for item in b.items %}<span>{{ item }}</span>{% if not forloop.last %}<i class="fas fa-arrow-right text-muted"></i>{% elif b.loop %}<i class="fas fa-redo text-muted"></i>{% endif %}{% endfor %}
+                <div class="slide-flow">
+                    {% for item in b.items %}<span>{{ item }}</span>{% if not forloop.last %}<i class="fas fa-arrow-right"></i>{% elif b.loop %}<i class="fas fa-redo"></i>{% endif %}{% endfor %}
                 </div>
+                {% elif b.type == 'heading' %}
+                <div class="slide-heading">{{ b.text }}</div>
                 {% else %}
-                <div class="concept-note">{{ b.text }}</div>
+                <div class="slide-note{% if b.tone %} tone-{{ b.tone }}{% endif %}">{{ b.text }}</div>
                 {% endif %}
             </div>
             {% endfor %}
         {% endif %}
-        <div class="concept-no">{{ forloop.counter }} / {{ total }}</div>
+        {% if s.kind != 'cover' %}<div class="slide-foot"><span>{{ s.footer }}</span><span>{{ forloop.counter }}</span></div>{% endif %}
     </section>
     {% endfor %}
-    <div class="text-center mt-4">
-        <a class="btn btn-primary btn-lg" href="{% url 'genba:demo' %}">デモ（genba）</a>
-    </div>
-</div>
+
+    <div class="deck-progress"><div id="deck-progress"></div></div>
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ページ送り：前後のボタン・キーボード（← → スペース Home End）・スワイプで1枚ずつ送る。
+// 今のスライドは URL の #slide-N に持つので、再読み込みや共有をしても同じスライドが開く。
+(function () {
+    var slides = document.querySelectorAll('.slide');
+    var total = slides.length;
+    var prev = document.getElementById('deck-prev');
+    var next = document.getElementById('deck-next');
+    var current = 1;
+
+    function numberFromHash() {
+        var m = location.hash.match(/^#slide-(\d+)$/);
+        var n = m ? parseInt(m[1], 10) : 1;
+        return n >= 1 && n <= total ? n : 1;
+    }
+
+    function show(n, keepHash) {
+        current = Math.min(Math.max(n, 1), total);
+        slides.forEach(function (el, i) { el.classList.toggle('is-current', i === current - 1); });
+        document.getElementById('deck-count').textContent = current + ' / ' + total;
+        document.getElementById('deck-progress').style.width = (current / total * 100) + '%';
+        prev.disabled = current === 1;
+        next.disabled = current === total;
+        slides[current - 1].scrollTop = 0;
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        if (!keepHash) { history.replaceState(null, '', '#slide-' + current); }
+    }
+
+    document.documentElement.classList.add('concept-paged');
+    prev.addEventListener('click', function () { show(current - 1); });
+    next.addEventListener('click', function () { show(current + 1); });
+    window.addEventListener('hashchange', function () { show(numberFromHash(), true); });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.altKey || e.ctrlKey || e.metaKey) { return; }
+        var onControl = /^(BUTTON|A)$/.test(e.target.tagName);
+        if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !onControl)) { e.preventDefault(); show(current + 1); }
+        else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(current - 1); }
+        else if (e.key === 'Home') { e.preventDefault(); show(1); }
+        else if (e.key === 'End') { e.preventDefault(); show(total); }
+    });
+
+    // スワイプ。表の横スクロールと区別するため、横に大きく動かしたときだけ送る
+    var startX = null, startY = null;
+    document.addEventListener('touchstart', function (e) {
+        var inTable = e.target.closest && e.target.closest('.table-responsive');
+        startX = inTable ? null : e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', function (e) {
+        if (startX === null) { return; }
+        var dx = e.changedTouches[0].clientX - startX;
+        var dy = e.changedTouches[0].clientY - startY;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { show(current + (dx < 0 ? 1 : -1)); }
+    }, { passive: true });
+
+    show(numberFromHash());
+})();
+</script>
 {% endblock %}

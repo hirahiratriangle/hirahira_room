@@ -1043,4 +1043,8 @@ class ConceptTests(TestCase):
                      '始める前に、6つを決める', '多様な人こそ会社の礎。行けるところまで、皆で行こう。', 'Pull Request のレビュー'):
             self.assertContains(res, text)
         self.assertContains(res, 'id="slide-23"')
+        self.assertContains(res, 'id="deck-next"')
+        self.assertContains(res, '#2F6B5E')
+        self.assertContains(res, 'genba 構想 · 立場ごとの機能')
+        self.assertContains(res, 'id="slide-22" class="slide slide-dark"')
         self.assertContains(res, f'href="{reverse("genba:about")}"')
