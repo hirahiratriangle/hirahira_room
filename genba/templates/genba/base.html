@@ -33,6 +33,12 @@
 
 {% block contents %}
 <div class="container px-5 py-4">
+    {% comment %}立場の切り替え。押すとその立場のホームへ移る（views.DemoSwitchView）{% endcomment %}
+    <form method="post" class="d-flex flex-wrap align-items-center gap-2 mb-3 small">
+        {% csrf_token %}
+        <span class="text-muted">立場</span>
+        {% for p in personas %}<button class="btn btn-sm {% if p.key == current_persona %}btn-primary{% else %}btn-outline-primary{% endif %}" formaction="{% url 'genba:demo_switch' p.key %}">{{ p.label }}</button>{% endfor %}
+    </form>
     <ul class="nav nav-pills genba-tabs mb-4">
         {% if 'member' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'member' %}active{% endif %}" href="{% url 'genba:member_home' %}"><i class="fas fa-user me-1"></i>メンバー</a></li>{% endif %}
         {% if 'leader' in roles %}<li class="nav-item"><a class="nav-link {% if current_role == 'leader' %}active{% endif %}" href="{% url 'genba:leader_home' %}"><i class="fas fa-user-friends me-1"></i>リーダー</a></li>{% endif %}

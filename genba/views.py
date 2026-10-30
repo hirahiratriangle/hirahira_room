@@ -26,21 +26,31 @@ from .models import (
 )
 
 
-class GuestMixin:
-    """デモ：ログインしていない人は共通のゲストユーザーとして扱う（ログイン画面へは送らない）。
+class PersonaMixin:
+    """デモの立場の切り替え。選んだ立場の人（ペルソナ）として画面を動かす。
+
+    - 立場を選んだ人：ログインしていてもいなくても、その立場の人になる（訪問者ごとにセッションで持つ）
+    - 選んでいない未ログインの人：kit.DEMO_DEFAULT_PERSONA の人になる（ログイン画面へは送らない）
+    - 選んでいないログイン中の人：本人のまま
+
     dispatch より前の setup で入れ替えるので、各ビューの dispatch の判定にも効く。
-    LoginRequiredMiddleware からは urls.py で外している"""
+    LoginRequiredMiddleware からは urls.py で外している。入れ替えは genba のビューの中だけで、ログイン状態は変えない。
+    """
 
     def setup(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            request.user = roles.guest_user()
+        key = request.session.get(roles.PERSONA_SESSION_KEY)
+        if key not in roles.PERSONAS:
+            key = None if request.user.is_authenticated else kit.DEMO_DEFAULT_PERSONA
+        if key:
+            request.user = roles.persona_user(key)
+        request.genba_persona = key
         super().setup(request, *args, **kwargs)
 
 
 class AboutView(generic.TemplateView):
     """案内ページ。hirahira-room から最初に開くページで、構想を伝え、genba 本体（portal）へ案内する。
 
-    genba の立場を使わないので GuestMixin は通さない（誰でも同じ内容）。
+    genba の立場を使わないので PersonaMixin は通さない（誰でも同じ内容）。
     文言は kit.ABOUT_* に持つ。説明を読んだあとに具体へ進めるよう、最下部に2つのボタンを並べる。
     構想プレゼンは kit.CONCEPT_DECK_URL に URL を書くと押せる。デモ（genba）はデモの説明ページへ進む。
     """
@@ -57,7 +67,7 @@ class DemoGuideView(generic.TemplateView):
     """デモの説明ページ。案内ページと genba 本体のあいだに挟み、どのような組織・現場・メンバーがいるかを説明する。
 
     現場と人はデモデータから読む（seed_genba を変えても説明とずれないように）。説明の文言は kit.DEMO_* に持つ。
-    ゲスト（未ログインの人）は「あなた」と出す。デモデータがない現場は出さない。
+    ここで立場を選ぶと、その立場の人として本体に入る（DemoSwitchView）。デモデータがない現場は出さない。
     """
     template_name = 'genba/demo.html'
 
@@ -73,18 +83,32 @@ class DemoGuideView(generic.TemplateView):
                 # リーダーを先に、あとは入場した順に並べる
                 memberships = site.memberships.select_related('user').order_by('joined_on')
                 people = sorted(
-                    ({'name': 'あなた' if m.user.username == roles.GUEST_USERNAME else m.user.username,
+                    ({'name': m.user.username,
                       'role': m.get_role_display(), 'is_leader': m.role == Membership.ROLE_LEADER, 'duty': m.duty}
                      for m in memberships), key=lambda p: not p['is_leader'])
                 sites.append({'site': site, 'note': note, 'people': people,
                               'is_solo': not any(p['is_leader'] for p in people)})
             if sites:
                 teams.append({'name': name, 'sites': sites})
-        context.update(organization=kit.DEMO_ORGANIZATION, your_roles=kit.DEMO_YOUR_ROLES, teams=teams)
+        context.update(organization=kit.DEMO_ORGANIZATION, personas=kit.DEMO_PERSONAS, teams=teams,
+                       current_persona=self.request.session.get(roles.PERSONA_SESSION_KEY))
         return context
 
 
-class GenbaMixin(GuestMixin):
+class DemoSwitchView(View):
+    """立場を切り替える。選んだ立場をセッションに持ち、その立場のホームを開く。
+
+    今の画面に留まらないのは、切り替えた先の人がその現場に入っていないと 403 になるため。
+    """
+
+    def post(self, request, key):
+        if key not in roles.PERSONAS:
+            raise Http404
+        request.session[roles.PERSONA_SESSION_KEY] = key
+        return redirect(roles.PERSONAS[key]['home'])
+
+
+class GenbaMixin(PersonaMixin):
     """ナビに出す立場の一覧をテンプレートへ渡す"""
     role_name = ''
 
@@ -92,6 +116,9 @@ class GenbaMixin(GuestMixin):
         context = super().get_context_data(**kwargs)
         context['roles'] = roles.available_roles(self.request.user)
         context['current_role'] = self.role_name
+        # 立場の切り替えボタン（genba/base.html）
+        context['personas'] = kit.DEMO_PERSONAS
+        context['current_persona'] = self.request.genba_persona
         return context
 
 
@@ -317,7 +344,7 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
         return context
 
 
-class SiteArchiveView(GuestMixin, View):
+class SiteArchiveView(PersonaMixin, View):
     """現場の一生の最後。Archive した現場は読むだけになる（リーダーだけが切り替える）"""
 
     def post(self, request, site_pk):
@@ -463,7 +490,7 @@ class IssueDetailView(GenbaMixin, generic.DetailView):
         return self.render_to_response(self.get_context_data(**{f'{name}_form': form}))
 
 
-class QuestionToggleView(GuestMixin, View):
+class QuestionToggleView(PersonaMixin, View):
     """Issue を解決済みにする／未解決に戻す（同じ現場の人なら誰でも）"""
 
     def post(self, request, pk):
@@ -477,7 +504,7 @@ class QuestionToggleView(GuestMixin, View):
         return redirect(request.POST.get('next') or question.get_absolute_url())
 
 
-class ChecklistItemToggleView(GuestMixin, View):
+class ChecklistItemToggleView(PersonaMixin, View):
     """チェック項目を済みにする／戻す。全部済めば作業 Issue も閉じる。"""
 
     def post(self, request, pk):
@@ -719,7 +746,7 @@ class DocumentUpdateView(GenbaMixin, generic.UpdateView):
         return context
 
 
-class KnowledgeActionView(GuestMixin, View):
+class KnowledgeActionView(PersonaMixin, View):
     """公開レビュー：現場チームの誰かが候補にする／候補から外す。リーダーが公開をやめる。
     本人に公開範囲を選ばせない（憲章 III）。公開はリーダーが一般化した版を書いて行う（KnowledgePublishView）。"""
 

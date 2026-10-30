@@ -22,12 +22,16 @@
     </section>
 
     <section class="mb-5">
-        <h2 class="h5 mb-3" style="color: #2c5aa0;">あなたの立場</h2>
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">立場を選ぶ</h2>
         <div class="row g-3">
-            {% for icon, name, place, point in your_roles %}
-            <div class="col-md-6"><div class="card h-100"><div class="card-body">
-                <h3 class="h6 fw-bold"><i class="fas {{ icon }} me-2" style="color: #2c5aa0;"></i>{{ name }}<span class="fw-normal text-muted ms-2">{{ place }}</span></h3>
-                <p class="small mb-0">{{ point }}</p>
+            {% for p in personas %}
+            <div class="col-md-6"><div class="card h-100"><div class="card-body d-flex flex-column">
+                <h3 class="h6 fw-bold"><i class="fas {{ p.icon }} me-2" style="color: #2c5aa0;"></i>{{ p.label }}<span class="fw-normal text-muted ms-2">{{ p.username }} ・ {{ p.place }}</span></h3>
+                <p class="small">{{ p.point }}</p>
+                <form method="post" action="{% url 'genba:demo_switch' p.key %}" class="mt-auto">
+                    {% csrf_token %}
+                    <button class="btn btn-sm {% if p.key == current_persona %}btn-primary{% else %}btn-outline-primary{% endif %}">この立場で見る</button>
+                </form>
             </div></div></div>
             {% endfor %}
         </div>
@@ -50,9 +54,5 @@
         </div>
     </section>
     {% endfor %}
-
-    <div class="text-center">
-        <a class="btn btn-primary btn-lg" href="{% url 'genba:portal' %}">デモを始める</a>
-    </div>
 </div>
 {% endblock %}

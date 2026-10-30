@@ -7,23 +7,27 @@ from django.contrib.auth.models import Group
 
 from accounts.models import CustomUser
 
+from . import kit
 from .models import Membership, Site
 
 GROUP_MANAGEMENT = 'genba_management'
 GROUP_COMPANY = 'genba_company'
-GUEST_USERNAME = 'genba_guest'
+# 立場の切り替え（デモ）：どの立場を選んでいるかをセッションのこのキーに持つ
+PERSONA_SESSION_KEY = 'genba_persona'
+# ペルソナのうち、Django のグループで立場を持つもの（メンバー・リーダーは現場の Membership で持つ）
+PERSONA_GROUPS = {'management': GROUP_MANAGEMENT, 'company': GROUP_COMPANY}
+PERSONAS = {p['key']: p for p in kit.DEMO_PERSONAS}
 
 
-def guest_user():
-    """デモ：ログインしていない人が共通で使うユーザー。マネジメント・会社の立場も持たせ、
-    4つの立場の画面をログインせずに試せるようにする"""
-    user, created = CustomUser.objects.get_or_create(
-        username=GUEST_USERNAME, defaults={'email': f'{GUEST_USERNAME}@example.com'})
+def persona_user(key):
+    """その立場の人（デモのユーザー）を返す。なければ作る。パスワードは使えないので、ログインはできない"""
+    username = PERSONAS[key]['username']
+    user, created = CustomUser.objects.get_or_create(username=username, defaults={'email': f'{username}@example.com'})
     if created:
         user.set_unusable_password()
         user.save()
-        for name in (GROUP_MANAGEMENT, GROUP_COMPANY):
-            user.groups.add(Group.objects.get_or_create(name=name)[0])
+        if key in PERSONA_GROUPS:
+            user.groups.add(Group.objects.get_or_create(name=PERSONA_GROUPS[key])[0])
     return user
 
 

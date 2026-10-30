@@ -11,6 +11,7 @@ urlpatterns = [
     path('about/', views.AboutView.as_view(), name='about'),
     # デモの説明ページ（案内ページと genba 本体のあいだ）
     path('demo/', views.DemoGuideView.as_view(), name='demo'),
+    path('demo/as/<str:key>/', views.DemoSwitchView.as_view(), name='demo_switch'),
     # 現場テンプレートと言い回し集（全現場共通）
     path('kit/', views.KitView.as_view(), name='kit'),
     path('kit/phrases/', views.PhrasesView.as_view(), name='phrases'),
@@ -49,6 +50,6 @@ urlpatterns = [
     path('knowledge/<str:model>/<int:pk>/<str:action>/', views.KnowledgeActionView.as_view(), name='knowledge_action'),
 ]
 
-# デモ：genba はログインせずに使える（未ログインの人はゲストユーザーになる。views.GuestMixin）
+# デモ：genba はログインせずに使える（未ログインの人も、選んだ立場の人として動く。views.PersonaMixin）
 for pattern in urlpatterns:
     login_not_required(pattern.callback)

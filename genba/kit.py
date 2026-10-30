@@ -183,13 +183,19 @@ CONCEPT_DECK_URL = ''
 
 DEMO_PREFIX = 'genba-demo-'  # デモの現場のリポジトリ名の頭。seed_genba もこれを使う
 DEMO_ORGANIZATION = '架空の SI 会社です。チームが2つあり、それぞれのメンバーが顧客の現場に入っています。'
-# あなた（未ログインの人が使うゲスト）が兼ねる4つの立場：立場・どこで・見どころ
-DEMO_YOUR_ROLES = [
-    ('fa-user', 'メンバー', '保険金請求 基本設計', '入場から6日目。読めない資料があり、危険信号が出ている'),
-    ('fa-user-friends', 'リーダー', '受発注システム刷新', 'メンバーの詰まりと、成長の確認待ちが届いている'),
-    ('fa-chart-bar', 'マネジメント', 'すべての現場', '現場単位の運営指標と、成長の承認待ち'),
-    ('fa-building', '会社', '全社', '公開されたナレッジと、個人のスキル台帳'),
+# 訪問者が切り替える4つの立場（ペルソナ）。立場ごとに別の人がいる（ひとりが全部を持つのは現実的でないため）。
+# key：セッションに持つ値 ／ username：その立場の人 ／ place・point：説明ページの文言 ／ home：入ったときに開く画面
+DEMO_PERSONAS = [
+    {'key': 'member', 'icon': 'fa-user', 'label': 'メンバー', 'username': 'demo_kimura', 'place': '保険金請求 基本設計',
+     'point': '入場から6日目。読めない資料があり、危険信号が出ている', 'home': 'genba:member_home'},
+    {'key': 'leader', 'icon': 'fa-user-friends', 'label': 'リーダー', 'username': 'demo_kobayashi',
+     'place': '受発注システム刷新', 'point': 'メンバーの詰まりと、成長の確認待ちが届いている', 'home': 'genba:leader_home'},
+    {'key': 'management', 'icon': 'fa-chart-bar', 'label': 'マネジメント', 'username': 'demo_kacho', 'place': 'すべての現場',
+     'point': '現場単位の運営指標と、成長の承認待ち', 'home': 'genba:management'},
+    {'key': 'company', 'icon': 'fa-building', 'label': '会社', 'username': 'demo_honbu', 'place': '全社',
+     'point': '公開されたナレッジと、個人のスキル台帳', 'home': 'genba:company'},
 ]
+DEMO_DEFAULT_PERSONA = 'member'  # 立場を選ばずに本体を開いた未ログインの人は、メンバーとして見る
 # チームと、そのチームの現場（キーはリポジトリ名の DEMO_PREFIX より後ろ）・現場の今の状況
 DEMO_TEAMS = [
     ('チーム1', [

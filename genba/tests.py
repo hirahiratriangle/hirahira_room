@@ -4,7 +4,7 @@ from unittest import mock
 
 from django.contrib.auth.models import Group
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -17,7 +17,7 @@ from .models import (
     ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site,
     StructureGap, Summary, Term, week_start,
 )
-from .roles import GROUP_COMPANY, GROUP_MANAGEMENT, GUEST_USERNAME, guest_user
+from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
 from .signals import signals_for, weeks_missing_in_row
 
 
@@ -35,6 +35,10 @@ class GenbaTestBase(TestCase):
         Membership.objects.create(site=site, user=self.member, joined_on=started)
         Membership.objects.create(site=site, user=self.leader, role=Membership.ROLE_LEADER, joined_on=started)
         return site
+
+    def assertNoUsername(self, res, name):
+        """画面に人の名前が出ていないこと（切り替えボタンの URL /demo/as/member/ は名前ではないので数えない）"""
+        self.assertNotRegex(res.content.decode(), rf'(?<![/\w]){name}(?![/\w])')
 
     def add_group(self, user, name):
         user.groups.add(Group.objects.get_or_create(name=name)[0])
@@ -138,20 +142,21 @@ class AccessTests(GenbaTestBase):
         self.assertContains(res, 'SI業界ワード確認表')
         self.assertContains(res, '清濁併せ呑む')
 
-    def test_anonymous_uses_guest_with_all_roles(self):
-        # デモ：ログインしていなくてもログイン画面へは送られず、ゲストとして4つの立場を試せる
-        for name in ('portal', 'kit', 'phrases', 'skillset', 'member_home', 'management', 'company'):
+    def test_anonymous_default_is_member_persona(self):
+        # 立場を選ばずに開いた未ログインの人は、ログイン画面へ送らずメンバーとして見せる
+        for name in ('portal', 'kit', 'phrases', 'skillset', 'member_home'):
             self.assertEqual(self.client.get(reverse(f'genba:{name}')).status_code, 200, name)
+        self.assertEqual(self.client.get(reverse('genba:management')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('genba:company')).status_code, 403)
         res = self.client.post(reverse('genba:site_create'), {
-            'name': 'ゲストの現場', 'repo_name': 'genba-guest', 'industry': '物流業',
+            'name': 'デモの現場', 'repo_name': 'genba-persona', 'industry': '物流業',
             'started_on': self.today.isoformat(), 'description': '', 'my_role': 'leader',
         })
-        site = Site.objects.get(repo_name='genba-guest')
+        site = Site.objects.get(repo_name='genba-persona')
         self.assertRedirects(res, reverse('genba:site_detail', args=[site.pk]) + '?tab=checklist')
-        guest = CustomUser.objects.get(username=GUEST_USERNAME)
-        self.assertTrue(Membership.objects.filter(site=site, user=guest, role=Membership.ROLE_LEADER).exists())
-        self.assertEqual(self.client.get(reverse('genba:leader_home')).status_code, 200)
-        # ゲストが入っていない現場の原文は、これまでどおり読めない
+        self.assertTrue(Membership.objects.filter(site=site, user__username='demo_kimura',
+                                                  role=Membership.ROLE_LEADER).exists())
+        # 入っていない現場の原文は、これまでどおり読めない
         self.assertEqual(self.client.get(reverse('genba:site_detail', args=[self.site.pk])).status_code, 403)
 
     def test_team_document_hidden_from_outsider_public_one_visible(self):
@@ -188,7 +193,7 @@ class AccessTests(GenbaTestBase):
         self.assertEqual(res.status_code, 200)
         self.assertContains(res, '現場A')
         self.assertNotContains(res, '秘密の確認事項')
-        self.assertNotContains(res, 'member')
+        self.assertNoUsername(res, 'member')
 
     def test_company_sees_only_published(self):
         Term.objects.create(site=self.site, author=self.member, term='公開語', meaning='x', visibility=VISIBILITY_COMPANY,
@@ -450,17 +455,15 @@ class MetricsTests(GenbaTestBase):
 
 
 class SeedCommandTests(TestCase):
-    def test_old_demo_user_leaves_role_groups(self):
-        CustomUser.objects.create_user('me', 'me@example.com', 'pass12345')
-        kacho = CustomUser.objects.create_user('demo_kacho', 'k@example.com', 'pass12345')
-        kacho.groups.add(Group.objects.get_or_create(name=GROUP_MANAGEMENT)[0])
-        call_command('seed_genba', '--user', 'me', stdout=StringIO())
-        self.assertFalse(kacho.groups.exists())
+    def test_old_guest_leaves_role_groups(self):
+        guest = CustomUser.objects.create_user('genba_guest', 'g@example.com', 'pass12345')
+        guest.groups.add(Group.objects.get_or_create(name=GROUP_MANAGEMENT)[0], Group.objects.get_or_create(name=GROUP_COMPANY)[0])
+        call_command('seed_genba', stdout=StringIO())
+        self.assertFalse(guest.groups.exists())
 
     def test_seed_twice(self):
-        user = CustomUser.objects.create_user('me', 'me@example.com', 'pass12345')
         for _ in range(2):
-            call_command('seed_genba', '--user', 'me', stdout=StringIO())
+            call_command('seed_genba', stdout=StringIO())
         self.assertEqual(Site.objects.count(), 4)
         counts = {s.repo_name: (s.memberships.filter(role=Membership.ROLE_LEADER).count(),
                                 s.memberships.filter(role=Membership.ROLE_MEMBER).count()) for s in Site.objects.all()}
@@ -468,23 +471,28 @@ class SeedCommandTests(TestCase):
                                   'genba-demo-claims': (1, 4), 'genba-demo-stock': (0, 1)})
         solo = Goal.objects.filter(site__repo_name__in=['genba-demo-logistics', 'genba-demo-stock'])
         self.assertTrue(all(g.is_solo for g in solo))
-        self.assertEqual(list(CustomUser.objects.filter(groups__name=GROUP_MANAGEMENT)), [user])
-        self.assertEqual(list(CustomUser.objects.filter(groups__name=GROUP_COMPANY)), [user])
-        self.client.force_login(user)
-        for name in ('portal', 'kit', 'phrases', 'skillset', 'member_home', 'leader_home', 'management', 'company'):
-            self.assertEqual(self.client.get(reverse(f'genba:{name}')).status_code, 200, name)
+        # 立場ごとに別の人。マネジメント・会社は1人ずつ
+        self.assertEqual([u.username for u in CustomUser.objects.filter(groups__name=GROUP_MANAGEMENT)], ['demo_kacho'])
+        self.assertEqual([u.username for u in CustomUser.objects.filter(groups__name=GROUP_COMPANY)], ['demo_honbu'])
+        member, leader = CustomUser.objects.get(username='demo_kimura'), CustomUser.objects.get(username='demo_kobayashi')
+        self.assertEqual([m.site.repo_name for m in member.genba_memberships.all()], ['genba-demo-claims'])
+        self.assertEqual([m.site.repo_name for m in leader.genba_memberships.all()], ['genba-demo-order'])
+        self.assertFalse(member.has_usable_password())
         claims = Site.objects.get(repo_name='genba-demo-claims')
-        detected = {s.sign for s in signals_for(user, claims) if s.detected}
+        detected = {s.sign for s in signals_for(member, claims) if s.detected}
         self.assertEqual(detected, {'3日経っても理解が進んでいない', '理解したことが形になっていない'})
+        for key, name in (('member', 'member_home'), ('leader', 'leader_home'), ('management', 'management'), ('company', 'company')):
+            self.client.post(reverse('genba:demo_switch', args=[key]))
+            self.assertEqual(self.client.get(reverse(f'genba:{name}')).status_code, 200, name)
         for site in Site.objects.all():
-            self.client.force_login(site.memberships.first().user)
-            self.assertEqual(self.client.get(reverse('genba:site_detail', args=[site.pk])).status_code, 200)
-            self.assertEqual(self.client.get(reverse('genba:growth', args=[site.pk])).status_code, 200)
-        self.client.force_login(user)
-        for site in Site.objects.filter(memberships__user=user):
-            for name in ('weekly_board', 'lines', 'summary'):
-                self.assertEqual(self.client.get(reverse(f'genba:{name}', args=[site.pk])).status_code, 200, name)
-        for goal in Goal.objects.filter(author=user):
+            client = Client()
+            client.force_login(site.memberships.first().user)
+            self.assertEqual(client.get(reverse('genba:site_detail', args=[site.pk])).status_code, 200)
+            self.assertEqual(client.get(reverse('genba:growth', args=[site.pk])).status_code, 200)
+        self.client.post(reverse('genba:demo_switch', args=['member']))
+        for name in ('weekly_board', 'lines', 'summary'):
+            self.assertEqual(self.client.get(reverse(f'genba:{name}', args=[claims.pk])).status_code, 200, name)
+        for goal in Goal.objects.filter(author=member):
             self.assertEqual(self.client.get(reverse('genba:goal_reach', args=[goal.pk])).status_code, 200)
 
 
@@ -828,7 +836,7 @@ class MetricsV2Tests(GenbaTestBase):
         self.client.force_login(self.outsider)
         res = self.client.get(reverse('genba:management'))
         self.assertContains(res, '1人')
-        self.assertNotContains(res, 'member')
+        self.assertNoUsername(res, 'member')
 
     def test_leader_concern_metric_and_feedback(self):
         q = Question.objects.create(site=self.site, author=self.leader, kind=Question.KIND_PROBLEM, title='リーダーの懸念',
@@ -963,17 +971,71 @@ class AboutTests(TestCase):
 
 class DemoGuideTests(TestCase):
     def test_shows_organization_sites_and_members_without_login(self):
-        guest_user()
-        call_command('seed_genba', '--user', GUEST_USERNAME, stdout=StringIO())
+        call_command('seed_genba', stdout=StringIO())
         res = self.client.get(reverse('genba:demo'))
-        self.assertContains(res, f'href="{reverse("genba:portal")}"')
-        for name in ('受発注システム刷新', '出荷バッチ改修', '保険金請求 基本設計', '店舗在庫の可視化', 'demo_sato', 'demo_tanaka', 'ひとり現場'):
+        for name in ('受発注システム刷新', '出荷バッチ改修', '保険金請求 基本設計', '店舗在庫の可視化', 'demo_sato', 'demo_tanaka',
+                     'demo_kobayashi', 'ひとり現場', '立場を選ぶ'):
             self.assertContains(res, name)
-        self.assertContains(res, 'あなた')
-        self.assertNotContains(res, GUEST_USERNAME)
+        for key in ('member', 'leader', 'management', 'company'):
+            self.assertContains(res, reverse('genba:demo_switch', args=[key]))
         self.assertEqual(sum(len(t['sites']) for t in res.context['teams']), 4)
         solo = {s['site'].name for t in res.context['teams'] for s in t['sites'] if s['is_solo']}
         self.assertEqual(solo, {'出荷バッチ改修', '店舗在庫の可視化'})
 
     def test_opens_without_demo_data(self):
         self.assertEqual(self.client.get(reverse('genba:demo')).status_code, 200)
+
+
+class PersonaTests(TestCase):
+    def setUp(self):
+        call_command('seed_genba', stdout=StringIO())
+        self.leader_site = Site.objects.get(repo_name='genba-demo-order')
+
+    def switch(self, key):
+        return self.client.post(reverse('genba:demo_switch', args=[key]))
+
+    def test_switch_opens_home_of_that_role(self):
+        for key, name in (('member', 'member_home'), ('leader', 'leader_home'), ('management', 'management'), ('company', 'company')):
+            self.assertRedirects(self.switch(key), reverse(f'genba:{name}'))
+
+    def test_each_persona_has_only_its_own_role(self):
+        self.switch('member')
+        for name in ('leader_home', 'management', 'company'):
+            self.assertEqual(self.client.get(reverse(f'genba:{name}')).status_code, 403, name)
+        self.switch('company')
+        self.assertEqual(self.client.get(reverse('genba:management')).status_code, 403)
+        self.switch('management')
+        self.assertEqual(self.client.get(reverse('genba:company')).status_code, 403)
+
+    def test_switch_is_per_visitor(self):
+        other = Client()
+        self.switch('leader')
+        self.assertEqual(self.client.get(reverse('genba:leader_home')).status_code, 200)
+        self.assertEqual(other.get(reverse('genba:leader_home')).status_code, 403)
+
+    def test_switch_bar_marks_current_persona(self):
+        self.switch('leader')
+        res = self.client.get(reverse('genba:leader_home'))
+        self.assertContains(res, f'btn btn-sm btn-primary" formaction="{reverse("genba:demo_switch", args=["leader"])}"')
+
+    def test_logged_in_user_stays_self_until_choosing(self):
+        user = CustomUser.objects.create_user('me', 'me@example.com', 'pass12345')
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse('genba:member_home')).context['user'], user)
+        self.switch('leader')
+        self.assertEqual(self.client.get(reverse('genba:leader_home')).status_code, 200)
+
+    def test_unknown_persona_and_get_are_rejected(self):
+        self.assertEqual(self.switch('nobody').status_code, 404)
+        self.assertEqual(self.client.get(reverse('genba:demo_switch', args=['leader'])).status_code, 405)
+
+    def test_management_approves_leaders_goal(self):
+        goal = Goal.objects.get(site=self.leader_site, author__username='demo_sato')
+        self.switch('leader')
+        self.client.post(reverse('genba:goal_reach', args=[goal.pk]), {'action': 'confirm', 'comment': '確かめた'})
+        self.switch('management')
+        self.client.post(reverse('genba:goal_approval', args=[goal.pk]), {
+            'approved_level': 3, 'approved_grade': 'B', 'action': 'approve'})
+        goal.refresh_from_db()
+        self.assertEqual((goal.stage, goal.confirmed_by.username, goal.approved_by.username),
+                         (Goal.STAGE_APPROVED, 'demo_kobayashi', 'demo_kacho'))
