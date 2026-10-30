@@ -42,7 +42,7 @@ class AboutView(generic.TemplateView):
 
     genba の立場を使わないので GuestMixin は通さない（誰でも同じ内容）。
     文言は kit.ABOUT_* に持つ。説明を読んだあとに具体へ進めるよう、最下部に2つのボタンを並べる。
-    構想プレゼンは kit.CONCEPT_DECK_URL に URL を書くと押せる。デモ（genba）は genba 本体へ進む。
+    構想プレゼンは kit.CONCEPT_DECK_URL に URL を書くと押せる。デモ（genba）はデモの説明ページへ進む。
     """
     template_name = 'genba/about.html'
 
@@ -50,6 +50,37 @@ class AboutView(generic.TemplateView):
         context = super().get_context_data(**kwargs)
         context.update(title=kit.ABOUT_TITLE, lead=kit.ABOUT_LEAD, message=kit.ABOUT_MESSAGE, issues=kit.ABOUT_ISSUES,
                        about_roles=kit.ABOUT_ROLES, deck_url=kit.CONCEPT_DECK_URL)
+        return context
+
+
+class DemoGuideView(generic.TemplateView):
+    """デモの説明ページ。案内ページと genba 本体のあいだに挟み、どのような組織・現場・メンバーがいるかを説明する。
+
+    現場と人はデモデータから読む（seed_genba を変えても説明とずれないように）。説明の文言は kit.DEMO_* に持つ。
+    ゲスト（未ログインの人）は「あなた」と出す。デモデータがない現場は出さない。
+    """
+    template_name = 'genba/demo.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        teams = []
+        for name, entries in kit.DEMO_TEAMS:
+            sites = []
+            for key, note in entries:
+                site = Site.objects.filter(repo_name=f'{kit.DEMO_PREFIX}{key}').first()
+                if site is None:
+                    continue
+                # リーダーを先に、あとは入場した順に並べる
+                memberships = site.memberships.select_related('user').order_by('joined_on')
+                people = sorted(
+                    ({'name': 'あなた' if m.user.username == roles.GUEST_USERNAME else m.user.username,
+                      'role': m.get_role_display(), 'is_leader': m.role == Membership.ROLE_LEADER, 'duty': m.duty}
+                     for m in memberships), key=lambda p: not p['is_leader'])
+                sites.append({'site': site, 'note': note, 'people': people,
+                              'is_solo': not any(p['is_leader'] for p in people)})
+            if sites:
+                teams.append({'name': name, 'sites': sites})
+        context.update(organization=kit.DEMO_ORGANIZATION, your_roles=kit.DEMO_YOUR_ROLES, teams=teams)
         return context
 
 

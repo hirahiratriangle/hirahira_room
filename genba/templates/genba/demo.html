@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}デモの説明 - genba | HirahiraRoom{% endblock %}
+
+{% comment %}fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRAROOM）は出さない{% endcomment %}
+{% block site_nav %}{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0;">
+    <div class="container px-5 py-4 text-center text-white">
+        <h1 class="h3 fw-bold mb-2">デモの説明</h1>
+        <p class="mb-0 small"><a href="{% url 'genba:about' %}" class="text-white">案内へ戻る</a></p>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">組織</h2>
+        <p class="mb-0">{{ organization }}</p>
+    </section>
+
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">あなたの立場</h2>
+        <div class="row g-3">
+            {% for icon, name, place, point in your_roles %}
+            <div class="col-md-6"><div class="card h-100"><div class="card-body">
+                <h3 class="h6 fw-bold"><i class="fas {{ icon }} me-2" style="color: #2c5aa0;"></i>{{ name }}<span class="fw-normal text-muted ms-2">{{ place }}</span></h3>
+                <p class="small mb-0">{{ point }}</p>
+            </div></div></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% for team in teams %}
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">{{ team.name }}</h2>
+        <div class="row g-3">
+            {% for s in team.sites %}
+            <div class="col-md-6"><div class="card h-100"><div class="card-body">
+                <h3 class="h6 fw-bold mb-1">{{ s.site.name }}{% if s.is_solo %}<span class="badge bg-warning text-dark ms-2">ひとり現場</span>{% endif %}</h3>
+                <p class="small text-muted mb-2">{{ s.site.industry }}</p>
+                <p class="small mb-2">{{ s.note }}</p>
+                <ul class="list-unstyled small mb-0">
+                    {% for p in s.people %}<li>{% if p.is_leader %}<strong>{{ p.name }}</strong>{% else %}{{ p.name }}{% endif %}<span class="text-muted">　{{ p.role }}{% if p.duty %} ・ {{ p.duty }}{% endif %}</span></li>{% endfor %}
+                </ul>
+            </div></div></div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+
+    <div class="text-center">
+        <a class="btn btn-primary btn-lg" href="{% url 'genba:portal' %}">デモを始める</a>
+    </div>
+</div>
+{% endblock %}

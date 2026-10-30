@@ -51,7 +51,7 @@ from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
 from ._seed_activity import seed_activity
 
-DEMO_PREFIX = 'genba-demo-'
+DEMO_PREFIX = kit.DEMO_PREFIX
 DEMO_USERS = ['demo_sato', 'demo_suzuki', 'demo_takahashi',
               'demo_tanaka', 'demo_ito', 'demo_watanabe', 'demo_yamamoto', 'demo_nakamura']
 

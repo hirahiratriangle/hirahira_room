@@ -47,7 +47,7 @@
     <section class="d-flex flex-wrap justify-content-center gap-3">
         {% if deck_url %}<a class="btn btn-outline-primary btn-lg" href="{{ deck_url }}" target="_blank" rel="noopener">構想プレゼン</a>
         {% else %}<span class="btn btn-outline-primary btn-lg disabled">構想プレゼン</span>{% endif %}
-        <a class="btn btn-primary btn-lg" href="{% url 'genba:portal' %}">デモ（genba）</a>
+        <a class="btn btn-primary btn-lg" href="{% url 'genba:demo' %}">デモ（genba）</a>
     </section>
 </div>
 {% endblock %}

@@ -17,7 +17,7 @@ from .models import (
     ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site,
     StructureGap, Summary, Term, week_start,
 )
-from .roles import GROUP_COMPANY, GROUP_MANAGEMENT, GUEST_USERNAME
+from .roles import GROUP_COMPANY, GROUP_MANAGEMENT, GUEST_USERNAME, guest_user
 from .signals import signals_for, weeks_missing_in_row
 
 
@@ -937,12 +937,12 @@ class AboutTests(TestCase):
     def test_about_opens_without_login_and_links_to_app(self):
         res = self.client.get(reverse('genba:about'))
         self.assertContains(res, '会社の成長は、人から始まる。')
-        self.assertContains(res, f'href="{reverse("genba:portal")}"')
+        self.assertContains(res, f'href="{reverse("genba:demo")}"')
         self.assertContains(res, 'デモ（genba）')
         self.assertContains(res, 'disabled">構想プレゼン</span>')
 
     def test_no_site_header_like_fe(self):
-        for name in ('about', 'portal'):
+        for name in ('about', 'demo', 'portal'):
             res = self.client.get(reverse(f'genba:{name}'))
             self.assertEqual(res.status_code, 200)
             self.assertNotContains(res, 'HIRAHIRAROOM')
@@ -959,3 +959,21 @@ class AboutTests(TestCase):
         res = self.client.get(reverse('home:home'))
         self.assertContains(res, f'href="{reverse("genba:about")}"')
         self.assertNotContains(res, f'href="{reverse("genba:portal")}"')
+
+
+class DemoGuideTests(TestCase):
+    def test_shows_organization_sites_and_members_without_login(self):
+        guest_user()
+        call_command('seed_genba', '--user', GUEST_USERNAME, stdout=StringIO())
+        res = self.client.get(reverse('genba:demo'))
+        self.assertContains(res, f'href="{reverse("genba:portal")}"')
+        for name in ('受発注システム刷新', '出荷バッチ改修', '保険金請求 基本設計', '店舗在庫の可視化', 'demo_sato', 'demo_tanaka', 'ひとり現場'):
+            self.assertContains(res, name)
+        self.assertContains(res, 'あなた')
+        self.assertNotContains(res, GUEST_USERNAME)
+        self.assertEqual(sum(len(t['sites']) for t in res.context['teams']), 4)
+        solo = {s['site'].name for t in res.context['teams'] for s in t['sites'] if s['is_solo']}
+        self.assertEqual(solo, {'出荷バッチ改修', '店舗在庫の可視化'})
+
+    def test_opens_without_demo_data(self):
+        self.assertEqual(self.client.get(reverse('genba:demo')).status_code, 200)
