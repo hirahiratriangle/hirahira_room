@@ -228,7 +228,7 @@ class GoalForm(BootstrapMixin, forms.ModelForm):
 
 
 class ReachForm(BootstrapMixin, forms.ModelForm):
-    """到達を記入する（本人）。
+    """成長を記入する（本人）。
 
     書けるのは記入の段階だけ。確認の依頼はフォームの欄ではなく、ビューで押されたボタン（action）で決める。
     """
@@ -258,7 +258,7 @@ class ReachForm(BootstrapMixin, forms.ModelForm):
 
 
 class ApprovalForm(BootstrapMixin, forms.ModelForm):
-    """到達を承認する（マネジメント）。レベルと評価A〜Eを確定し、次の目標を示す。
+    """成長を承認する（マネジメント）。レベルと評価A〜Eを確定し、次の目標を示す。
 
     ひとり現場のときだけ「元請・顧客の声」の欄を出す。
     """
@@ -273,7 +273,7 @@ class ApprovalForm(BootstrapMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         goal = self.instance
-        # 承認ではレベルと評価を必ず決める（モデルでは空を許している：承認前の到達もあるため）
+        # 承認ではレベルと評価を必ず決める（モデルでは空を許している：承認前の成長もあるため）
         self.fields['approved_level'].required = self.fields['approved_grade'].required = True
         # 初めて承認するときは、本人が書いたレベルと、そこから求めた評価の目安を初期値にする
         if not goal.approved_level:

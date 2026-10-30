@@ -1,4 +1,4 @@
-# tasks 006：到達の確定とスキル台帳
+# tasks 006：成長の確定とスキル台帳
 
 plan：[plan.md](plan.md)
 

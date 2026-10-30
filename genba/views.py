@@ -749,7 +749,7 @@ class KnowledgePublishView(GenbaMixin, generic.UpdateView):
 
 
 # ---------------------------------------------------------------------------
-# 成長基軸（メンバー本人）：目標を立て、記録で到達を示す
+# 成長基軸（メンバー本人）：目標を立て、記録で成長を示す
 # ---------------------------------------------------------------------------
 
 class SkillsetView(GenbaMixin, generic.TemplateView):
@@ -829,15 +829,15 @@ class GoalCreateView(SiteMixin, generic.TemplateView):
 
 
 # ---------------------------------------------------------------------------
-# 到達の確定：記入（メンバー）→ 確認（リーダー）→ 承認（マネジメント）
+# 成長の確定：記入（メンバー）→ 確認（リーダー）→ 承認（マネジメント）
 # ---------------------------------------------------------------------------
 
 def can_read_reach(user, goal):
-    """到達を読める人（構想書スライド9「目標と到達」の行）。
+    """成長を読める人（構想書スライド9「目標と成長」の行）。
 
     - 現場チーム（同じ現場のメンバー・リーダー）：段階によらず全文を読める
     - マネジメント：確認が済んだものと承認したもの。ひとり現場は確認待ちのときから
-      （マネジメントが確認も行うため）。記入中の到達は読まない。自分の到達はこの経路では読まない
+      （マネジメントが確認も行うため）。記入中の成長は読まない。自分の成長はこの経路では読まない
     """
     if roles.can_read_site(user, goal.site):
         return True
@@ -846,7 +846,7 @@ def can_read_reach(user, goal):
 
 
 def reach_context(goal):
-    """到達の画面（本人・チーム・承認）に共通して出す値：具体記述・目安・貼る文章・証拠"""
+    """成長の画面（本人・チーム・承認）に共通して出す値：具体記述・目安・貼る文章・証拠"""
     return {
         'levels': growth.level_descriptions(goal.skill_item),
         'grade': growth.ae_grade(goal.reached_level, goal.mentored),
@@ -857,7 +857,7 @@ def reach_context(goal):
 
 
 class GoalReachView(GenbaMixin, generic.UpdateView):
-    """到達の画面。見る人によって、できることが変わる。
+    """成長の画面。見る人によって、できることが変わる。
 
     - 本人：記入の段階なら、証拠を選び、具体記述に当てはめて保存・確認を依頼する。
       依頼したあとは書き換えられず、承認前なら取り下げられる
@@ -933,7 +933,7 @@ class GoalReachView(GenbaMixin, generic.UpdateView):
             goal.save()
             messages.success(self.request, '確認を依頼しました。')
         else:
-            messages.success(self.request, '到達を保存しました。')
+            messages.success(self.request, '成長を保存しました。')
         return redirect('genba:goal_reach', pk=goal.pk)
 
     def get_context_data(self, **kwargs):
@@ -950,10 +950,10 @@ class GoalReachView(GenbaMixin, generic.UpdateView):
 
 
 class GoalApprovalView(GenbaMixin, generic.UpdateView):
-    """到達の承認（マネジメント）。レベルと評価A〜Eを確定し、次の目標を示す（構想書スライド22）。
+    """成長の承認（マネジメント）。レベルと評価A〜Eを確定し、次の目標を示す（構想書スライド22）。
 
     ひとり現場（確認できるリーダーがいない）では、確認も兼ねる。そのときは元請・顧客の声を残せる。
-    自分の到達は承認できない。承認したものは、ここからは変えられない。
+    自分の成長は承認できない。承認したものは、ここからは変えられない。
     """
     model = Goal
     form_class = ApprovalForm
@@ -989,7 +989,7 @@ class GoalApprovalView(GenbaMixin, generic.UpdateView):
             goal.confirmed_at, goal.confirmed_by = now, user
         goal.approved_on, goal.approved_by = now.date(), user
         goal.save()
-        messages.success(self.request, f'{goal.author.username} さんの到達を承認しました。')
+        messages.success(self.request, f'{goal.author.username} さんの成長を承認しました。')
         return redirect('genba:management')
 
     def get_context_data(self, **kwargs):
@@ -1043,7 +1043,7 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
                 'weekly': site.documents.filter(kind=Document.KIND_WEEKLY,
                                                 week_of__gte=week_start(timezone.localdate()) - timedelta(weeks=1))
                 .exclude(stuck='').select_related('author').order_by('-week_of'),
-                # 到達の確認待ち（本人以外のメンバーが確認を依頼したもの）
+                # 成長の確認待ち（本人以外のメンバーが確認を依頼したもの）
                 'reach_requests': site.goals.filter(submitted_at__isnull=False, confirmed_at__isnull=True)
                 .exclude(author=user).select_related('author'),
                 'candidates': [
@@ -1063,7 +1063,7 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
 # ---------------------------------------------------------------------------
 
 class ManagementView(GenbaMixin, generic.TemplateView):
-    """マネジメント：現場単位の運営指標と、到達の承認待ち（構想書スライド4・18）"""
+    """マネジメント：現場単位の運営指標と、成長の承認待ち（構想書スライド4・18）"""
     template_name = 'genba/management.html'
     role_name = 'management'
 
@@ -1077,7 +1077,7 @@ class ManagementView(GenbaMixin, generic.TemplateView):
         rows = [site_metrics(s) for s in Site.objects.all()]
         rows.sort(key=lambda m: (-len(m.alerts), m.site.name))
         context['rows'] = rows
-        # 到達の承認待ち：確認が済んだもの、またはひとり現場の確認待ち（自分の到達は自分で承認しない）
+        # 成長の承認待ち：確認が済んだもの、またはひとり現場の確認待ち（自分の成長は自分で承認しない）
         goals = Goal.objects.exclude(author=self.request.user).select_related('author', 'site', 'confirmed_by')
         context['approval_requests'] = [
             g for g in goals.filter(approved_on__isnull=True, submitted_at__isnull=False).order_by('submitted_at')
@@ -1094,13 +1094,13 @@ class ManagementView(GenbaMixin, generic.TemplateView):
 
 
 # ---------------------------------------------------------------------------
-# 会社：一般化して公開された記録と、承認した到達（顧客名の代わりに業界を出す）
+# 会社：一般化して公開された記録と、承認した成長（顧客名の代わりに業界を出す）
 # ---------------------------------------------------------------------------
 
 class CompanyView(GenbaMixin, generic.TemplateView):
     """会社：一般化して公開された記録（ナレッジ資産）と、個人のスキル台帳（構想書スライド19・20）。
 
-    台帳は承認した到達だけで作る。現場名ではなく業界を出し、記録の原文は出さない（証拠は名前だけ）。
+    台帳は承認した成長だけで作る。現場名ではなく業界を出し、記録の原文は出さない（証拠は名前だけ）。
     """
     template_name = 'genba/company.html'
     role_name = 'company'
@@ -1131,7 +1131,7 @@ class CompanyView(GenbaMixin, generic.TemplateView):
         context['questions'] = InterviewQuestion.objects.select_related('source__site')
         context['question_form'] = kwargs.get('question_form') or InterviewQuestionForm()
         context['proposals'] = KitProposal.objects.select_related('author', 'decided_by')
-        # スキル台帳（承認した到達だけ）：1. 個人の台帳 2. スキルシート 3. 次の目標 4. 台帳の集計
+        # スキル台帳（承認した成長だけ）：1. 個人の台帳 2. スキルシート 3. 次の目標 4. 台帳の集計
         reaches = growth.approved_reaches()
         distribution = growth.skill_distribution(reaches)
         context['ledger'] = growth.ledger(reaches)

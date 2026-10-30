@@ -18,12 +18,12 @@ spec：[spec.md](spec.md)
 | `/genba/knowledge/<doc|term>/<id>/publish/` | 一般化して公開（リーダー）：原文を見ながら一般化した版を書く |
 | `/genba/company/` | 会社：ナレッジ資産（用語辞書・先例・振り返り・面談メモ・質問リスト・改訂の提案）、組織の力（スキル分布・ITSS相当・複雑性・薄い項目）、アサインの希望、成長のつながり |
 | `/genba/kit/proposals/create/?target=...` | 改訂の提案（誰でも）。テンプレート・言い回し集・スキルセットの画面から移れる |
-| 到達を説明する画面 | 次の目標とアサインの希望 |
+| 成長を説明する画面 | 次の目標とアサインの希望 |
 
 ## 集計（`growth.py`）
 
-- `skill_distribution()`：合意した到達を、本人×項目ごとに最新の1件にして、項目×レベルの人数にする
-- `itss_distribution()`・`complexity_experience()`：合意した到達の ITSS 相当と複雑性
+- `skill_distribution()`：合意した成長を、本人×項目ごとに最新の1件にして、項目×レベルの人数にする
+- `itss_distribution()`・`complexity_experience()`：合意した成長の ITSS 相当と複雑性
 - `thin_items()`：レベル3以上の人数が最も少ない項目
 
 ## テスト

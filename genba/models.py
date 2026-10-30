@@ -380,10 +380,10 @@ class PromiseCheck(models.Model):
 
 
 class Goal(models.Model):
-    """現場ごとの成長の目標と到達（基本設計スキルセット）。
+    """現場ごとの目標と成長（基本設計スキルセット）。
 
-    目標も到達も現場チームに全文で見せる（構想書スライド9「目標と到達」の行）。
-    到達は3段階で確定する（スライド22）。
+    目標も成長も現場チームに全文で見せる（構想書スライド9「目標と成長」の行）。
+    成長は3段階で確定する（スライド22）。
 
     1. 記入（メンバー本人）：当てはまるレベル・行動・証拠を書き、確認を依頼する（submitted_at）
     2. 確認（同じ現場のリーダー）：その行動が事実か、どの責任・規模でやったかを確かめる（confirmed_*）
@@ -391,7 +391,7 @@ class Goal(models.Model):
 
     確認するリーダーがいない現場（ひとり現場）では、マネジメントが確認と承認をまとめて行い、
     元請・顧客から聞き取った声を customer_voice に残す。
-    承認した到達だけが、会社のスキル台帳・スキルシート・台帳の集計に入る（スライド20）。
+    承認した成長だけが、会社のスキル台帳・スキルシート・台帳の集計に入る（スライド20）。
     """
 
     ROLE_CHOICES = [('member', 'メンバー'), ('leader', 'リーダー'), ('owner', '責任者')]
@@ -414,7 +414,7 @@ class Goal(models.Model):
     team_size = models.PositiveIntegerField(verbose_name='ピーク時のチーム人数', null=True, blank=True)
     complexity = models.CharField(verbose_name='複雑性（該当する番号）', max_length=30, blank=True)
     # 次の現場へ：一つ上の列を次の目標にする。本人が書き、承認のときにマネジメントが示し直せる。
-    # 承認した到達の次の目標は、会社の「目標に合う現場へアサイン」に並ぶ
+    # 承認した成長の次の目標は、会社の「目標に合う現場へアサイン」に並ぶ
     next_text = models.TextField(verbose_name='次の目標（一つ上の列）', blank=True)
     # 確認を依頼した日時。依頼したあとは、本人は書き換えられない（取り下げれば記入に戻る）
     submitted_at = models.DateTimeField(verbose_name='確認を依頼した日時', null=True, blank=True)
@@ -442,7 +442,7 @@ class Goal(models.Model):
     STAGE_LABELS = {STAGE_DRAFT: '記入中', STAGE_SUBMITTED: '確認待ち', STAGE_CONFIRMED: '承認待ち', STAGE_APPROVED: '承認済み'}
 
     class Meta:
-        verbose_name = verbose_name_plural = '目標と到達'
+        verbose_name = verbose_name_plural = '目標と成長'
         ordering = ['created_at']
 
     def __str__(self):
@@ -468,7 +468,7 @@ class Goal(models.Model):
         return self.STAGE_LABELS[self.stage]
 
     def confirmers(self):
-        """確認できる人：同じ現場のリーダー（本人は除く。自分の到達は自分で確認しない）"""
+        """確認できる人：同じ現場のリーダー（本人は除く。自分の成長は自分で確認しない）"""
         return CustomUser.objects.filter(
             genba_memberships__site=self.site, genba_memberships__role=Membership.ROLE_LEADER).exclude(pk=self.author_id)
 
@@ -489,7 +489,7 @@ class Goal(models.Model):
 
 
 class GoalEvidence(models.Model):
-    """到達の証拠に選んだ本人の記録"""
+    """成長の証拠に選んだ本人の記録"""
 
     TYPE_CHOICES = [('doc', '文書'), ('term', '用語'), ('issue', 'Issue'), ('summary', 'まとめ'), ('feedback', 'まとめへの返し')]
 
@@ -499,7 +499,7 @@ class GoalEvidence(models.Model):
     title = models.CharField(verbose_name='記録の名前', max_length=150)
 
     class Meta:
-        verbose_name = verbose_name_plural = '到達の証拠'
+        verbose_name = verbose_name_plural = '成長の証拠'
         constraints = [models.UniqueConstraint(fields=['goal', 'record_type', 'record_id'], name='genba_unique_evidence')]
 
     def __str__(self):

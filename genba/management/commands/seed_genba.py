@@ -15,7 +15,7 @@
 
 それぞれのチームに、ひとり現場（自社のリーダーが現場にいない）に入っている人を1人ずつ置く。
 ひとり現場は、その人だけがメンバーとして入っている現場として作る。確認するリーダーがいないので、
-到達はマネジメントが確認と承認を行う（構想書スライド22）。
+成長はマネジメントが確認と承認を行う（構想書スライド22）。
 
 デモの現場（リポジトリ名が genba-demo- で始まるもの）と、デモのユーザーが出した改訂の提案・質問リストは
 毎回作り直す。前の版の seed で作ったデモのユーザー（demo_kacho など）は、立場のグループから外す
@@ -23,14 +23,14 @@
 
 筋書き：
 - 受発注（リーダー）：入場から10週。チェックリストはほぼ済み、まとめはリーダーと確認済み。
-  demo_sato の到達の確認がリーダーの画面に届いている。demo_suzuki の到達は承認済み。
+  demo_sato の成長の確認がリーダーの画面に届いている。demo_suzuki の成長は承認済み。
   自分の目標（プロジェクトマネジメント レベル3→4）は記入中（マネジメントが自分1人なので、自分では承認しない）
-- 物流の出荷バッチ改修（ひとり現場・demo_takahashi）：到達はマネジメントが元請の声を聞き取って承認済み
+- 物流の出荷バッチ改修（ひとり現場・demo_takahashi）：成長はマネジメントが元請の声を聞き取って承認済み
 - 保険金請求（メンバー）：現場は12週目、自分は入場から6日。1週目の途中で、3日止まっている「読めない」があり、
   まとめはまだ出していない → 危険信号が2つ出る。目標（デザイン レベル3→4）を立てている。
-  demo_watanabe の到達はリーダーが確認済みで、マネジメントの承認待ちに届いている。
+  demo_watanabe の成長はリーダーが確認済みで、マネジメントの承認待ちに届いている。
   公開された振り返り・用語、質問リスト、改訂の提案も、この現場から出す
-- 店舗在庫の可視化（ひとり現場・demo_nakamura）：到達の確認を依頼していて、マネジメントの画面に
+- 店舗在庫の可視化（ひとり現場・demo_nakamura）：成長の確認を依頼していて、マネジメントの画面に
   「確認して承認する」で届いている。スコープ外の作業と体制のズレが運営指標に出る
 """
 from datetime import timedelta
@@ -116,7 +116,7 @@ class Command(BaseCommand):
                     public_body=body, published_by=leader, published_at=self.now - timedelta(days=3))
 
     def approved(self, level, grade, confirmed_by, days=2, comment='', customer_voice=''):
-        """記入・確認・承認が済んだ到達の欄。承認するのはマネジメント（指定したユーザー）。
+        """記入・確認・承認が済んだ成長の欄。承認するのはマネジメント（指定したユーザー）。
 
         days 日前に承認、その前日に確認、さらに前日に確認を依頼した、という順に日付を並べる。
         """
@@ -386,8 +386,8 @@ class Command(BaseCommand):
                                    reason='顧客の担当者から直接作業を頼まれることが続いた', author=ito, status='adopted',
                                    decided_by=me, created_at=self.ago(20))
 
-        # 到達：承認済み（台帳に載る）・承認待ち（マネジメントの画面に届く）
-        # リーダー本人の到達は、確認できる他のリーダーがいないので、マネジメントが確認も行った
+        # 成長：承認済み（台帳に載る）・承認待ち（マネジメントの画面に届く）
+        # リーダー本人の成長は、確認できる他のリーダーがいないので、マネジメントが確認も行った
         Goal.objects.create(site=site, author=tanaka, skill_item='プロジェクトマネジメント', current_level=4,
                             target_text='10人以上の開発チームのコスト・スケジュール・リスクを管理し、他を指導する', reached_level=4,
                             role='leader', team_size=6, complexity='1,4,5',
@@ -431,7 +431,7 @@ class Command(BaseCommand):
         Document.objects.create(site=site, author=takahashi, kind=Document.KIND_DESIGN, title='締め時刻の変更は設定値で持つ',
                                 body='案: プログラムに埋め込む／設定値で持つ\n決定: 設定値\n理由: 倉庫ごとに締め時刻が違うため。',
                                 created_at=self.ago(20))
-        # ひとり現場の到達：マネジメントが元請・顧客の声を聞き取って、確認と承認を行った
+        # ひとり現場の成長：マネジメントが元請・顧客の声を聞き取って、確認と承認を行った
         Goal.objects.create(site=site, author=takahashi, skill_item='ソフトウェアエンジニアリング', current_level=2,
                             target_text='担当機能の影響範囲を自分で分析し、設計に反映する', reached_level=3,
                             role='member', team_size=1, complexity='2',

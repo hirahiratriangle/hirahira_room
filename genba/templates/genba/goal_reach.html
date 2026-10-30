@@ -1,11 +1,11 @@
 {% extends 'genba/base.html' %}
 
-{% block genba_title %}到達{% endblock %}
+{% block genba_title %}成長{% endblock %}
 
 {% block genba_contents %}
 <p class="small mb-1"><a href="{% if is_author %}{% url 'genba:growth' site.pk %}{% else %}{% url 'genba:site_detail' site.pk %}?tab=members{% endif %}">{{ site.name }}</a></p>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-    <h2 class="h5 mb-0" style="color: #2c5aa0;">到達：{{ object.author.username }} さん</h2>
+    <h2 class="h5 mb-0" style="color: #2c5aa0;">成長：{{ object.author.username }} さん</h2>
     <span class="badge {% if object.stage == 'approved' %}bg-success{% elif object.stage %}bg-info text-dark{% else %}bg-light text-dark border{% endif %}">{{ object.stage_label }}</span>
 </div>
 <p class="small mb-2">{{ object.skill_item }}{% if object.concrete_skill %} ／ {{ object.concrete_skill }}{% endif %} ・ 目標（レベル{{ object.target_level }}）：<strong>{{ object.target_text }}</strong></p>

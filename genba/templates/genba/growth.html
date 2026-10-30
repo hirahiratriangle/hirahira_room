@@ -13,7 +13,7 @@
     <span class="badge bg-light text-dark border fw-normal">① 入場前　目標を立てる</span><i class="fas fa-arrow-right text-muted"></i>
     <span class="badge bg-light text-dark border fw-normal">② 期中　チェックリストに沿って動く</span><i class="fas fa-arrow-right text-muted"></i>
     <span class="badge bg-light text-dark border fw-normal">③ 期中　記録にスキル項目が付く</span><i class="fas fa-arrow-right text-muted"></i>
-    <span class="badge bg-light text-dark border fw-normal">④ 振り返り　到達を確かめる</span><i class="fas fa-arrow-right text-muted"></i>
+    <span class="badge bg-light text-dark border fw-normal">④ 振り返り　成長を確かめる</span><i class="fas fa-arrow-right text-muted"></i>
     <span class="badge bg-light text-dark border fw-normal">⑤ 次の現場　一つ上の列を次の目標へ</span>
 </div>
 
@@ -27,9 +27,9 @@
         </div>
         <div class="text-end small">
             <div>この項目に付いた記録 <strong>{{ g.matches }}</strong> 件</div>
-            {% if g.goal.approved_on %}<div>承認：レベル{{ g.goal.approved_level }}・評価{{ g.goal.approved_grade }}</div>{% elif g.goal.reached_level %}<div>到達：レベル{{ g.goal.reached_level }}（評価の目安 {{ g.grade }}）</div>{% endif %}
+            {% if g.goal.approved_on %}<div>承認：レベル{{ g.goal.approved_level }}・評価{{ g.goal.approved_grade }}</div>{% elif g.goal.reached_level %}<div>成長：レベル{{ g.goal.reached_level }}（評価の目安 {{ g.grade }}）</div>{% endif %}
             <span class="badge {% if g.goal.stage == 'approved' %}bg-success{% elif g.goal.stage %}bg-info text-dark{% else %}bg-light text-dark border{% endif %}">{{ g.goal.stage_label }}</span>
-            <a class="btn btn-outline-primary btn-sm mt-1" href="{% url 'genba:goal_reach' g.goal.pk %}">到達を記入する</a>
+            <a class="btn btn-outline-primary btn-sm mt-1" href="{% url 'genba:goal_reach' g.goal.pk %}">成長を記入する</a>
         </div>
     </div>
 </div></div>

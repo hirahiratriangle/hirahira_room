@@ -5,7 +5,7 @@ spec：[spec.md](spec.md)
 ## 方針
 
 - スキルセットは `kit_data` と同じく元資料の docx から `genba/skillset_data.py` を生成し、組み立てを `genba/growth.py` に書く。
-- 目標と到達は1つのモデル（`Goal`）に持つ。証拠は `GoalEvidence` で記録を指す。
+- 目標と成長は1つのモデル（`Goal`）に持つ。証拠は `GoalEvidence` で記録を指す。
 - 記録のスキル項目は保存しない。記録の種類から `growth.auto_skill(record)` で求める（スライド14の表）。
 - プロトタイプなので、マイグレーションは引き続き `0001_initial` を作り直す。
 
@@ -13,7 +13,7 @@ spec：[spec.md](spec.md)
 
 | モデル | 内容 |
 |---|---|
-| `Goal`（新規） | `site`・`author`・`skill_item`（11項目）・`concrete_skill`（具体スキル、任意）・`current_level`・`target_text`（一つ上の具体記述）・`preparation`（入場前の準備）／到達：`reached_level`・`explanation`・`role`（メンバー／リーダー／責任者）・`team_size`・`complexity`（8項目の番号）・`mentored`（後進指導）・`agreed_on`（課長と合意した日） |
+| `Goal`（新規） | `site`・`author`・`skill_item`（11項目）・`concrete_skill`（具体スキル、任意）・`current_level`・`target_text`（一つ上の具体記述）・`preparation`（入場前の準備）／成長：`reached_level`・`explanation`・`role`（メンバー／リーダー／責任者）・`team_size`・`complexity`（8項目の番号）・`mentored`（後進指導）・`agreed_on`（課長と合意した日） |
 | `GoalEvidence`（新規） | `goal`・`record_type`（doc／term／issue／summary）・`record_id`・`title` |
 | `Document` | 週報に `goal_action`（目標に近づいた行動）を追加 |
 
@@ -31,19 +31,19 @@ spec：[spec.md](spec.md)
 | `/genba/kit/skills/` | スキルセット：構成、11項目、具体スキル（典型的な場面）、レベル別の具体記述、ITSSのレベルと複雑性、使い方、注意点 |
 | `/genba/sites/<id>/growth/` | 自分の成長：この現場の目標、目標ごとの証拠の候補の数、週報の「目標に近づいた行動」 |
 | `/genba/sites/<id>/goals/create/` | 目標を立てる：項目と今のレベルを選ぶ → 一つ上の具体記述と、その項目の具体スキル（典型的な場面つき）が出る → 目標の文と準備を書く |
-| `/genba/goals/<id>/reach/` | 到達を説明する（本人だけ）：証拠の選択、具体記述への当てはめ、評価A〜Eの目安、ITSSレベル相当の目安、課会資料・スキルシートに貼る文章、課長と合意 |
-| 現場のページ「メンバー」タブ | メンバーごとの目標（目標の文だけ。到達は出さない） |
+| `/genba/goals/<id>/reach/` | 成長を説明する（本人だけ）：証拠の選択、具体記述への当てはめ、評価A〜Eの目安、ITSSレベル相当の目安、課会資料・スキルシートに貼る文章、課長と合意 |
+| 現場のページ「メンバー」タブ | メンバーごとの目標（目標の文だけ。成長は出さない） |
 | メンバーのホーム | 現場ごとに自分の目標 |
 
 ## 目安の計算（`growth.py`）
 
-- 評価A〜E：到達レベル2→C、3→B（後進指導ありならA）、4以上→A
+- 評価A〜E：成長レベル2→C、3→B（後進指導ありならA）、4以上→A
 - ITSSレベル相当：メンバー→3、リーダーかつ3人以上→4、責任者かつ（10人以上、または複雑性4項目以上で3人以上）→5。それ以外は一つ下。成功回数などは本人が確かめる旨を出す
 
 ## テスト
 
 - スキルセットのデータ件数と、職級・賃金の記述がないこと
-- 目標の作成（一つ上の具体記述が出る）、チームには目標だけ見え、到達の画面は本人以外 403
+- 目標の作成（一つ上の具体記述が出る）、チームには目標だけ見え、成長の画面は本人以外 403
 - 証拠：自動で付いた記録が候補に並び、他人の記録・他の現場の記録は選べない
 - A〜E・ITSS相当の目安
 - 人ごとのチェックリスト（入場した人ごとに 12 Issue）、危険信号の期間

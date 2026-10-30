@@ -1,8 +1,8 @@
-"""成長基軸：基本設計スキルセット（ITSS対応）の引き方と、目標・到達の目安。
+"""成長基軸：基本設計スキルセット（ITSS対応）の引き方と、目標・成長の目安。
 
 記録のスキル項目は保存せず、記録の種類から求める（構想書スライド14）。
 評価A〜E・ITSSレベル相当は目安で、本人が記入に使い、マネジメントが承認で確定する（憲章 V）。
-会社のスキル台帳と集計に使うのは、承認した到達だけ（構想書スライド20）。
+会社のスキル台帳と集計に使うのは、承認した成長だけ（構想書スライド20）。
 """
 from . import skillset_data as data
 from collections import Counter, defaultdict
@@ -157,7 +157,7 @@ def paste_text(goal, evidence_titles):
              f'{goal.skill_item}（レベル{goal.target_level}の記述）：{goal.target_text}']
     if goal.reached_level:
         desc = level_description(goal.skill_item, goal.reached_level)
-        lines += ['', '【到達】', f'{goal.skill_item}：レベル{goal.reached_level}の記述「{desc}」に当たる。']
+        lines += ['', '【成長】', f'{goal.skill_item}：レベル{goal.reached_level}の記述「{desc}」に当たる。']
         if goal.explanation:
             lines.append(goal.explanation)
         if evidence_titles:
@@ -176,9 +176,9 @@ def paste_text(goal, evidence_titles):
 
 
 def approved_reaches():
-    """承認した到達を、本人×項目ごとに最新の1件にする。
+    """承認した成長を、本人×項目ごとに最新の1件にする。
 
-    同じ人が同じ項目で何度も承認を受けたら（現場をまたいで伸びたら）、最後に承認したものが今の到達。
+    同じ人が同じ項目で何度も承認を受けたら（現場をまたいで伸びたら）、最後に承認したものが今の成長。
     台帳・スキル分布・ITSS相当・複雑性の集計は、すべてこの一覧から作る。
     """
     latest = {}
@@ -252,8 +252,8 @@ def ledger(reaches=None):
     """個人のスキル台帳（構想書スライド20の1）。本人ごとに1行。
 
     levels：SKILL_ITEMS の並びで、承認したレベル（なければ None）
-    itss  ：承認した到達から見た ITSS レベル相当の一番高いもの
-    next  ：次の目標がある到達（目標に合う現場へのアサインに使う）
+    itss  ：承認した成長から見た ITSS レベル相当の一番高いもの
+    next  ：次の目標がある成長（目標に合う現場へのアサインに使う）
     sheet ：skill_sheet() の文章
     """
     reaches = approved_reaches() if reaches is None else reaches
@@ -263,7 +263,7 @@ def ledger(reaches=None):
     rows = []
     for author, goals in sorted(people.items(), key=lambda kv: kv[0].username):
         levels = {g.skill_item: g.approved_level for g in goals}
-        # 立場・規模・複雑性を書いていない到達は相当レベルが出ない（0 として扱い、全部 0 なら None）
+        # 立場・規模・複雑性を書いていない成長は相当レベルが出ない（0 として扱い、全部 0 なら None）
         best = max((itss_equivalent(g.role, g.team_size, len(g.complexity_numbers)) or 0 for g in goals), default=0)
         rows.append({
             'author': author, 'goals': goals, 'levels': [levels.get(item) for item in SKILL_ITEMS],

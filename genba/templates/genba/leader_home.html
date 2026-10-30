@@ -82,7 +82,7 @@
             </div></div>
             {% empty %}<p class="small text-muted">「詰まっていること」が書かれた週報はありません</p>{% endfor %}
 
-            <h3 class="h6 mt-3">到達の確認待ち</h3>
+            <h3 class="h6 mt-3">成長の確認待ち</h3>
             <ul class="list-group">
                 {% for g in p.reach_requests %}<li class="list-group-item small d-flex flex-wrap justify-content-between gap-2"><span><strong>{{ g.author.username }}</strong>　{{ g.skill_item }}（レベル{{ g.reached_level }}）</span><a class="btn btn-outline-primary btn-sm py-0" href="{% url 'genba:goal_reach' g.pk %}">確認する</a></li>
                 {% empty %}<li class="list-group-item small text-muted">確認待ちはありません</li>{% endfor %}
