@@ -1,22 +1,23 @@
 name: 基本情報の問題の X 投稿
 
-# Azure App Service (Linux) には cron が無いため、ここから朝・昼・夜に叩く。
+# 定期の投稿は Azure Logic Apps（hirahira-fe-x-post）が日本時間の7時・12時・19時に起こす。
+# GitHub Actions の定期実行は数時間遅れることがあったため、2026-10-30 にやめた。
+# このワークフローは、失敗した枠を手で流し直すときだけに使う。
 # 実際に投稿するのはサイト側（/fe/tasks/post-x/ → fe/x_post.py の post_slot）。
-# cron は UTC 指定。22:00 UTC = 7:00 JST、03:00 UTC = 12:00 JST、10:00 UTC = 19:00 JST。
-# 同じ日の同じ時間帯は1回しか投稿しないので、「Run workflow」で手で流し直してよい。
+# 同じ日の同じ時間帯は1回しか投稿しないので、流し直してよい。
 # 失敗した時間帯は、流し直すと同じ問題で投稿し直す。
 on:
-  schedule:
-    - cron: '0 22 * * *'
-    - cron: '0 3 * * *'
-    - cron: '0 10 * * *'
-  workflow_dispatch:  # 手動実行（動作確認用）
+  workflow_dispatch:
     inputs:
       slot:
         description: 時間帯
         required: true
         type: choice
         options: [morning, noon, evening]
+      date:
+        description: 枠の日付（YYYY-MM-DD。空なら今日。夜の枠は0〜7時なら前の日）
+        required: false
+        type: string
 
 permissions: {}
 
@@ -28,24 +29,19 @@ jobs:
         env:
           ENDPOINT: ${{ secrets.FE_X_URL }}
           TOKEN: ${{ secrets.FE_X_TOKEN }}
-          SCHEDULE: ${{ github.event.schedule }}
-          INPUT_SLOT: ${{ inputs.slot }}
+          SLOT: ${{ inputs.slot }}
+          DATE: ${{ inputs.date }}
         run: |
           set -euo pipefail
           if [ -z "${ENDPOINT}" ] || [ -z "${TOKEN}" ]; then
             echo "FE_X_URL と FE_X_TOKEN を Secrets に設定してください。" >&2
             exit 1
           fi
-          case "${SCHEDULE}" in
-            '0 22 * * *') SLOT=morning ;;
-            '0 3 * * *')  SLOT=noon ;;
-            '0 10 * * *') SLOT=evening ;;
-            *)            SLOT="${INPUT_SLOT}" ;;
-          esac
           curl --silent --show-error --fail-with-body \
                --max-time 120 \
                --retry 3 --retry-delay 30 --retry-all-errors \
                -X POST "${ENDPOINT}" \
                -H "X-Fe-X-Token: ${TOKEN}" \
-               --data-urlencode "slot=${SLOT}"
+               --data-urlencode "slot=${SLOT}" \
+               --data-urlencode "date=${DATE}"
           echo

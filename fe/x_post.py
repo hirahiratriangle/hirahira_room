@@ -1,7 +1,8 @@
 """基本情報の問題を X に投稿する（1日3回・1回1問）。
 
-GitHub Actions が朝・昼・夜に /fe/tasks/post-x/ を叩き、post_slot がその時間帯の
-1問を投稿する。投稿は「問題文＋出典＋解答ページの URL＋タグ」だけで、選択肢・正解・
+Azure Logic Apps が日本時間の7時・12時・19時に /fe/tasks/post-x/ を叩き、
+post_slot がその時間帯の1問を投稿する。Logic Apps は予定の日付（date）も渡す。
+GitHub Actions のワークフローは、手で流し直すときだけに使う。投稿は「問題文＋出典＋解答ページの URL＋タグ」だけで、選択肢・正解・
 解説は解答ページ（/fe/x/<code>/）にだけ出す。出典は、IPA の公開問題なら IPA の
 求める形、自作の問題なら「オリジナル問題」ともとにしたシラバスの項目。
 
@@ -47,7 +48,11 @@ logger = logging.getLogger(__name__)
 # X の上限。全角は1字で2、URL は長さによらず 23 と数える
 LIMIT = 280
 URL_WEIGHT = 23
-HEADER = '【基本情報 今日の問題】'
+# 見出し。予定の日付・曜日・時刻を入れる（例：【基本情報 10/30（木）7時の問題】）
+HEADER = '【基本情報 {month}/{day}（{weekday}）{hour}時の問題】'
+WEEKDAYS = '月火水木金土日'
+# 時間帯ごとの予定の時刻（日本時間）
+SLOT_HOURS = {XPost.SLOT_MORNING: 7, XPost.SLOT_NOON: 12, XPost.SLOT_EVENING: 19}
 LINK_LABEL = '▶選択肢と解答はこちら'
 LINK_LABEL_FIGURE = '▶図・選択肢と解答はこちら'
 # 問題文を途中で切ったときの案内
@@ -120,13 +125,19 @@ def page_url(code):
     return settings.FE_SITE_URL.rstrip('/') + reverse('fe:x_answer', args=[code])
 
 
-def _compose(stem, source, label, url):
-    return '\n'.join([HEADER, stem, source_line(source), label, url, TAGS])
+def header(date, slot):
+    return HEADER.format(month=date.month, day=date.day,
+                         weekday=WEEKDAYS[date.weekday()], hour=SLOT_HOURS[slot])
 
 
-def build_text(stem, source, has_figures, url):
+def _compose(head, stem, source, label, url):
+    return '\n'.join([head, stem, source_line(source), label, url, TAGS])
+
+
+def build_text(stem, source, has_figures, url, date, slot):
     """投稿の文面。収まらなければ問題文を後ろから切り、「…」と続きの案内を付ける。"""
-    text = _compose(stem, source, LINK_LABEL_FIGURE if has_figures else LINK_LABEL, url)
+    head = header(date, slot)
+    text = _compose(head, stem, source, LINK_LABEL_FIGURE if has_figures else LINK_LABEL, url)
     if weight(text) <= LIMIT:
         return text
     label = LINK_LABEL_CUT_FIGURE if has_figures else LINK_LABEL_CUT
@@ -134,11 +145,11 @@ def build_text(stem, source, has_figures, url):
     low, high = 0, len(stem)
     while low < high:
         mid = (low + high + 1) // 2
-        if weight(_compose(stem[:mid].rstrip() + ELLIPSIS, source, label, url)) <= LIMIT:
+        if weight(_compose(head, stem[:mid].rstrip() + ELLIPSIS, source, label, url)) <= LIMIT:
             low = mid
         else:
             high = mid - 1
-    return _compose(stem[:low].rstrip() + ELLIPSIS, source, label, url)
+    return _compose(head, stem[:low].rstrip() + ELLIPSIS, source, label, url)
 
 
 def eligible_questions():
@@ -176,16 +187,30 @@ def _create(date, slot, question):
         figures=question.figures, choice_figures=question.choice_figures,
         answer_index=question.answer_index, explanation=question.explanation,
         source=question.source,
-        text=build_text(question.stem, question.source, bool(question.figures), page_url(code)),
+        text=build_text(question.stem, question.source, bool(question.figures), page_url(code),
+                        date, slot),
     )
+
+
+def slot_date(slot, now=None):
+    """予定の日付が渡されなかったときの、その枠の日付。
+
+    夜（19時）の枠が0時を過ぎてから届いたときは、前の日の夜として扱う。
+    朝の枠が始まる7時より前なら、前の日の夜の枠の遅れとみなす。
+    """
+    local = timezone.localtime(now or timezone.now())
+    if slot == XPost.SLOT_EVENING and local.hour < SLOT_HOURS[XPost.SLOT_MORNING]:
+        return local.date() - datetime.timedelta(days=1)
+    return local.date()
 
 
 def post_slot(slot, today=None, rng=None):
     """その日のその時間帯の1問を投稿する。結果を dict で返す。
 
+    today はその枠の予定の日付。渡されなければ slot_date で決める。
     投稿済みなら何もしない。投稿前・失敗の記録があれば、同じ問題で投稿し直す。
     """
-    today = today or timezone.localdate()
+    today = today or slot_date(slot)
     post = XPost.objects.filter(date=today, slot=slot).first()
     if post and post.status == XPost.STATUS_POSTED:
         return {'status': 'already', 'code': post.code}

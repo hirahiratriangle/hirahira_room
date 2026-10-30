@@ -13,6 +13,7 @@ login_not_required で外してあり、hirahira_room にログインしなく�
 問題の管理だけは、これまでどおりログインも要る。
 """
 
+import datetime
 import logging
 
 import hmac
@@ -1180,9 +1181,10 @@ class XAnswerView(generic.View):
 @method_decorator(login_not_required, name='dispatch')
 @method_decorator(csrf_exempt, name='dispatch')
 class PostXView(generic.View):
-    """X への投稿を、GitHub Actions の定期実行から起こす入口（朝・昼・夜）。
+    """X への投稿を、Azure Logic Apps の定期実行から起こす入口（朝・昼・夜）。
 
-    共有トークン（settings.FE_X_TOKEN）で確かめ、時間帯（slot）を受け取る。
+    共有トークン（settings.FE_X_TOKEN）で確かめ、時間帯（slot）と予定の日付（date、
+    YYYY-MM-DD。省略可）を受け取る。日付は今日の前後1日だけ受け付ける。
     期限を過ぎた投稿の削除も、ここで一緒に行う。SendMailsView と同じ形。
     """
 
@@ -1198,10 +1200,19 @@ class PostXView(generic.View):
         slot = request.POST.get('slot') or request.GET.get('slot', '')
         if slot not in dict(XPost.SLOT_CHOICES):
             return JsonResponse({'detail': '時間帯（slot）が正しくありません。'}, status=400)
+        date_text = request.POST.get('date') or request.GET.get('date', '')
+        date = None
+        if date_text:
+            try:
+                date = datetime.date.fromisoformat(date_text)
+            except ValueError:
+                return JsonResponse({'detail': '日付（date）が正しくありません。'}, status=400)
+            if abs((date - timezone.localdate()).days) > 1:
+                return JsonResponse({'detail': '日付（date）が今日から離れすぎています。'}, status=400)
 
         purged = x_post.purge_old()
         try:
-            result = x_post.post_slot(slot)
+            result = x_post.post_slot(slot, today=date)
         except x_post.PostError as e:
             logger.error('X への投稿に失敗しました（%s）: %s', slot, e)
             return JsonResponse({'detail': 'X への投稿に失敗しました。', 'error': str(e)}, status=502)

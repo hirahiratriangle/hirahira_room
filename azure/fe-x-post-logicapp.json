@@ -1,0 +1,79 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "基本情報の X 投稿を、日本時間の7時・12時・19時に起こす Logic App（従量課金）。作り方は azure/create-fe-x-post-logicapp.sh。"
+  },
+  "parameters": {
+    "feXToken": {
+      "type": "securestring",
+      "metadata": { "description": "投稿の口のトークン。Azure のアプリ設定 FE_X_TOKEN と同じ値" }
+    },
+    "endpoint": {
+      "type": "string",
+      "defaultValue": "https://hirahira-room.net/fe/tasks/post-x/"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "japanwest"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "hirahira-fe-x-post",
+      "location": "[parameters('location')]",
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "feXToken": { "value": "[parameters('feXToken')]" },
+          "endpoint": { "value": "[parameters('endpoint')]" }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "feXToken": { "type": "securestring" },
+            "endpoint": { "type": "string" }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "timeZone": "Tokyo Standard Time",
+                "schedule": { "hours": [ "7", "12", "19" ], "minutes": [ 0 ] }
+              }
+            }
+          },
+          "actions": {
+            "Slot": {
+              "type": "Compose",
+              "inputs": "@convertFromUtc(coalesce(trigger()?['scheduledTime'], utcNow()), 'Tokyo Standard Time')"
+            },
+            "Post": {
+              "type": "Http",
+              "runAfter": { "Slot": [ "Succeeded" ] },
+              "inputs": {
+                "method": "POST",
+                "uri": "@parameters('endpoint')",
+                "headers": {
+                  "X-Fe-X-Token": "@parameters('feXToken')",
+                  "Content-Type": "application/x-www-form-urlencoded"
+                },
+                "body": "@{concat('slot=', if(equals(formatDateTime(outputs('Slot'), 'HH'), '07'), 'morning', if(equals(formatDateTime(outputs('Slot'), 'HH'), '12'), 'noon', if(equals(formatDateTime(outputs('Slot'), 'HH'), '19'), 'evening', 'none'))), '&date=', formatDateTime(outputs('Slot'), 'yyyy-MM-dd'))}",
+                "retryPolicy": { "type": "exponential", "count": 3, "interval": "PT1M" }
+              },
+              "runtimeConfiguration": {
+                "secureData": { "properties": [ "inputs" ] }
+              }
+            }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ]
+}

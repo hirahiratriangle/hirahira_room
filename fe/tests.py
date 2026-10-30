@@ -3466,6 +3466,51 @@ class XPostTests(TestCase):
 
     # ---- 起動口 ----
 
+    # ---- 見出しの日時と、枠の日付 ----
+
+    def test_header_has_scheduled_date_and_time(self):
+        import datetime
+        from . import x_post
+        self._question()
+        x_post.post_slot('noon', today=datetime.date(2026, 10, 30))
+        post = XPost.objects.get()
+        self.assertTrue(post.text.startswith('【基本情報 10/30（金）12時の問題】\n'))
+        self.assertEqual(x_post.header(datetime.date(2026, 11, 1), 'morning'),
+                         '【基本情報 11/1（日）7時の問題】')
+        self.assertEqual(x_post.header(datetime.date(2026, 11, 2), 'evening'),
+                         '【基本情報 11/2（月）19時の問題】')
+
+    def test_late_evening_slot_belongs_to_the_previous_day(self):
+        import datetime
+        from zoneinfo import ZoneInfo
+        from .x_post import slot_date
+        tokyo = ZoneInfo('Asia/Tokyo')
+        at = lambda h: datetime.datetime(2026, 10, 30, h, 30, tzinfo=tokyo)
+        self.assertEqual(slot_date('evening', at(1)), datetime.date(2026, 10, 29))
+        self.assertEqual(slot_date('evening', at(19)), datetime.date(2026, 10, 30))
+        self.assertEqual(slot_date('evening', at(23)), datetime.date(2026, 10, 30))
+        self.assertEqual(slot_date('morning', at(1)), datetime.date(2026, 10, 30))
+
+    def test_task_endpoint_takes_the_scheduled_date(self):
+        url = reverse('fe:post_x')
+        self._question()
+        tomorrow = timezone.localdate() + timezone.timedelta(days=1)
+        far = timezone.localdate() + timezone.timedelta(days=3)
+        with override_settings(FE_X_TOKEN='secret'):
+            response = self.client.post(url, {'slot': 'morning', 'date': tomorrow.isoformat()},
+                                        HTTP_X_FE_X_TOKEN='secret')
+            self.assertEqual(response.json()['status'], 'posted')
+            self.assertTrue(XPost.objects.filter(date=tomorrow, slot='morning').exists())
+            for bad in (far.isoformat(), '2026-13-01', 'yesterday'):
+                response = self.client.post(url, {'slot': 'noon', 'date': bad},
+                                            HTTP_X_FE_X_TOKEN='secret')
+                self.assertEqual(response.status_code, 400, bad)
+            # Logic App は予定の時刻が7・12・19時以外だと slot=none を送る。認証は通って 400 になる
+            response = self.client.post(url, {'slot': 'none', 'date': tomorrow.isoformat()},
+                                        HTTP_X_FE_X_TOKEN='secret')
+            self.assertEqual(response.status_code, 400)
+        self.assertEqual(XPost.objects.count(), 1)
+
     def test_task_endpoint_needs_token_and_slot(self):
         url = reverse('fe:post_x')
         self._question()
