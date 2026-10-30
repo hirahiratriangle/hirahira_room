@@ -21,13 +21,13 @@ post が None のときは、期限切れ・存在しない投稿の案内ペー
     <style>
         :root {
             --x-bg: #f3f5f8; --x-card: #ffffff; --x-text: #1f2933; --x-muted: #5f6b7a;
-            --x-border: #d9dee5; --x-accent: #2c5aa0; --x-hover: #eef3fa;
+            --x-border: #d9dee5; --x-accent: #2c5aa0; --x-on-accent: #ffffff; --x-hover: #eef3fa;
             --x-ok-bg: #e6f4ea; --x-ok: #1e7e34; --x-ng-bg: #fbe9eb; --x-ng: #b02a37;
         }
         @media (prefers-color-scheme: dark) {
             :root {
                 --x-bg: #15181d; --x-card: #1f242b; --x-text: #e6e9ee; --x-muted: #a3adba;
-                --x-border: #3a424d; --x-accent: #7fa6e0; --x-hover: #27303b;
+                --x-border: #3a424d; --x-accent: #7fa6e0; --x-on-accent: #15181d; --x-hover: #27303b;
                 --x-ok-bg: #173a24; --x-ok: #7fd49a; --x-ng-bg: #43191f; --x-ng: #f19aa4;
             }
         }
@@ -60,6 +60,11 @@ post が None のときは、期限切れ・存在しない投稿の案内ペー
         .x-expl { border-left: 4px solid var(--x-accent); padding-left: 1rem; }
         .x-expl h2 { font-size: 1rem; color: var(--x-accent); }
         a { color: var(--x-accent); }
+        /* アプリへの導線。指で押しやすいよう、幅いっぱいで高さを取る */
+        a.x-cta {
+            display: block; padding: .75rem 1rem; min-height: 48px; text-align: center; font-weight: 700;
+            text-decoration: none; color: var(--x-on-accent); background: var(--x-accent); border-radius: .5rem;
+        }
         @media (min-width: 768px) {
             body { font-size: 17px; }
             .x-wrap { max-width: 640px; padding: 1.5rem 24px 4rem; }
@@ -78,8 +83,8 @@ post が None のときは、期限切れ・存在しない投稿の案内ペー
     <div class="x-card">
         <h1 class="h5 mb-3">この問題の公開は終わりました</h1>
         <p class="mb-3">解答ページは、投稿から30日で公開を終えています。</p>
-        <p class="mb-1">毎日の練習・学習モード（解説を読んでから解く）・苦手分野の重点出題・問題メールは、基本情報の対策アプリで。</p>
-        <p class="mb-0 x-break"><a href="{{ fe_url }}">{{ fe_url }}</a></p>
+        <p class="mb-3">毎日の練習・学習モード（解説を読んでから解く）・苦手分野の重点出題・問題メールは、基本情報の対策アプリで。</p>
+        <a href="{{ fe_url }}" class="x-cta">HirahiraRoom で対策を続ける</a>
     </div>
 {% else %}
     <div class="x-card mb-4">
@@ -128,8 +133,8 @@ post が None のときは、期限切れ・存在しない投稿の案内ペー
     <p class="small x-muted mb-4">{% if citation %}{{ citation }}{% else %}この問題は、シラバスをもとに作ったオリジナル問題です。{% endif %}</p>
 
     {% if answered %}
-    <p class="mb-1">毎日の練習・学習モード（解説を読んでから解く）・苦手分野の重点出題・問題メールは、基本情報の対策アプリで。</p>
-    <p class="mb-0 x-break"><a href="{{ fe_url }}">{{ fe_url }}</a></p>
+    <p class="mb-3">毎日の練習・学習モード（解説を読んでから解く）・苦手分野の重点出題・問題メールは、基本情報の対策アプリで。</p>
+    <a href="{{ fe_url }}" class="x-cta">HirahiraRoom で対策を続ける</a>
     {% endif %}
 {% endif %}
 </main>

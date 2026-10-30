@@ -3440,7 +3440,7 @@ class XPostTests(TestCase):
         self.assertContains(response, 'あなたの答え')
         self.assertContains(response, 'SSID はネットワークの名前。')
         self.assertContains(response, '学習モード')
-        self.assertContains(response, 'https://example.jp/fe/')
+        self.assertContains(response, '<a href="https://example.jp/fe/" class="x-cta">')
         self.assertContains(response, 'オリジナル問題')
 
     def test_official_question_shows_citation(self):
