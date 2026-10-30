@@ -9,6 +9,8 @@ urlpatterns = [
     path('', views.PortalView.as_view(), name='portal'),
     # 案内ページ（hirahira-room から最初に開く）
     path('about/', views.AboutView.as_view(), name='about'),
+    # 構想プレゼン（「genba 構想.pptx」の内容を順に読むページ）
+    path('concept/', views.ConceptView.as_view(), name='concept'),
     # デモの説明ページ（案内ページと genba 本体のあいだ）
     path('demo/', views.DemoGuideView.as_view(), name='demo'),
     path('demo/as/<str:key>/', views.DemoSwitchView.as_view(), name='demo_switch'),

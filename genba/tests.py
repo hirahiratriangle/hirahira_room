@@ -947,20 +947,14 @@ class AboutTests(TestCase):
         self.assertContains(res, '会社の成長は、人から始まる。')
         self.assertContains(res, f'href="{reverse("genba:demo")}"')
         self.assertContains(res, 'デモ（genba）')
-        self.assertContains(res, 'disabled">構想プレゼン</span>')
+        self.assertContains(res, f'href="{reverse("genba:concept")}"')
 
     def test_no_site_header_like_fe(self):
-        for name in ('about', 'demo', 'portal'):
+        for name in ('about', 'concept', 'demo', 'portal'):
             res = self.client.get(reverse(f'genba:{name}'))
             self.assertEqual(res.status_code, 200)
             self.assertNotContains(res, 'HIRAHIRAROOM')
             self.assertNotContains(res, 'Log In')
-
-    def test_deck_link_appears_when_set(self):
-        with mock.patch('genba.kit.CONCEPT_DECK_URL', 'https://example.com/deck'):
-            res = self.client.get(reverse('genba:about'))
-        self.assertContains(res, 'https://example.com/deck')
-        self.assertNotContains(res, 'disabled">構想プレゼン</span>')
 
     def test_home_opens_about_first(self):
         self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))
@@ -1039,3 +1033,14 @@ class PersonaTests(TestCase):
         goal.refresh_from_db()
         self.assertEqual((goal.stage, goal.confirmed_by.username, goal.approved_by.username),
                          (Goal.STAGE_APPROVED, 'demo_kobayashi', 'demo_kacho'))
+
+
+class ConceptTests(TestCase):
+    def test_all_slides_open_without_login(self):
+        res = self.client.get(reverse('genba:concept'))
+        self.assertEqual(res.context['total'], 23)
+        for text in ('genbaは、GitHubを土台として実現する', '現場の経験が、個人の中に閉じている', '立場ごとの成長のharmony',
+                     '始める前に、6つを決める', '多様な人こそ会社の礎。行けるところまで、皆で行こう。', 'Pull Request のレビュー'):
+            self.assertContains(res, text)
+        self.assertContains(res, 'id="slide-23"')
+        self.assertContains(res, f'href="{reverse("genba:about")}"')

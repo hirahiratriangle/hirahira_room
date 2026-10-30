@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}構想プレゼン - genba | HirahiraRoom{% endblock %}
+
+{% comment %}fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRAROOM）は出さない{% endcomment %}
+{% block site_nav %}{% endblock %}
+
+{% block head %}
+<style>
+    .concept-slide { border: 1px solid #dee2e6; border-radius: .5rem; background: #fff; padding: 2rem; margin-bottom: 1.5rem; }
+    .concept-solid { background: #2c5aa0; color: #fff; border-color: #2c5aa0; text-align: center; padding: 4rem 2rem; }
+    .concept-kicker { color: #2c5aa0; font-weight: 700; font-size: .85rem; }
+    .concept-title { color: #2c5aa0; font-size: 1.35rem; font-weight: 700; margin-bottom: 1.25rem; }
+    .concept-label { color: #2c5aa0; font-weight: 700; font-size: .85rem; margin-bottom: .25rem; }
+    .concept-sub { color: #2c5aa0; font-size: .85rem; margin-top: .5rem; }
+    .concept-no { color: #6c757d; font-size: .75rem; text-align: right; margin-top: 1rem; }
+    .concept-solid .concept-no { color: #dbe6f5; }
+    .concept-note { border-left: 4px solid #2c5aa0; background: #f3f6fb; padding: .5rem .75rem; font-size: .9rem; }
+    .concept-flow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem; font-size: .9rem; }
+    .concept-flow span { border: 1px solid #2c5aa0; color: #2c5aa0; border-radius: 2rem; padding: .25rem .75rem; }
+    .concept-step { flex: 1 1 9rem; min-width: 0; }
+    .concept-slide table { min-width: 32rem; }
+    .concept-slide th:first-child, .concept-slide td:first-child { white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0;">
+    <div class="container px-5 py-4 text-center text-white">
+        <h1 class="h3 fw-bold mb-2">構想プレゼン</h1>
+        <p class="mb-0 small"><a href="{% url 'genba:about' %}" class="text-white">案内へ戻る</a></p>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-3 px-md-5 py-4" style="max-width: 960px;">
+    {% for s in slides %}
+    <section id="slide-{{ forloop.counter }}" class="concept-slide {% if s.kind != 'slide' %}concept-solid{% endif %}">
+        {% if s.kind == 'cover' %}
+            <p class="display-5 fw-bold mb-3">{{ s.kicker }}</p>
+            <p class="h3 mb-3">{{ s.title }}</p>
+            <p class="mb-2">{{ s.lead }}</p>
+            <p class="mb-4">{{ s.text }}</p>
+            <p class="small mb-0">{{ s.meta }}</p>
+        {% elif s.kind == 'part' %}
+            <p class="small fw-bold mb-2">{{ s.kicker }}</p>
+            <p class="h3 mb-3">{{ s.title }}</p>
+            <p class="mb-0">{{ s.text }}</p>
+            {% if s.lines %}<ul class="list-unstyled small mt-3 mb-0">{% for line in s.lines %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+        {% elif s.kind == 'end' %}
+            <p class="h4 mb-0">{{ s.title }}</p>
+        {% else %}
+            <div class="concept-kicker">{{ s.kicker }}</div>
+            <h2 class="concept-title">{{ s.title }}</h2>
+            {% for b in s.blocks %}
+            <div class="mb-3">
+                {% if b.type == 'cards' %}
+                <div class="row g-3">
+                    {% for c in b.items %}<div class="col-md-{{ b.width }}">{% include 'genba/_concept_card.html' %}</div>{% endfor %}
+                </div>
+                {% elif b.type == 'steps' %}
+                <div class="d-flex flex-wrap align-items-stretch gap-2">
+                    {% for c in b.items %}<div class="concept-step">{% include 'genba/_concept_card.html' %}</div>{% endfor %}
+                </div>
+                {% elif b.type == 'table' %}
+                <div class="table-responsive"><table class="table table-sm small align-middle mb-0">
+                    <thead class="text-muted"><tr>{% for h in b.head %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+                    <tbody>{% for row in b.rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+                </table></div>
+                {% elif b.type == 'flow' %}
+                <div class="concept-flow">
+                    {% for item in b.items %}<span>{{ item }}</span>{% if not forloop.last %}<i class="fas fa-arrow-right text-muted"></i>{% elif b.loop %}<i class="fas fa-redo text-muted"></i>{% endif %}{% endfor %}
+                </div>
+                {% else %}
+                <div class="concept-note">{{ b.text }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% endif %}
+        <div class="concept-no">{{ forloop.counter }} / {{ total }}</div>
+    </section>
+    {% endfor %}
+    <div class="text-center mt-4">
+        <a class="btn btn-primary btn-lg" href="{% url 'genba:demo' %}">デモ（genba）</a>
+    </div>
+</div>
+{% endblock %}

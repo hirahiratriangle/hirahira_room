@@ -1,0 +1,7 @@
+<div class="card h-100"><div class="card-body">
+    {% if c.label %}<div class="concept-label">{{ c.label }}</div>{% endif %}
+    {% if c.title %}<h3 class="h6 fw-bold">{{ c.title }}</h3>{% endif %}
+    {% if c.text %}<p class="small mb-0">{{ c.text }}</p>{% endif %}
+    {% if c.lines %}<ul class="small ps-3 mb-0">{% for line in c.lines %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+    {% if c.sub %}<div class="concept-sub">{{ c.sub }}</div>{% endif %}
+</div></div>

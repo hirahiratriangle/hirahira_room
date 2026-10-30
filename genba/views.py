@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views import View, generic
 
-from . import growth, kit, kit_data, roles, signals, skillset_data
+from . import concept_data, growth, kit, kit_data, roles, signals, skillset_data
 from .forms import (
     ApprovalForm, DocumentForm, FeedbackForm, GoalForm, GoalPickForm, InterviewQuestionForm, IssueForm, KitProposalForm, LineForm,
     PromiseCheckForm, ReachForm, publish_form_for,
@@ -52,14 +52,29 @@ class AboutView(generic.TemplateView):
 
     genba の立場を使わないので PersonaMixin は通さない（誰でも同じ内容）。
     文言は kit.ABOUT_* に持つ。説明を読んだあとに具体へ進めるよう、最下部に2つのボタンを並べる。
-    構想プレゼンは kit.CONCEPT_DECK_URL に URL を書くと押せる。デモ（genba）はデモの説明ページへ進む。
+    構想プレゼンは ConceptView へ、デモ（genba）はデモの説明ページへ進む。
     """
     template_name = 'genba/about.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(title=kit.ABOUT_TITLE, lead=kit.ABOUT_LEAD, message=kit.ABOUT_MESSAGE, issues=kit.ABOUT_ISSUES,
-                       about_roles=kit.ABOUT_ROLES, deck_url=kit.CONCEPT_DECK_URL)
+                       about_roles=kit.ABOUT_ROLES)
+        return context
+
+
+class ConceptView(generic.TemplateView):
+    """構想プレゼンのページ。「genba 構想.pptx」の全スライドを順に読めるようにする。
+
+    内容は concept_data.SLIDES に持つ（文言はプレゼンのまま）。案内ページと同じく、genba の立場は使わない。
+    スライド番号はプレゼンと同じになるよう、並び順から振る。
+    """
+    template_name = 'genba/concept.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['slides'] = concept_data.SLIDES
+        context['total'] = len(concept_data.SLIDES)
         return context
 
 
