@@ -47,11 +47,12 @@
             </label>
 
             {% comment %}
-            直前に学習した中分類だけを開いて、学習回数を見せる。ダッシュボードで
-            指定している分野は開かない。選ぶのは利用者なので、どれも選んだ状態にはしない。
+            ダッシュボードで指定した分野と、直前に学習した中分類を開く
+            （LearnStartView._opened_categories）。
+            選ぶのは利用者なので、どれも選んだ状態にはしない。
             {% endcomment %}
             {% for group in groups %}
-            <details class="fe-group border-bottom"{% if opened.code == group.category.code %} open data-opened{% endif %}>
+            <details class="fe-group border-bottom"{% if group.category in opened %} open data-opened{% endif %}>
                 <summary class="d-flex justify-content-between align-items-center p-2 px-3"
                          style="cursor:pointer;">
                     <span>
@@ -137,7 +138,7 @@
 <script>
 // 「戻る」で表示し直したときも、前の選択は残さない。ブラウザが選択を復元すると、
 // 分野を指定していても前に選んだ中分類が「選択中」になって開いてしまう。
-// 開くのは、サーバーが開いた中分類（直前に学習したもの）だけに戻す。
+// 開くのは、サーバーが開いた中分類（直前に学習したものか、指定した分野）だけに戻す。
 window.addEventListener('pageshow', function () {
     document.querySelectorAll('.fe-pick input[name="note"]').forEach(function (input) {
         input.checked = false;

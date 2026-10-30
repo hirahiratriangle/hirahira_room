@@ -2182,20 +2182,58 @@ class LearningModeTests(TestCase):
             round_.refresh_from_db()
         return round_
 
-    def test_the_dashboard_category_is_not_opened(self):
-        """ダッシュボードで分野を指定していても、その中分類は開かない。"""
+    @staticmethod
+    def _opened_codes(response):
+        """学習モードの一覧で開いている中分類の番号。"""
+        return sorted(category.code for category in response.context['opened'])
+
+    def test_the_dashboard_category_is_opened(self):
+        """まだ学習していなければ、ダッシュボードで指定した分野を開く。選んだ状態にはしない。"""
         self._prepare()
         self._set_category(Category.objects.get(code=9))
 
         response = self.client.get(reverse('fe:learn_start'))
-        self.assertIsNone(response.context['opened'])
-        self.assertNotContains(response, 'fe-group border-bottom" open')
+        self.assertEqual(self._opened_codes(response), [9])
+        self.assertContains(response, 'fe-group border-bottom" open', count=1)
         self.assertEqual(self._checked_notes(response), [])
 
+    def test_the_dashboard_category_follows_a_new_choice(self):
+        """解き終えたあとで分野を指定し直せば、指定し直した分野も開く。
+
+        前は直前に解き終えた中分類だけを開いていたので、一度コンピュータ構成要素を
+        解き終えると、ダッシュボードで分野をどう選び直しても、学習モードのトップは
+        そこだけが開いたまま変わらなかった。
+        """
+        self._prepare()
+        hardware = Category.objects.get(code=3)
+        note = LearningNote.objects.create(
+            category=hardware, topic=hardware.name, title='構成要素の解説', body='本文',
+        )
+        security = Category.objects.get(code=11)
+        LearningNote.objects.create(
+            category=security, topic=security.name, title='セキュリティの解説', body='本文',
+        )
+        self._finish_round(note)
+        response = self.client.get(reverse('fe:learn_start'))
+        self.assertEqual(self._opened_codes(response), [3])
+
+        for code in (9, 11, 9):
+            self._set_category(Category.objects.get(code=code))
+            response = self.client.get(reverse('fe:learn_start'))
+            self.assertEqual(self._opened_codes(response), [3, code])
+            self.assertContains(response, 'fe-group border-bottom" open', count=2)
+
+        # 指定した分野を解き終えたなら、同じ中分類なので1つだけ開く
+        self._set_category(hardware)
+        response = self.client.get(reverse('fe:learn_start'))
+        self.assertEqual(self._opened_codes(response), [3])
+        self.assertContains(response, 'fe-group border-bottom" open', count=1)
+
     def test_the_last_studied_category_is_opened(self):
-        """直前に学習した中分類だけを開く。指定している分野とは別でも、そちらを開く。
+        """指定とは別の分野を解き終えたら、指定した分野と、解き終えた中分類の両方を開く。
 
         学習回数は小分類の行に出るので、閉じたままだと学習したことが見えない。
+        指定した分野も閉じないので、ダッシュボードの指定と一覧の開く先がずれない。
         """
         self._prepare()
         security = Category.objects.get(code=11)
@@ -2206,8 +2244,8 @@ class LearningModeTests(TestCase):
         self._finish_round(note)
 
         response = self.client.get(reverse('fe:learn_start'))
-        self.assertEqual(response.context['opened'].code, 11)
-        self.assertContains(response, 'fe-group border-bottom" open', count=1)
+        self.assertEqual(self._opened_codes(response), [9, 11])
+        self.assertContains(response, 'fe-group border-bottom" open', count=2)
         self.assertEqual(self._checked_notes(response), [])
 
         # 途中のラウンドは数えない。終わったものだけが「直前に学習した」になる。
@@ -2215,8 +2253,9 @@ class LearningModeTests(TestCase):
             reverse('fe:learn_start'),
             {'minutes': 5, 'note': LearningNote.objects.get(category__code=9).pk},
         )
+        self._set_category(None)
         response = self.client.get(reverse('fe:learn_start'))
-        self.assertEqual(response.context['opened'].code, 11)
+        self.assertEqual(self._opened_codes(response), [11])
 
     def test_the_auto_pick_stays_inside_the_dashboard_category(self):
         """分野を指定していれば、おまかせもその分野の中から選ぶ。"""
@@ -2263,7 +2302,7 @@ class LearningModeTests(TestCase):
         """まだ学習していなければ、どの中分類も開かず、何も選ばない。"""
         self._prepare()
         response = self.client.get(reverse('fe:learn_start'))
-        self.assertIsNone(response.context['opened'])
+        self.assertEqual(response.context['opened'], [])
         self.assertEqual(self._checked_notes(response), [])
 
     def test_a_category_of_the_other_subject_is_not_used(self):

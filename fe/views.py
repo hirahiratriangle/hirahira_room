@@ -655,9 +655,6 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
         finished = LearningRound.objects.filter(
             learner=self.learner, phase=LearningRound.PHASE_DONE
         )
-        # 直前に学習した中分類を開いて見せる。学習した結果（学習回数）は小分類の行に
-        # 出るので、閉じたままだと、学習したことが一覧に反映されていないように見える。
-        # ダッシュボードで指定している分野は、おまかせの範囲になるだけで、開かない。
         last = (
             finished.filter(subject=session.subject, note__isnull=False)
             .select_related('note__category').first()
@@ -668,9 +665,30 @@ class LearnStartView(LearnerRequiredMixin, generic.View):
             'count': LearningRound.QUESTION_COUNT,
             'study_session': session,
             'groups': note_menu(self.learner, session.subject),
-            'opened': last.note.category if last else None,
+            'opened': self._opened_categories(session, last),
             'recent': finished[:5],
         })
+
+    @staticmethod
+    def _opened_categories(session, last):
+        """一覧で開いておく中分類。次の2つを、重ねずに両方開く。
+
+        ・ダッシュボードで指定した分野。おまかせはこの中から選ぶので、開いておくと
+          何が対象か分かる。開かないと、分野をどう選び直しても一覧の開く先が変わらず、
+          前に解き終えた中分類に固定されているように見えた。
+        ・最後に解き終えたラウンドの中分類。学習した結果（学習回数）は小分類の行に
+          出るので、閉じたままだと、学習したことが一覧に反映されていないように見える。
+
+        どちらか一方だけにすると、学習モードで指定とは別の分野を解き終えたときに、
+        ダッシュボードの指定と一覧の開く先がずれる。指定のほうを書き換えて合わせると、
+        おまかせや1問1答の出題範囲まで変わってしまうので、両方を開いて済ませる。
+        指定が今の科目のものでなければ（focus_category が None なら）使わない。
+        """
+        opened = []
+        for category in (focus_category(session), last.note.category if last else None):
+            if category is not None and category not in opened:
+                opened.append(category)
+        return opened
 
     def post(self, request, *args, **kwargs):
         raw = request.POST.get('minutes')
