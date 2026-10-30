@@ -1,5 +1,6 @@
 from datetime import timedelta
 from io import StringIO
+from unittest import mock
 
 from django.contrib.auth.models import Group
 from django.core.management import call_command
@@ -930,3 +931,31 @@ class CompanyTests(GenbaTestBase):
         rows = growth.candidates(g)
         self.assertEqual(rows[0]['type'], 'feedback')
         self.assertTrue(rows[0]['matches'])
+
+
+class AboutTests(TestCase):
+    def test_about_opens_without_login_and_links_to_app(self):
+        res = self.client.get(reverse('genba:about'))
+        self.assertContains(res, '会社の成長は、人から始まる。')
+        self.assertContains(res, f'href="{reverse("genba:portal")}"')
+        self.assertContains(res, 'プロトタイプ（現場）')
+        self.assertContains(res, 'disabled">構想プレゼン</span>')
+
+    def test_no_site_header_like_fe(self):
+        for name in ('about', 'portal'):
+            res = self.client.get(reverse(f'genba:{name}'))
+            self.assertEqual(res.status_code, 200)
+            self.assertNotContains(res, 'HIRAHIRAROOM')
+            self.assertNotContains(res, 'Log In')
+
+    def test_deck_link_appears_when_set(self):
+        with mock.patch('genba.kit.CONCEPT_DECK_URL', 'https://example.com/deck'):
+            res = self.client.get(reverse('genba:about'))
+        self.assertContains(res, 'https://example.com/deck')
+        self.assertNotContains(res, 'disabled">構想プレゼン</span>')
+
+    def test_home_opens_about_first(self):
+        self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))
+        res = self.client.get(reverse('home:home'))
+        self.assertContains(res, f'href="{reverse("genba:about")}"')
+        self.assertNotContains(res, f'href="{reverse("genba:portal")}"')

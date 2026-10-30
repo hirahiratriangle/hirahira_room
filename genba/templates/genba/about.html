@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}genba | HirahiraRoom{% endblock %}
+
+{% comment %}fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRAROOM）は出さない{% endcomment %}
+{% block site_nav %}{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0;">
+    <div class="container px-5 py-5 text-center text-white">
+        <h1 class="display-5 fw-bold mb-3">GENBA</h1>
+        <p class="h4 mb-3">{{ title }}</p>
+        <p class="mb-0">{{ lead }}</p>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+    <p class="text-center mb-5">{{ message }}</p>
+
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">課題：現場の経験が、個人の中に閉じている</h2>
+        <div class="row g-3">
+            {% for name, text in issues %}
+            <div class="col-md-4"><div class="card h-100"><div class="card-body">
+                <h3 class="h6 fw-bold">{{ name }}</h3>
+                <p class="small mb-0">{{ text }}</p>
+            </div></div></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">構想：会社が人を支え、人の成長が会社を育てる</h2>
+        <div class="row g-3">
+            {% for icon, name, text in about_roles %}
+            <div class="col-md-6"><div class="card h-100"><div class="card-body">
+                <h3 class="h6 fw-bold"><i class="fas {{ icon }} me-2" style="color: #2c5aa0;"></i>{{ name }}</h3>
+                <p class="small mb-0">{{ text }}</p>
+            </div></div></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% comment %}説明を読んだあとに具体へ進む：構想プレゼンとプロトタイプ（現場）を最後に並べる{% endcomment %}
+    <section class="d-flex flex-wrap justify-content-center gap-3">
+        {% if deck_url %}<a class="btn btn-outline-primary btn-lg" href="{{ deck_url }}" target="_blank" rel="noopener">構想プレゼン</a>
+        {% else %}<span class="btn btn-outline-primary btn-lg disabled">構想プレゼン</span>{% endif %}
+        <a class="btn btn-primary btn-lg" href="{% url 'genba:portal' %}">プロトタイプ（現場）</a>
+    </section>
+</div>
+{% endblock %}

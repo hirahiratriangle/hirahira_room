@@ -37,6 +37,22 @@ class GuestMixin:
         super().setup(request, *args, **kwargs)
 
 
+class AboutView(generic.TemplateView):
+    """案内ページ。hirahira-room から最初に開くページで、構想を伝え、genba 本体（portal）へ案内する。
+
+    genba の立場を使わないので GuestMixin は通さない（誰でも同じ内容）。
+    文言は kit.ABOUT_* に持つ。説明を読んだあとに具体へ進めるよう、最下部に2つのボタンを並べる。
+    構想プレゼンは kit.CONCEPT_DECK_URL に URL を書くと押せる。プロトタイプ（現場）は genba 本体へ進む。
+    """
+    template_name = 'genba/about.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(title=kit.ABOUT_TITLE, lead=kit.ABOUT_LEAD, message=kit.ABOUT_MESSAGE, issues=kit.ABOUT_ISSUES,
+                       about_roles=kit.ABOUT_ROLES, deck_url=kit.CONCEPT_DECK_URL)
+        return context
+
+
 class GenbaMixin(GuestMixin):
     """ナビに出す立場の一覧をテンプレートへ渡す"""
     role_name = ''

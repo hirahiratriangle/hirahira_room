@@ -7,6 +7,8 @@ app_name = 'genba'
 
 urlpatterns = [
     path('', views.PortalView.as_view(), name='portal'),
+    # 案内ページ（hirahira-room から最初に開く）
+    path('about/', views.AboutView.as_view(), name='about'),
     # 現場テンプレートと言い回し集（全現場共通）
     path('kit/', views.KitView.as_view(), name='kit'),
     path('kit/phrases/', views.PhrasesView.as_view(), name='phrases'),
