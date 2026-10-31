@@ -34,13 +34,16 @@
 """
 import calendar
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from django.utils import timezone
 
 from . import growth, money
-from .metrics import site_metrics
-from .models import VISIBILITY_COMPANY, Document, Goal, InterviewQuestion, KitProposal, Membership, Site, Term
+from .metrics import THRESHOLDS, WEEKLY_RATE_MIN, site_metrics
+from .models import (
+    KNOWLEDGE_CANDIDATE, VISIBILITY_COMPANY, Document, Goal, InterviewQuestion, KitProposal, Membership, Question, Site, Term,
+    week_start,
+)
 
 # 期間：3か月ごとに6つ。今月を含む区切りを最後にして、さかのぼる。
 # 暦の四半期にしないのは、月初めの「今の四半期」が1か月分しかなく、前の期と比べられなくなるのを減らすため
@@ -65,6 +68,11 @@ TARGETS = {
     'next_rate': 50,        # 次の目標を持つ人の割合（%）
     'promise_gaps': 3,      # 約束と実際のズレの件数（これ以下）
     'scope_out': 5,         # スコープ外の件数（これ以下）
+    'support_rate': 80,     # 「読めない」に説明の時間を割り当てた割合（%）
+    'feedback_rate': 80,    # まとめに返した割合（%）
+    'reach_waiting': 2,     # 成長の確認待ちの件数（これ以下）
+    'line_rate': 80,        # 裁量の線を書いた人の割合（%）
+    'candidates': 3,        # 公開待ちの候補の件数（これ以下）
 }
 # レベル3以上がこの人数に満たない項目を「層が薄い」とする。1人だけだと、その人が抜けた現場で受けられなくなるため
 THIN_PEOPLE = 2
@@ -98,6 +106,17 @@ MANAGEMENT_DEFINITIONS = [
     ('アサイン', '稼働率', '今月、現場に入っている人数 ÷ 全社の在籍人数', f'{TARGETS["operating_rate"]}%以上', '現場へ動かす人がいるか'),
     ('約束の調整', '約束と実際のズレ', '動いている現場の、食い違った行の合計', f'{TARGETS["promise_gaps"]}件以下', '営業時の説明を直すか'),
     ('約束の調整', 'スコープ外の件数', '動いている現場の「スコープ外」の合計', f'{TARGETS["scope_out"]}件以下', '追加交渉や契約の見直しが要るか'),
+]
+
+# リーダーの職掌の指標。マネジメントが現場をまたいで手を打つのに対し、リーダーは1つの現場の中でメンバーを支える
+LEADER_DEFINITIONS = [
+    ('詰まりの解消', '確認事項の平均滞留日数', '未解決の確認事項の経過日数の平均', f'{THRESHOLDS["stall_days"]}日未満', '意思決定が止まっていないか'),
+    ('詰まりの解消', '説明の時間を割り当てた割合', '未解決の「読めない」のうち、説明の時間が決まったもの', f'{TARGETS["support_rate"]}%以上', '読めないまま放っていないか'),
+    ('メンバーの育成', 'まとめに返した割合', 'メンバーが出したまとめのうち、リーダーが返したもの', f'{TARGETS["feedback_rate"]}%以上', '理解の差を返せているか'),
+    ('メンバーの育成', '成長の確認待ち', 'メンバーが確認を依頼し、まだ確認していない成長', f'{TARGETS["reach_waiting"]}件以下', '成長の確認を止めていないか'),
+    ('チームの運営', '週報の提出率', '週報がある週の割合（現場単位）', f'{WEEKLY_RATE_MIN}%以上', '週次共有が回っているか'),
+    ('チームの運営', '裁量の線を書いた人', 'リーダーを除くメンバーのうち、裁量の線を書いた人の割合', f'{TARGETS["line_rate"]}%以上', '決めてよい範囲を言葉にしたか'),
+    ('知見の資産化', '公開待ちの候補', 'ナレッジ候補のまま、まだ公開していない記録', f'{TARGETS["candidates"]}件以下', '現場の経験を止めていないか'),
 ]
 
 # 使わない指標。金額は積み上げるが、人を比べる数字にはしない（憲章 II・VI）
@@ -446,4 +465,103 @@ def management_reference(today=None):
     functions = for_role('management', today)
     for function in functions[1:]:
         function['chart'] = None
+    return functions
+
+
+LEADER_WEEKS = 8  # 週ごとのグラフで見る週の数
+
+
+def leader_functions(site, user, today=None):
+    """リーダーの4職掌。担当する現場1つについて、現場単位の値だけを返す。
+
+    リーダーは1つの現場の中で、メンバーが止まらないように日々支える。人ごとの状況はリーダーのホームで見るので、
+    ここは現場の集計にする。リーダーが1人の現場では現場の数字がリーダー個人の数字になるため、
+    これはリーダー自身の振り返りに使い、マネジメントや会社には渡さない（憲章 II）。
+
+    上の立場へのつながり：詰まりの解消とチームの運営はマネジメントの「現場の運営」に、メンバーの育成は「人の成長の確定」と
+    会社の「人材開発」に、知見の資産化は会社の「ナレッジ管理」につながる。
+    """
+    today = today or timezone.localdate()
+    metrics = site_metrics(site, today)
+    this_week = week_start(today)
+    weeks = [this_week - timedelta(weeks=n) for n in range(LEADER_WEEKS - 1, -1, -1)]
+    labels = [f'{w.month}/{w.day}' for w in weeks]
+
+    unreadable = list(site.questions.filter(unreadable=True, is_open=True))
+    supported = sum(1 for q in unreadable if q.support_on)
+    support_rate = percent(supported, len(unreadable))
+    stall = metrics.stall_days
+    closed = [timezone.localdate(t) for t in site.questions.filter(
+        kind=Question.KIND_QUESTION, stage='', closed_at__isnull=False).values_list('closed_at', flat=True)]
+    unblocking = {
+        'name': '詰まりの解消', 'duty': '読めない資料や確認事項を、止まる前に解く',
+        'tiles': [
+            Tile('確認事項の平均滞留日数', '―' if stall is None else f'{stall}日', f'未解決 {metrics.open_questions}件',
+                 f'目標 {THRESHOLDS["stall_days"]}日未満', None if stall is None else stall < THRESHOLDS['stall_days']),
+            Tile('説明の時間を割り当てた割合', show_percent(support_rate), f'{supported}件 ／ 読めない {len(unreadable)}件',
+                 f'目標 {TARGETS["support_rate"]}%', judge(support_rate, TARGETS['support_rate'])),
+        ],
+        'chart_title': '解決した確認事項（週ごと）',
+        'chart': chart(f'lead-closed-{site.pk}', labels,
+                       [('解決', [sum(1 for d in closed if week_start(d) == w) for w in weeks])], ORDINAL_3[1:]),
+    }
+
+    goals = list(site.goals.exclude(author=user))
+    submitted = site.summaries.filter(submitted_at__isnull=False).exclude(author=user)
+    answered = submitted.filter(feedback_at__isnull=False).count()
+    feedback_rate = percent(answered, submitted.count())
+    waiting = sum(1 for g in goals if g.stage == Goal.STAGE_SUBMITTED)
+    stages = list(Goal.STAGE_LABELS.items())
+    developing = {
+        'name': 'メンバーの育成', 'duty': 'まとめに返し、成長を事実で確認する',
+        'tiles': [
+            Tile('まとめに返した割合', show_percent(feedback_rate), f'{answered}件 ／ 出された {submitted.count()}件',
+                 f'目標 {TARGETS["feedback_rate"]}%', judge(feedback_rate, TARGETS['feedback_rate'])),
+            Tile('成長の確認待ち', f'{waiting}件', 'メンバーが確認を依頼した成長',
+                 f'目標 {TARGETS["reach_waiting"]}件以下', judge(waiting, TARGETS['reach_waiting'], lower_is_better=True)),
+        ],
+        'chart_title': 'メンバーの成長の段階',
+        'chart': chart(f'lead-stage-{site.pk}', [label for _, label in stages],
+                       [('件数', [sum(1 for g in goals if g.stage == key) for key, _ in stages])], ORDINAL_3[1:], horizontal=True),
+    }
+
+    members = site.memberships.exclude(user=user)
+    lined = members.filter(line_updated_at__isnull=False).count()
+    line_rate = percent(lined, members.count())
+    reports = site.documents.filter(kind=Document.KIND_WEEKLY, week_of__in=weeks).values_list('week_of', 'author_id').distinct()
+    team = {
+        'name': 'チームの運営', 'duty': '週次共有を回し、裁量の線を言葉にする',
+        'tiles': [
+            Tile('週報の提出率', show_percent(metrics.weekly_rate), f'直近{metrics.weekly_weeks}週',
+                 f'目標 {WEEKLY_RATE_MIN}%', judge(metrics.weekly_rate, WEEKLY_RATE_MIN)),
+            Tile('裁量の線を書いた人', show_percent(line_rate), f'{lined}人 ／ {members.count()}人',
+                 f'目標 {TARGETS["line_rate"]}%', judge(line_rate, TARGETS['line_rate'])),
+        ],
+        'chart_title': '週報を出した人数（週ごと）',
+        'chart': chart(f'lead-weekly-{site.pk}', labels,
+                       [('人数', [sum(1 for week, _ in reports if week == w) for w in weeks])], ORDINAL_3[1:]),
+    }
+
+    candidates = (site.documents.filter(knowledge_status=KNOWLEDGE_CANDIDATE).count()
+                  + site.terms.filter(knowledge_status=KNOWLEDGE_CANDIDATE).count())
+    public_docs = site.documents.filter(visibility=VISIBILITY_COMPANY)
+    published = [('用語', site.terms.filter(visibility=VISIBILITY_COMPANY).count()),
+                 ('設計判断', public_docs.filter(kind=Document.KIND_DESIGN).count()),
+                 ('振り返り', public_docs.filter(kind=Document.KIND_RETRO).count()),
+                 ('面談メモ', public_docs.filter(kind=Document.KIND_PRE).count())]
+    knowledge = {
+        'name': '知見の資産化', 'duty': 'ナレッジ候補を一般化して会社へ公開する',
+        'tiles': [
+            Tile('公開待ちの候補', f'{candidates}件', 'ナレッジ候補のまま',
+                 f'目標 {TARGETS["candidates"]}件以下', judge(candidates, TARGETS['candidates'], lower_is_better=True)),
+            Tile('公開した記録', f'{sum(n for _, n in published)}件', 'この現場から会社へ', '', None),
+        ],
+        'chart_title': '公開した記録の種類',
+        'chart': chart(f'lead-public-{site.pk}', [name for name, _ in published],
+                       [('件数', [n for _, n in published])], ORDINAL_3[1:], horizontal=True),
+    }
+
+    functions = [unblocking, developing, team, knowledge]
+    for function in functions:
+        function['rows'] = table_rows(function['chart'])
     return functions

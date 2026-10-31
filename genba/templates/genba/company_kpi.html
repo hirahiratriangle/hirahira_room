@@ -7,11 +7,25 @@
 
 <h2 class="h5 mb-3" style="color: #2c5aa0;">{{ heading }}</h2>
 
+{% for p in panels %}
+<h3 class="h6 fw-bold mt-3 mb-2">{{ p.site.name }}</h3>
+<div class="row g-3 mb-3">
+    {% for f in p.functions %}
+    {% include 'genba/_kpi_card.html' %}
+    {% endfor %}
+</div>
+{% endfor %}
+
 <div class="row g-3">
     {% for f in functions %}
     {% include 'genba/_kpi_card.html' %}
     {% endfor %}
 </div>
+
+{% if own_sites %}
+<h3 class="h6 mt-4">自分の現場の運営指標</h3>
+{% for m in own_sites %}<div class="small mb-2"><strong>{{ m.site.name }}</strong>　週報の提出率 {% if m.weekly_rate is None %}―{% else %}{{ m.weekly_rate }}%{% endif %} ・ 確認事項の滞留 {% if m.stall_days is None %}―{% else %}{{ m.stall_days }}日{% endif %}{% for a in m.alerts %}<div><i class="fas fa-exclamation-circle text-warning me-1"></i>{{ a }}</div>{% endfor %}</div>{% endfor %}
+{% endif %}
 
 {% if reference %}
 <h2 class="h5 mt-5 mb-3" style="color: #2c5aa0;">会社のKPI（参考）</h2>
@@ -20,11 +34,6 @@
     {% include 'genba/_kpi_card.html' %}
     {% endfor %}
 </div>
-{% endif %}
-
-{% if own_sites %}
-<h3 class="h6 mt-4">自分の現場の運営指標</h3>
-{% for m in own_sites %}<div class="small mb-2"><strong>{{ m.site.name }}</strong>　週報の提出率 {% if m.weekly_rate is None %}―{% else %}{{ m.weekly_rate }}%{% endif %} ・ 確認事項の滞留 {% if m.stall_days is None %}―{% else %}{{ m.stall_days }}日{% endif %}{% for a in m.alerts %}<div><i class="fas fa-exclamation-circle text-warning me-1"></i>{{ a }}</div>{% endfor %}</div>{% endfor %}
 {% endif %}
 
 {% if interview_questions %}
@@ -39,8 +48,10 @@
     <tbody>{% for function, name, definition, target, decision in definitions %}<tr><td class="text-nowrap">{{ function }}</td><td class="text-nowrap">{{ name }}</td><td>{{ definition }}</td><td class="text-nowrap">{{ target }}</td><td>{{ decision }}</td></tr>{% endfor %}</tbody>
 </table></div>
 
+{% if excluded %}
 <h3 class="h6 mt-4">使わない指標</h3>
 <p class="small text-muted">{{ excluded }}</p>
+{% endif %}
 {% endif %}
 
 {{ charts|json_script:"kpi-charts" }}

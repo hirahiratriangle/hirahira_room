@@ -18,6 +18,10 @@
             <h3 class="h6 fw-bold"><i class="fas fa-user-friends me-2"></i>リーダー：メンバーを支える</h3>
             <p class="small text-muted mb-0">詰まりの発見、成長の確認</p>
         </div></a></div>
+        <div class="col-md-6"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:role_kpi' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-chart-line me-2"></i>リーダー：職掌とKPI</h3>
+            <p class="small text-muted mb-0">現場ごとの KPI とグラフ</p>
+        </div></a></div>
         {% endif %}
         {% if 'management' in roles %}
         <div class="col-md-6"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:management' %}"><div class="card-body">

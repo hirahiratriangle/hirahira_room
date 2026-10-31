@@ -1190,7 +1190,6 @@ class ManagementKpiTests(GenbaTestBase):
         self.client.force_login(self.leader)
         res = self.client.get(reverse('genba:role_kpi'))
         self.assertNotContains(res, '承認待ちの平均日数')
-        self.assertNotContains(res, '会社のKPI（参考）')
 
     def test_alert_sites_ignore_archived(self):
         self.make_site('現場B', 'genba-b')
@@ -1224,6 +1223,73 @@ class ManagementKpiTests(GenbaTestBase):
         call_command('seed_genba', stdout=StringIO())
         self.client.post(reverse('genba:demo_switch', args=['management']))
         self.assertContains(self.client.get(reverse('genba:role_kpi')), 'マネジメントの職掌とKPI')
+
+
+class LeaderKpiTests(GenbaTestBase):
+    """リーダーの職掌とKPI（spec 010）"""
+
+    def setUp(self):
+        super().setUp()
+        self.manager = CustomUser.objects.create_user('manager', 'k@example.com', 'pass12345')
+        self.add_group(self.manager, GROUP_MANAGEMENT)
+
+    def tile(self, name):
+        return next(t for f in kpi.leader_functions(self.site, self.leader) for t in f['tiles'] if t.name == name)
+
+    def test_panels_for_each_active_site(self):
+        other = self.make_site('現場B', 'genba-b')
+        archived = self.make_site('現場D', 'genba-d')
+        archived.is_archived = True
+        archived.save()
+        self.client.force_login(self.leader)
+        res = self.client.get(reverse('genba:role_kpi'))
+        self.assertEqual({p['site'] for p in res.context['panels']}, {self.site, other})
+        self.assertEqual([f['name'] for f in res.context['panels'][0]['functions']],
+                         ['詰まりの解消', 'メンバーの育成', 'チームの運営', '知見の資産化'])
+        ids = [c['id'] for c in res.context['charts']]
+        self.assertEqual(len(ids), len(set(ids)))
+        body = res.content.decode()
+        self.assertLess(body.index('確認事項の平均滞留日数'), body.index('会社のKPI（参考）'))
+        self.assertNotContains(res, '使わない指標')
+
+    def test_not_shown_to_member_or_management(self):
+        for user in (self.member, self.manager):
+            self.client.force_login(user)
+            self.assertNotContains(self.client.get(reverse('genba:role_kpi')), 'まとめに返した割合')
+
+    def test_no_member_names_in_kpi(self):
+        self.client.force_login(self.leader)
+        self.assertNoUsername(self.client.get(reverse('genba:role_kpi')), self.member.username)
+
+    def test_support_rate(self):
+        for on in (self.today, None):
+            Question.objects.create(site=self.site, author=self.member, title='t', unreadable=True, support_on=on)
+        self.assertEqual(self.tile('説明の時間を割り当てた割合').value, '50%')
+
+    def test_rates_exclude_leader(self):
+        self.site.memberships.filter(user=self.leader).update(line_updated_at=timezone.now())
+        self.assertEqual(self.tile('裁量の線を書いた人').detail, '0人 ／ 1人')
+        Summary.objects.create(site=self.site, author=self.leader, submitted_at=timezone.now())
+        self.assertEqual(self.tile('まとめに返した割合').value, '―')
+        Summary.objects.create(site=self.site, author=self.member, submitted_at=timezone.now(), feedback_at=timezone.now())
+        self.assertEqual(self.tile('まとめに返した割合').value, '100%')
+
+    def test_reach_waiting_counts_unconfirmed_only(self):
+        for confirmed in (None, timezone.now()):
+            Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=2, target_text='t',
+                                submitted_at=timezone.now(), confirmed_at=confirmed)
+        self.assertEqual(self.tile('成長の確認待ち').value, '1件')
+
+    def test_candidates_counts_docs_and_terms(self):
+        Term.objects.create(site=self.site, author=self.member, term='a', knowledge_status=KNOWLEDGE_CANDIDATE)
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='d',
+                                knowledge_status=KNOWLEDGE_CANDIDATE)
+        self.assertEqual(self.tile('公開待ちの候補').value, '2件')
+
+    def test_seeded_page_renders(self):
+        call_command('seed_genba', stdout=StringIO())
+        self.client.post(reverse('genba:demo_switch', args=['leader']))
+        self.assertContains(self.client.get(reverse('genba:role_kpi')), 'リーダーの職掌とKPI')
 
 
 class AboutTests(TestCase):
