@@ -25,16 +25,16 @@ class SiteForm(BootstrapMixin, forms.ModelForm):
 
     class Meta:
         model = Site
-        fields = ['name', 'repo_name', 'industry', 'started_on', 'description']
+        fields = ['name', 'team_slug', 'industry', 'started_on', 'description']
         widgets = {
             'started_on': forms.DateInput(attrs={'type': 'date'}),
             'description': forms.Textarea(attrs={'rows': 3}),
         }
 
-    def clean_repo_name(self):
-        name = self.cleaned_data['repo_name']
+    def clean_team_slug(self):
+        name = self.cleaned_data['team_slug']
         if not name.startswith('genba-'):
-            raise forms.ValidationError('リポジトリ名は genba- で始めてください。')
+            raise forms.ValidationError('現場チーム名は genba- で始めてください。')
         return name
 
 
@@ -205,6 +205,12 @@ class GoalPickForm(forms.Form):
                              widget=forms.Select(attrs={'class': 'form-select'}))
     level = forms.TypedChoiceField(label='今のレベル', coerce=int, choices=Goal.LEVEL_CHOICES[:4], initial=3,
                                    widget=forms.Select(attrs={'class': 'form-select'}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 会社の重点に印を付ける。何を選ぶかは本人が決める
+        focus = growth.focus_items()
+        self.fields['item'].choices = [('', '選ぶ')] + [(n, f'★ {n}' if n in focus else n) for n in growth.SKILL_ITEMS]
 
 
 class GoalForm(BootstrapMixin, forms.ModelForm):

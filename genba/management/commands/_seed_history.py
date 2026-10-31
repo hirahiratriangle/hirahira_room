@@ -14,10 +14,10 @@
 """
 from datetime import timedelta
 
-from genba import growth
+from genba import growth, kit
 from genba.models import (
     KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY,
-    CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Site, Term,
+    Assignment, CompanyMonth, Document, FocusSkill, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Site, Term,
     month_start,
 )
 
@@ -27,6 +27,10 @@ PEOPLE_GRADES = {'demo_kimura': 'G1', 'demo_sato': 'G2', 'demo_yamamoto': 'G2', 
                  'demo_takahashi': 'G2', 'demo_ito': 'G2', 'demo_suzuki': 'G3', 'demo_kobayashi': 'G4', 'demo_tanaka': 'G4'}
 # 成長で階級が上がった人：(本人, 元の階級, 元になった成長のスキル項目, 何日前に採用)。それより前の月は元の階級で記録する
 PROMOTED = [('demo_takahashi', 'G1', 'ソフトウェアエンジニアリング', 190), ('demo_yamamoto', 'G1', 'テクノロジ', 120)]
+FOCUS = ['業務分析', '知的資産管理活用', 'ネゴシエーション']   # 会社の重点スキル項目
+# 過去のアサイン：(本人, 元になった成長のスキル項目, 入った現場, 次の目標に合うか, 何日前)
+ASSIGNED = [('demo_tanaka', 'リーダーシップ', 'claims', True, 85), ('demo_suzuki', 'リーダーシップ', 'order', True, 70),
+            ('demo_takahashi', 'ソフトウェアエンジニアリング', 'logistics', False, 56)]
 PAST_ENDED = {'genba-demo-past-sales': 150, 'genba-demo-past-web': 110}   # 終わった現場が何日前に終わったか
 
 # (キー, 現場名, 業界, 入場した日からの日数, リーダー, メンバー)
@@ -90,7 +94,7 @@ def seed_history(cmd, users):
     sites = {}
     for key, name, industry, started, leader, members in SITES:
         site = Site.objects.create(
-            name=name, repo_name=f'genba-demo-{key}', industry=industry, is_archived=True,
+            name=name, team_slug=f'genba-demo-{key}', industry=industry, is_archived=True,
             started_on=cmd.today - timedelta(days=started), description='終わった現場。',
         )
         sites[key] = site
@@ -133,10 +137,11 @@ def seed_work(cmd):
                                  'required_level': level})[0]
     raised = {user: (grades[old], cmd.today - timedelta(days=days)) for user, old, _, days in PROMOTED}
     people = {}
-    for m in Membership.objects.filter(site__repo_name__startswith='genba-demo-').select_related('site', 'user'):
+    for m in Membership.objects.filter(site__team_slug__startswith='genba-demo-').select_related('site', 'user'):
+        kit.ensure_repository(m.user)
         grade = grades[PEOPLE_GRADES[m.user.username]]
         GradeAssignment.objects.update_or_create(user=m.user, defaults={'grade': grade})
-        last = cmd.today - timedelta(days=PAST_ENDED.get(m.site.repo_name, 0))
+        last = cmd.today - timedelta(days=PAST_ENDED.get(m.site.team_slug, 0))
         month = month_start(m.joined_on)
         while month <= last:
             old, since = raised.get(m.user.username, (None, None))
@@ -147,6 +152,7 @@ def seed_work(cmd):
         CompanyMonth.objects.get_or_create(month=month, defaults={'headcount': len(users) + 1})
     seed_reviews(cmd, grades)
     seed_task_evidence()
+    seed_vision(cmd)
 
 
 def seed_reviews(cmd, grades):
@@ -163,8 +169,20 @@ def seed_reviews(cmd, grades):
 
 def seed_task_evidence():
     """動いている現場の目標に、本人が終えた作業を2件ずつ証拠として付ける。やり遂げた作業が成長につながる形を見せる"""
-    for goal in Goal.objects.filter(site__repo_name__startswith='genba-demo-', site__is_archived=False):
+    for goal in Goal.objects.filter(site__team_slug__startswith='genba-demo-', site__is_archived=False):
         tasks = goal.site.questions.filter(author=goal.author, kind='task', is_open=False, due_on__isnull=False)[:2]
         for task in tasks:
             GoalEvidence.objects.get_or_create(goal=goal, record_type='issue', record_id=task.pk,
                                                defaults={'title': growth.record_title(task)[:150]})
+
+
+def seed_vision(cmd):
+    """会社の重点と、過去のアサイン。本物の利用者が重点を決めていれば上書きしない"""
+    if not FocusSkill.objects.exists():
+        FocusSkill.objects.bulk_create(FocusSkill(skill_item=item) for item in FOCUS)
+    for user, item, key, matched, days in ASSIGNED:
+        goal = Goal.objects.get(author__username=user, skill_item=item, site__is_archived=True)
+        goal.next_text = '次の現場で、より大きな責任を担う'
+        goal.save(update_fields=['next_text'])
+        Assignment.objects.create(goal=goal, site=Site.objects.get(team_slug=f'genba-demo-{key}'), matched=matched,
+                                  assigned_by=cmd.kacho, created_at=cmd.ago(days))

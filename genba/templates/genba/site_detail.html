@@ -6,7 +6,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
     <div>
         <h2 class="h5 mb-1" style="color: #2c5aa0;">{{ site.name }}{% if site.is_archived %} <span class="badge bg-secondary">Archive 済み</span>{% endif %}</h2>
-        <p class="small text-muted mb-1"><i class="fab fa-github me-1"></i>{{ site.repo_name }} ・ {{ site.industry }} ・ 入場日 {{ site.started_on|date:"Y年n月j日" }} ・ テンプレート {{ site.template_version }}{% if is_leader %} ・ <span class="badge bg-primary">リーダー</span>{% endif %}</p>
+        <p class="small text-muted mb-1"><i class="fas fa-users me-1"></i>{{ site.team_slug }} ・ {{ site.industry }} ・ 入場日 {{ site.started_on|date:"Y年n月j日" }}{% if is_leader %} ・ <span class="badge bg-primary">リーダー</span>{% endif %}</p>
         {% if site.description %}<p class="small mb-0 genba-pre">{{ site.description }}</p>{% endif %}
     </div>
     <div class="d-flex gap-2">
@@ -205,10 +205,10 @@
 </table></div>
 
 {% elif tab == 'members' %}
-<table class="table table-sm">
-    <thead><tr class="small text-muted"><th>名前</th><th>立場</th><th>役割</th><th>入場日</th></tr></thead>
-    <tbody>{% for m in memberships %}<tr class="small"><td>{{ m.user.username }}</td><td>{{ m.get_role_display }}</td><td>{{ m.duty|default:"―" }}</td><td>{{ m.joined_on|date:"n/j" }}</td></tr>{% endfor %}</tbody>
-</table>
+<div class="table-responsive"><table class="table table-sm">
+    <thead><tr class="small text-muted"><th>名前</th><th>立場</th><th>役割</th><th>入場日</th><th>リポジトリ</th><th>テンプレート</th></tr></thead>
+    <tbody>{% for m in memberships %}<tr class="small"><td>{{ m.user.username }}</td><td>{{ m.get_role_display }}</td><td>{{ m.duty|default:"―" }}</td><td>{{ m.joined_on|date:"n/j" }}</td><td class="text-muted"><i class="fab fa-github me-1"></i>{{ m.user.genba_repository.name }}</td><td class="text-muted">{{ m.user.genba_repository.template_version }}</td></tr>{% endfor %}</tbody>
+</table></div>
 <h3 class="h6 mt-4">目標と成長</h3>
 <ul class="list-group mb-3">
     {% for g in goals %}<li class="list-group-item small d-flex flex-wrap justify-content-between gap-2"><span><strong>{{ g.author.username }}</strong>　{{ g.skill_item }}（レベル{{ g.target_level }}）：{{ g.target_text }}</span><a href="{% url 'genba:goal_reach' g.pk %}" class="text-nowrap">{{ g.stage_label }}</a></li>

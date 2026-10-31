@@ -44,7 +44,7 @@ from django.utils import timezone
 from . import grades, growth, kit, money, signals
 from .metrics import THRESHOLDS, WEEKLY_RATE_MIN, site_metrics
 from .models import (
-    KNOWLEDGE_CANDIDATE, VISIBILITY_COMPANY, Document, Goal, GoalEvidence, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question, Site, Term,
+    KNOWLEDGE_CANDIDATE, VISIBILITY_COMPANY, Assignment, Document, Goal, GoalEvidence, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question, Site, Term,
     month_start, week_start,
 )
 
@@ -76,6 +76,8 @@ TARGETS = {
     'reach_waiting': 2,     # 成長の確認待ちの件数（これ以下）
     'line_rate': 80,        # 裁量の線を書いた人の割合（%）
     'candidates': 3,        # 公開待ちの候補の件数（これ以下）
+    'focus_rate': 50,       # 重点に向かう目標の割合（%）
+    'matched_rate': 70,     # 次の目標に合うアサインの割合（%）
 }
 # レベル3以上がこの人数に満たない項目を「層が薄い」とする。1人だけだと、その人が抜けた現場で受けられなくなるため
 THIN_PEOPLE = 2
@@ -96,6 +98,7 @@ DEFINITIONS = [
      f'{TARGETS["leader_rate"]}%以上', '上の立場の案件を狙えるか'),
     ('営業・事業企画', '質問リストの件数', '営業・面談の質問リストの件数', f'{TARGETS["questions"]}件以上', '現場の教訓が入場前の確認に戻っているか'),
     ('人材開発', '成長した人の割合', '直近3か月に成長が承認された人数 ÷ 在籍人数', f'{TARGETS["growth_rate"]}%以上', '育成が止まっていないか'),
+    ('人材開発', '重点に向かう目標', '承認前の目標のうち、会社の重点スキル項目に向かうもの', f'{TARGETS["focus_rate"]}%以上', '会社の重点がメンバーの目標に届いているか'),
     ('人材開発', '層の薄い項目', f'レベル3以上が{THIN_PEOPLE}人に満たないスキル項目の数', f'{TARGETS["thin_items"]}項目以下', 'どこへ育成を再投資するか'),
     ('ナレッジ管理', '公開したナレッジ', '直近3か月に一般化して公開した記録の件数', f'{TARGETS["published"]}件以上', '経験が資産になり続けているか'),
     ('ナレッジ管理', '業界カバー率', '公開した記録がある業界 ÷ 現場の業界', f'{TARGETS["industry_rate"]}%以上', '得意な業界の知見が残っているか'),
@@ -109,6 +112,7 @@ MANAGEMENT_DEFINITIONS = [
     ('人の成長の確定', '承認待ちの平均日数', '確認が済んでから（ひとり現場は依頼から）今日までの日数の平均', f'{TARGETS["approval_days"]}日以下', '成長の確定を止めていないか'),
     ('人の成長の確定', '作業を証拠にした成長', '承認した成長のうち、終えた作業を証拠にしたものの割合', '―', 'タスクの消化が成長につながっているか'),
     ('アサイン', '次の目標を持つ人の割合', '承認した成長に次の目標がある人 ÷ 成長が承認された人', f'{TARGETS["next_rate"]}%以上', '次のアサインの材料があるか'),
+    ('アサイン', '目標に合うアサイン', '記録したアサインのうち、次の目標に合う現場へ入れたもの', f'{TARGETS["matched_rate"]}%以上', '成長のループが閉じているか'),
     ('アサイン', '稼働率', '今月、現場に入っている人数 ÷ 全社の在籍人数', f'{TARGETS["operating_rate"]}%以上', '現場へ動かす人がいるか'),
     ('約束の調整', '約束と実際のズレ', '動いている現場の、食い違った行の合計', f'{TARGETS["promise_gaps"]}件以下', '営業時の説明を直すか'),
     ('約束の調整', 'スコープ外の件数', '動いている現場の「スコープ外」の合計', f'{TARGETS["scope_out"]}件以下', '追加交渉や契約の見直しが要るか'),
@@ -239,11 +243,18 @@ def development_function(spans, people):
 
     current, previous = grown(spans[-1]), grown(spans[-2])
     rate = percent(current, people)
+    # 会社の重点がメンバーの目標に届いているか。選ぶのは本人なので、画面では印を付けるだけで、ここで結果を見る
+    focus = growth.focus_items()
+    open_goals = Goal.objects.filter(approved_on__isnull=True, site__is_archived=False)
+    toward = open_goals.filter(skill_item__in=focus).count()
+    focus_rate = percent(toward, open_goals.count())
     return {
         'name': '人材開発', 'duty': '育成へ再投資する項目を決める',
         'tiles': [
             Tile('成長した人（直近3か月）', show_percent(rate), f'{current}人 ／ 前の3か月 {previous}人',
                  f'目標 {TARGETS["growth_rate"]}%', judge(rate, TARGETS['growth_rate'])),
+            Tile('重点に向かう目標', show_percent(focus_rate), f'{toward}件 ／ 承認前 {open_goals.count()}件',
+                 f'目標 {TARGETS["focus_rate"]}%', judge(focus_rate, TARGETS['focus_rate'])),
             Tile('層の薄い項目', f'{len(thin)}項目', '、'.join(thin) or '―',
                  f'目標 {TARGETS["thin_items"]}項目以下', judge(len(thin), TARGETS['thin_items'], lower_is_better=True)),
         ],
@@ -464,11 +475,16 @@ def management_functions(today=None):
     next_rate = percent(len(planned), len(reached))
     billed, enrolled, operating = money.operating(today or timezone.localdate())
     history = [money.operating(p.end) for p in spans]
+    assigned = Assignment.objects.count()
+    matched = Assignment.objects.filter(matched=True).count()
+    matched_rate = percent(matched, assigned)
     assignment = {
         'name': 'アサイン', 'duty': '次の目標に合う現場へ人を動かす',
         'tiles': [
             Tile('次の目標を持つ人', show_percent(next_rate), f'{len(planned)}人 ／ {len(reached)}人',
                  f'目標 {TARGETS["next_rate"]}%', judge(next_rate, TARGETS['next_rate'])),
+            Tile('目標に合うアサイン', show_percent(matched_rate), f'{matched}件 ／ {assigned}件',
+                 f'目標 {TARGETS["matched_rate"]}%', judge(matched_rate, TARGETS['matched_rate'])),
             Tile('稼働率（今月）', show_percent(operating), f'{billed}人 ／ 在籍 {enrolled or "―"}人',
                  f'目標 {TARGETS["operating_rate"]}%', judge(operating, TARGETS['operating_rate'])),
         ],
@@ -731,3 +747,10 @@ def member_functions(site, user, today=None):
     for function in functions:
         function['rows'] = table_rows(function['chart'])
     return functions
+
+
+def assignment_candidates(viewer):
+    """アサインの候補：承認した成長に次の目標があり、まだアサインを記録していないもの。本人の分は本人に出さない"""
+    goals = [g for g in growth.approved_reaches() if g.next_text and g.author != viewer]
+    done = set(Assignment.objects.filter(goal__in=goals).values_list('goal_id', flat=True))
+    return [g for g in goals if g.pk not in done]

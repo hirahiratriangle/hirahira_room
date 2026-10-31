@@ -6,6 +6,7 @@
 {% if current_role == 'company' %}{% include 'genba/_company_tabs.html' %}{% endif %}
 
 <h2 class="h5 mb-3" style="color: #2c5aa0;">{{ heading }}</h2>
+{% include 'genba/_vision.html' %}
 
 {% for p in panels %}
 <h3 class="h6 fw-bold mt-3 mb-2">{{ p.site.name }}</h3>
@@ -21,6 +22,14 @@
     {% include 'genba/_kpi_card.html' %}
     {% endfor %}
 </div>
+
+{% if current_role == 'company' %}
+<h3 class="h6 mt-4">会社の重点スキル項目</h3>
+<form method="post" action="{% url 'genba:focus_update' %}" class="small">{% csrf_token %}
+    <div class="d-flex flex-wrap gap-3 mb-2">{% for item in skill_items %}<label class="form-check-label"><input class="form-check-input me-1" type="checkbox" name="items" value="{{ item }}" {% if item in focus_items %}checked{% endif %}>{{ item }}</label>{% endfor %}</div>
+    <button class="btn btn-outline-primary btn-sm">保存する</button>
+</form>
+{% endif %}
 
 {% if grade_reviews %}
 <h3 class="h6 mt-4">階級の見直し</h3>

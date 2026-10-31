@@ -17,7 +17,7 @@
 ひとり現場は、その人だけがメンバーとして入っている現場として作る。確認するリーダーがいないので、
 成長はマネジメントが確認と承認を行う（構想書スライド22）。
 
-デモの現場（リポジトリ名が genba-demo- で始まるもの）と、デモのユーザーが出した改訂の提案・質問リストは
+デモの現場（現場チーム名が genba-demo- で始まるもの）と、デモのユーザーが出した改訂の提案・質問リストは
 毎回作り直す。マネジメント・会社のグループは、切り替えられる1人ずつだけにする
 （前の版のゲスト genba_guest はグループから外す）。
 
@@ -66,7 +66,7 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        Site.objects.filter(repo_name__startswith=DEMO_PREFIX).delete()
+        Site.objects.filter(team_slug__startswith=DEMO_PREFIX).delete()
         # 現場に属さない記録（改訂の提案・質問リスト）は、デモのユーザーが出したものだけ消す。
         # 本物の利用者が出したものは残す。作り直すたびに重ならないように
         KitProposal.objects.filter(author__username__startswith='demo_').delete()
@@ -98,7 +98,7 @@ class Command(BaseCommand):
         # 筋書きのあとに、過去の活動（週報・確認事項・作業・議事録など）を多めに足す。
         # 切り替えられるメンバーとリーダーは外す（本人の画面の筋書き：危険信号・出していない週を変えないため）
         for key in ('order', 'logistics', 'claims', 'stock'):
-            site = Site.objects.get(repo_name=f'{DEMO_PREFIX}{key}')
+            site = Site.objects.get(team_slug=f'{DEMO_PREFIX}{key}')
             members = [m.user for m in site.memberships.select_related('user')]
             # 店舗在庫（ひとり現場）は直近8週の週報を足さない：見ている人がいないと週報が滞る、という筋書き
             seed_activity(self, site, key, members, skip=(personas['member'], personas['leader']), quiet_weeks=8 if key == 'stock' else 0)
@@ -163,7 +163,7 @@ class Command(BaseCommand):
     def seed_order(self, lead, sato, suzuki):
         started = self.today - timedelta(weeks=10)
         site = Site.objects.create(
-            name='受発注システム刷新', repo_name=f'{DEMO_PREFIX}order', industry='製造業',
+            name='受発注システム刷新', team_slug=f'{DEMO_PREFIX}order', industry='製造業',
             description='既存の受発注システムを刷新する基本設計フェーズ。', started_on=started,
         )
         self.join(site, lead, Membership.ROLE_LEADER, duty='基本設計リード')
@@ -304,7 +304,7 @@ class Command(BaseCommand):
     def seed_claims(self, newcomer, tanaka, ito, watanabe, yamamoto):
         started = self.today - timedelta(weeks=12)
         site = Site.objects.create(
-            name='保険金請求 基本設計', repo_name=f'{DEMO_PREFIX}claims', industry='保険業',
+            name='保険金請求 基本設計', team_slug=f'{DEMO_PREFIX}claims', industry='保険業',
             description='保険金請求の受付から支払までの業務フローと画面の基本設計。', started_on=started,
         )
         others = (ito, watanabe, yamamoto)
@@ -418,7 +418,7 @@ class Command(BaseCommand):
     def seed_logistics(self, takahashi):
         started = self.today - timedelta(weeks=8)
         site = Site.objects.create(
-            name='出荷バッチ改修', repo_name=f'{DEMO_PREFIX}logistics', industry='物流業',
+            name='出荷バッチ改修', team_slug=f'{DEMO_PREFIX}logistics', industry='物流業',
             description='倉庫の出荷指示バッチを、締め時刻の変更に合わせて改修する。', started_on=started,
         )
         # ひとり現場：本人だけがメンバーとして入る（自社のリーダーはいない）
@@ -446,7 +446,7 @@ class Command(BaseCommand):
     def seed_stock(self, nakamura):
         started = self.today - timedelta(weeks=20)
         site = Site.objects.create(
-            name='店舗在庫の可視化', repo_name=f'{DEMO_PREFIX}stock', industry='小売業', started_on=started,
+            name='店舗在庫の可視化', team_slug=f'{DEMO_PREFIX}stock', industry='小売業', started_on=started,
         )
         # ひとり現場：本人だけがメンバーとして入る（自社のリーダーはいない）
         self.join(site, nakamura, duty='可視化画面の設計')

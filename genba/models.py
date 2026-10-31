@@ -32,12 +32,17 @@ def week_start(day):
 
 
 class Site(models.Model):
-    """現場。1現場＝1リポジトリ（genba-*）。テンプレートから作る。"""
+    """現場チーム。GitHub の Team に当たる（構想書スライド2）。
+
+    リポジトリは現場ではなくメンバー1人に1つ（MemberRepository）。現場の記録は書いた人のリポジトリに残り、
+    現場チームの人はチームの権限で読む。現場が終わっても、本人の記録は本人のリポジトリに残って次の現場へ続く。
+    モデルが記録を site と author の組で持つのは、この「誰のリポジトリの、どの現場のフォルダか」に当たる。
+    """
 
     name = models.CharField(verbose_name='現場名', max_length=60)
-    repo_name = models.CharField(
-        verbose_name='リポジトリ名', max_length=100, unique=True,
-        help_text='例: genba-acme-order。プロトタイプでは名前だけ持つ（GitHub には作らない）。',
+    team_slug = models.CharField(
+        verbose_name='現場チーム名', max_length=100, unique=True,
+        help_text='例: genba-acme-order。GitHub の Team に当たる。プロトタイプでは名前だけ持つ。',
     )
     industry = models.CharField(
         verbose_name='業界', max_length=40,
@@ -45,13 +50,30 @@ class Site(models.Model):
     )
     description = models.TextField(verbose_name='概要', blank=True)
     started_on = models.DateField(verbose_name='入場日')
-    template_version = models.CharField(verbose_name='テンプレートの版', max_length=20, default=kit.TEMPLATE_VERSION)
     is_archived = models.BooleanField(verbose_name='Archive 済み', default=False)
     created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
 
     class Meta:
         verbose_name = verbose_name_plural = '現場'
         ordering = ['-started_on']
+
+    def __str__(self):
+        return self.name
+
+
+class MemberRepository(models.Model):
+    """メンバー1人に1つのリポジトリ。テンプレートから作り、現場が変わっても使い続ける（構想書スライド2）。
+
+    プロトタイプでは名前だけ持ち、GitHub には作らない。記録はアプリの DB に書く。
+    """
+
+    user = models.OneToOneField(CustomUser, verbose_name='本人', on_delete=models.CASCADE, related_name='genba_repository')
+    name = models.CharField(verbose_name='リポジトリ名', max_length=100, unique=True)
+    template_version = models.CharField(verbose_name='テンプレートの版', max_length=20, default=kit.TEMPLATE_VERSION)
+    created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'メンバーのリポジトリ'
 
     def __str__(self):
         return self.name
@@ -577,7 +599,7 @@ class Grade(models.Model):
 
 
 class GradeAssignment(models.Model):
-    """その人の今の階級。会社が決める。本人もチームも読めるので、現場リポジトリに出てよい値。"""
+    """その人の今の階級。会社が決める。本人もチームも読めるので、メンバーのリポジトリに出てよい値。"""
 
     user = models.OneToOneField(CustomUser, verbose_name='本人', on_delete=models.CASCADE, related_name='genba_grade')
     grade = models.ForeignKey(Grade, verbose_name='階級', on_delete=models.PROTECT, related_name='assignments')
@@ -612,6 +634,38 @@ class GradeReview(models.Model):
 
     def __str__(self):
         return f'{self.user}：{self.current_grade} → {self.proposed_grade}'
+
+
+class Assignment(models.Model):
+    """アサインの記録。次の目標を見て現場へ入れた判断を残し、成長のループを閉じる（構想書スライド6・7）。
+
+    matched は「次の目標に合う現場か」のマネジメントの判断。自動では決めない。
+    """
+
+    goal = models.ForeignKey(Goal, verbose_name='元になった成長', on_delete=models.CASCADE, related_name='assignments')
+    site = models.ForeignKey(Site, verbose_name='アサインした現場', on_delete=models.CASCADE, related_name='assignments')
+    matched = models.BooleanField(verbose_name='次の目標に合う現場', default=False)
+    assigned_by = models.ForeignKey(CustomUser, verbose_name='決めた人', on_delete=models.PROTECT, related_name='+')
+    created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'アサイン'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.goal.author} → {self.site}'
+
+
+class FocusSkill(models.Model):
+    """会社の重点スキル項目。ビジョンを今の取り組みに落としたもの。会社が決め、メンバーの目標づくりに届く（憲章 VII）。"""
+
+    skill_item = models.CharField(verbose_name='スキル項目', max_length=40, unique=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '重点スキル項目'
+
+    def __str__(self):
+        return self.skill_item
 
 
 class MonthlyWork(models.Model):

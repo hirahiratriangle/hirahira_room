@@ -1,0 +1,5 @@
+<div class="card mb-3" style="border-left: 4px solid #2c5aa0;"><div class="card-body py-2 small">
+    {% for label, text in vision %}<div class="d-flex gap-2"><span class="text-muted text-nowrap" style="min-width: 5em;">{{ label }}</span><span class="{% if label == 'ビジョン' %}fw-bold{% endif %}">{{ text }}</span></div>{% endfor %}
+    {% if role_aim %}<div class="d-flex gap-2"><span class="text-muted text-nowrap" style="min-width: 5em;">この立場</span><span>{{ role_aim }}</span></div>{% endif %}
+    {% if focus_items %}<div class="d-flex gap-2"><span class="text-muted text-nowrap" style="min-width: 5em;">会社の重点</span><span>{% for item in focus_items %}<span class="badge bg-light text-dark border fw-normal me-1">★ {{ item }}</span>{% endfor %}</span></div>{% endif %}
+</div></div>

@@ -62,6 +62,20 @@
 </ul>
 {% if approved_recently %}<p class="small text-muted mb-0">最近30日に承認：{% for g in approved_recently %}{{ g.author.username }}（{{ g.skill_item }}・レベル{{ g.approved_level }}・{{ g.approved_grade }}）{% if not forloop.last %}、{% endif %}{% endfor %}</p>{% endif %}
 
+<h3 class="h6 mt-4">次の目標に合う現場へアサイン</h3>
+<ul class="list-group mb-2">
+    {% for g in assignment_candidates %}
+    <li class="list-group-item small">
+        <div><strong>{{ g.author.username }}</strong>　{{ g.skill_item }}：{{ g.next_text }}</div>
+        <form method="post" action="{% url 'genba:assignment_create' g.pk %}" class="d-flex flex-wrap align-items-center gap-2 mt-1">{% csrf_token %}
+            <select name="site" class="form-select form-select-sm w-auto">{% for s in active_sites %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}</select>
+            <label class="form-check-label"><input class="form-check-input me-1" type="checkbox" name="matched">次の目標に合う</label>
+            <button class="btn btn-outline-primary btn-sm py-0">記録する</button>
+        </form>
+    </li>
+    {% empty %}<li class="list-group-item small text-muted">アサインの候補はありません</li>{% endfor %}
+</ul>
+
 <h3 class="h6 mt-4">階級の見直し</h3>
 <ul class="list-group mb-2">
     {% for c in grade_candidates %}

@@ -9,7 +9,7 @@ from collections import Counter, defaultdict
 
 from django.db.models import Q
 
-from .models import Document, Goal, Question, Summary, Term
+from .models import Document, FocusSkill, Goal, Question, Summary, Term
 
 SKILL_ITEMS = [i['name'] for i in data.SKILL_ITEMS]
 
@@ -30,6 +30,12 @@ AUTO_SKILLS = {
 }
 
 ROLE_LABELS = {'member': 'メンバー', 'leader': 'リーダー', 'owner': '責任者'}
+
+
+def focus_items():
+    """会社の重点スキル項目（スキル項目の並び順）"""
+    chosen = set(FocusSkill.objects.values_list('skill_item', flat=True))
+    return [item for item in SKILL_ITEMS if item in chosen]
 
 
 def concrete_skills(item=None):

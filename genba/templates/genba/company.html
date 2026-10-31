@@ -92,7 +92,7 @@
 
     <h3 class="h6 mt-3">3. 目標に合う現場へアサイン</h3>
     <ul class="list-group">
-        {% for row in ledger %}{% for g in row.next %}<li class="list-group-item small"><strong>{{ row.author.username }}</strong>　{{ g.skill_item }}：{{ g.next_text }}</li>{% endfor %}
+        {% for row in ledger %}{% for g in row.next %}<li class="list-group-item small"><strong>{{ row.author.username }}</strong>　{{ g.skill_item }}：{{ g.next_text }}{% if g.assignments.exists %} <span class="badge bg-secondary fw-normal">アサイン済み</span>{% endif %}</li>{% endfor %}
         {% empty %}<li class="list-group-item small text-muted">次の目標はありません</li>{% endfor %}
     </ul>
 

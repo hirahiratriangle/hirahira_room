@@ -112,9 +112,17 @@ def join_site(site, user, role, joined_on, duty=''):
     """現場に入る。その人の入場時チェックリストを作業 Issue として並べる"""
     from .models import Membership
 
+    ensure_repository(user)
     membership = Membership.objects.create(site=site, user=user, role=role, joined_on=joined_on, duty=duty)
     create_checklist(site, user)
     return membership
+
+
+def ensure_repository(user):
+    """メンバー1人に1つのリポジトリを用意する（構想書スライド2）。現場が変わっても同じリポジトリを使い続ける"""
+    from .models import MemberRepository
+
+    return MemberRepository.objects.get_or_create(user=user, defaults={'name': f'genba-{user.username}'})[0]
 
 
 def create_checklist(site, user):
@@ -156,6 +164,15 @@ ROLE_GROWTH = [
 ROLE_GROWTH_NOTE = ('成長はつながっている：メンバーの成長はリーダーの「後進の指導」の証拠に、リーダーの成長はマネジメントの'
                     '「育成」の証拠に、全員の成長は会社の受注力になる。')
 
+# ビジョンの階層。上の2つは会社のホームページ、下の2つは構想プレゼン（表紙・スライド5）の言葉。言い換えない。
+# 使命から順に、メンバーの目標まで同じ向きに届くようにする（憲章 VII）
+VISION = [
+    ('使命', 'ITの力で世の中をより便利にして、人の心を豊かにする'),
+    ('経営理念', '実務的で付加価値創造型の企業であり続け、ITシステムを駆使して社会全体を豊かにする'),
+    ('ビジョン', '会社の成長は、人から始まる。'),
+    ('仕組み', '会社が人を支え、人の成長が会社を育てる'),
+]
+
 # ---- 案内ページ（/pvsys/genba/about/）：hirahira-room から最初に開くページ。文言は構想書（スライド1・3・4）のまま ----
 
 ABOUT_TITLE = '会社の成長は、人から始まる。'
@@ -179,7 +196,7 @@ ABOUT_ROLES = [
 # ---- デモの説明ページ（/pvsys/genba/demo/）：案内ページと genba 本体のあいだに挟む ----
 # 現場と人の一覧はデモデータ（seed_genba）から読む。ここに持つのは、データにない説明だけ
 
-DEMO_PREFIX = 'genba-demo-'  # デモの現場のリポジトリ名の頭。seed_genba もこれを使う
+DEMO_PREFIX = 'genba-demo-'  # デモの現場チーム名の頭。seed_genba もこれを使う
 DEMO_ORGANIZATION = '架空の SI 会社です。チームが2つあり、それぞれのメンバーが顧客の現場に入っています。'
 # 訪問者が切り替える4つの立場（ペルソナ）。立場ごとに別の人がいる（ひとりが全部を持つのは現実的でないため）。
 # key：セッションに持つ値 ／ username：その立場の人 ／ place・point：説明ページの文言 ／ home：入ったときに開く画面
@@ -194,7 +211,7 @@ DEMO_PERSONAS = [
      'point': '職掌と経営KPI、公開されたナレッジ、個人のスキル台帳', 'home': 'genba:company'},
 ]
 DEMO_DEFAULT_PERSONA = 'member'  # 立場を選ばずに本体を開いた未ログインの人は、メンバーとして見る
-# チームと、そのチームの現場（キーはリポジトリ名の DEMO_PREFIX より後ろ）・現場の今の状況
+# チームと、そのチームの現場（キーは現場チーム名の DEMO_PREFIX より後ろ）・現場の今の状況
 DEMO_TEAMS = [
     ('チーム1', [
         ('order', '入場から10週。確定後の取消が決まらず、画面の設計が止まっている'),

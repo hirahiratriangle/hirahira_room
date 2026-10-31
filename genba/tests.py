@@ -11,12 +11,12 @@ from django.utils import timezone
 
 from accounts.models import CustomUser
 
-from . import grades, growth, kit, kit_data, kpi, money, skillset_data
+from . import forms, grades, growth, kit, kit_data, kpi, money, skillset_data
 from .metrics import site_metrics, weekly_rate
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership,
-    MonthlyWork, PromiseCheck, Question, Site, StructureGap, Summary, Term, week_start,
+    Assignment, ChecklistItem, CompanyMonth, Document, FocusSkill, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, MemberRepository,
+    Membership, MonthlyWork, PromiseCheck, Question, Site, StructureGap, Summary, Term, week_start,
 )
 from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
 from .signals import signals_for, weeks_missing_in_row
@@ -32,7 +32,7 @@ class GenbaTestBase(TestCase):
 
     def make_site(self, name, repo, weeks=4, industry='製造業'):
         started = self.today - timedelta(weeks=weeks)
-        site = Site.objects.create(name=name, repo_name=repo, industry=industry, started_on=started)
+        site = Site.objects.create(name=name, team_slug=repo, industry=industry, started_on=started)
         Membership.objects.create(site=site, user=self.member, joined_on=started)
         Membership.objects.create(site=site, user=self.leader, role=Membership.ROLE_LEADER, joined_on=started)
         return site
@@ -74,27 +74,27 @@ class SiteCreateTests(GenbaTestBase):
     def test_create_site_from_template(self):
         self.client.force_login(self.outsider)
         res = self.client.post(reverse('genba:site_create'), {
-            'name': '新現場', 'repo_name': 'genba-new', 'industry': '物流業',
+            'name': '新現場', 'team_slug': 'genba-new', 'industry': '物流業',
             'started_on': self.today.isoformat(), 'description': '', 'my_role': 'member',
         })
-        site = Site.objects.get(repo_name='genba-new')
+        site = Site.objects.get(team_slug='genba-new')
         self.assertRedirects(res, reverse('genba:site_detail', args=[site.pk]) + '?tab=checklist')
         self.assertTrue(Membership.objects.filter(site=site, user=self.outsider, joined_on=self.today).exists())
         tasks = site.questions.exclude(stage='')
         self.assertEqual(tasks.count(), 12)
         self.assertTrue(all(q.kind == Question.KIND_TASK for q in tasks))
         self.assertEqual(ChecklistItem.objects.filter(question__site=site).count(), 45)
-        self.assertEqual(site.template_version, kit.TEMPLATE_VERSION)
+        self.assertEqual(site.memberships.get().user.genba_repository.template_version, kit.TEMPLATE_VERSION)
         page = self.client.get(reverse('genba:site_detail', args=[site.pk]))
         self.assertContains(page, '［入場前］契約・商流')
 
-    def test_repo_name_must_start_with_genba(self):
+    def test_team_slug_must_start_with_genba(self):
         self.client.force_login(self.member)
         res = self.client.post(reverse('genba:site_create'), {
-            'name': 'x', 'repo_name': 'other', 'industry': 'x', 'started_on': self.today.isoformat(), 'my_role': 'member',
+            'name': 'x', 'team_slug': 'other', 'industry': 'x', 'started_on': self.today.isoformat(), 'my_role': 'member',
         })
         self.assertEqual(res.status_code, 200)
-        self.assertFalse(Site.objects.filter(repo_name='other').exists())
+        self.assertFalse(Site.objects.filter(team_slug='other').exists())
 
     def test_checklist_item_closes_issue_when_all_done(self):
         kit.create_checklist(self.site, self.member)
@@ -150,10 +150,10 @@ class AccessTests(GenbaTestBase):
         self.assertEqual(self.client.get(reverse('genba:management')).status_code, 403)
         self.assertEqual(self.client.get(reverse('genba:company')).status_code, 403)
         res = self.client.post(reverse('genba:site_create'), {
-            'name': 'デモの現場', 'repo_name': 'genba-persona', 'industry': '物流業',
+            'name': 'デモの現場', 'team_slug': 'genba-persona', 'industry': '物流業',
             'started_on': self.today.isoformat(), 'description': '', 'my_role': 'leader',
         })
-        site = Site.objects.get(repo_name='genba-persona')
+        site = Site.objects.get(team_slug='genba-persona')
         self.assertRedirects(res, reverse('genba:site_detail', args=[site.pk]) + '?tab=checklist')
         self.assertTrue(Membership.objects.filter(site=site, user__username='demo_kimura',
                                                   role=Membership.ROLE_LEADER).exists())
@@ -467,21 +467,21 @@ class SeedCommandTests(TestCase):
             call_command('seed_genba', stdout=StringIO())
         self.assertEqual(Site.objects.filter(is_archived=False).count(), 4)
         self.assertEqual(Site.objects.filter(is_archived=True).count(), 2)
-        counts = {s.repo_name: (s.memberships.filter(role=Membership.ROLE_LEADER).count(),
+        counts = {s.team_slug: (s.memberships.filter(role=Membership.ROLE_LEADER).count(),
                                 s.memberships.filter(role=Membership.ROLE_MEMBER).count())
                   for s in Site.objects.filter(is_archived=False)}
         self.assertEqual(counts, {'genba-demo-order': (1, 2), 'genba-demo-logistics': (0, 1),
                                   'genba-demo-claims': (1, 4), 'genba-demo-stock': (0, 1)})
-        solo = Goal.objects.filter(site__repo_name__in=['genba-demo-logistics', 'genba-demo-stock'])
+        solo = Goal.objects.filter(site__team_slug__in=['genba-demo-logistics', 'genba-demo-stock'])
         self.assertTrue(all(g.is_solo for g in solo))
         # 立場ごとに別の人。マネジメント・会社は1人ずつ
         self.assertEqual([u.username for u in CustomUser.objects.filter(groups__name=GROUP_MANAGEMENT)], ['demo_kacho'])
         self.assertEqual([u.username for u in CustomUser.objects.filter(groups__name=GROUP_COMPANY)], ['demo_honbu'])
         member, leader = CustomUser.objects.get(username='demo_kimura'), CustomUser.objects.get(username='demo_kobayashi')
-        self.assertEqual([m.site.repo_name for m in member.genba_memberships.all()], ['genba-demo-claims'])
-        self.assertEqual([m.site.repo_name for m in leader.genba_memberships.all()], ['genba-demo-order'])
+        self.assertEqual([m.site.team_slug for m in member.genba_memberships.all()], ['genba-demo-claims'])
+        self.assertEqual([m.site.team_slug for m in leader.genba_memberships.all()], ['genba-demo-order'])
         self.assertFalse(member.has_usable_password())
-        claims = Site.objects.get(repo_name='genba-demo-claims')
+        claims = Site.objects.get(team_slug='genba-demo-claims')
         detected = {s.sign for s in signals_for(member, claims) if s.detected}
         self.assertEqual(detected, {'3日経っても理解が進んでいない', '理解したことが形になっていない'})
         for key, name in (('member', 'member_home'), ('leader', 'leader_home'), ('management', 'management'), ('company', 'company')):
@@ -681,7 +681,7 @@ class ReachStageTests(GenbaTestBase):
         self.assertEqual(self.client.get(self.approval_url).status_code, 403)
 
     def test_solo_site_management_confirms_and_approves(self):
-        solo = Site.objects.create(name='ひとり', repo_name='genba-solo', industry='小売業', started_on=self.today)
+        solo = Site.objects.create(name='ひとり', team_slug='genba-solo', industry='小売業', started_on=self.today)
         Membership.objects.create(site=solo, user=self.outsider, joined_on=self.today)
         g = Goal.objects.create(site=solo, author=self.outsider, skill_item='業務分析', current_level=2, target_text='t',
                                 reached_level=3, submitted_at=timezone.now())
@@ -1468,6 +1468,116 @@ class GrowthChainTests(GenbaTestBase):
         self.assertGreater(money.growth_share(span.start, span.end)[1], 0)
 
 
+class VisionTests(GenbaTestBase):
+    """ビジョンの統合（憲章 VII・spec 013）：1メンバー1リポジトリ、上から下への流れ、アサインの輪"""
+
+    def setUp(self):
+        super().setUp()
+        self.company = CustomUser.objects.create_user('company', 'c@example.com', 'pass12345')
+        self.add_group(self.company, GROUP_COMPANY)
+        self.manager = CustomUser.objects.create_user('manager', 'k@example.com', 'pass12345')
+        self.add_group(self.manager, GROUP_MANAGEMENT)
+
+    def test_one_repository_per_member_across_sites(self):
+        first = kit.ensure_repository(self.outsider)
+        site = self.make_site('現場B', 'genba-b')
+        kit.join_site(site, self.outsider, Membership.ROLE_MEMBER, self.today)
+        other = self.make_site('現場C', 'genba-c')
+        kit.join_site(other, self.outsider, Membership.ROLE_MEMBER, self.today)
+        self.assertEqual(MemberRepository.objects.filter(user=self.outsider).count(), 1)
+        self.assertEqual(self.outsider.genba_repository, first)
+
+    def test_members_tab_shows_template_version_of_repository(self):
+        """テンプレートの版は現場ではなくメンバーのリポジトリが持つ"""
+        repository = kit.ensure_repository(self.member)
+        repository.template_version = '2099-01'
+        repository.save()
+        self.client.force_login(self.member)
+        self.assertNotContains(self.client.get(reverse('genba:site_detail', args=[self.site.pk])), 'テンプレート ')
+        res = self.client.get(reverse('genba:site_detail', args=[self.site.pk]), {'tab': 'members'})
+        self.assertContains(res, '<td class="text-muted">2099-01</td>')
+
+    def test_records_stay_with_person_across_sites(self):
+        """現場が変わっても、本人の記録は本人の分として数えられる"""
+        kit.ensure_repository(self.member)
+        other = self.make_site('現場B', 'genba-b')
+        Term.objects.create(site=self.site, author=self.member, term='a')
+        Term.objects.create(site=other, author=self.member, term='b')
+        self.assertEqual(self.member.genba_terms.count(), 2)
+
+    def test_vision_on_every_role_page(self):
+        self.client.force_login(self.member)
+        self.assertContains(self.client.get(reverse('genba:role_kpi')), '会社の成長は、人から始まる。')
+        self.client.force_login(self.leader)
+        self.assertContains(self.client.get(reverse('genba:role_kpi')), '人の心を豊かにする')
+        self.client.force_login(self.manager)
+        self.assertContains(self.client.get(reverse('genba:role_kpi')), '社会全体を豊かにする')
+        self.client.force_login(self.company)
+        self.assertContains(self.client.get(reverse('genba:company_kpi')), '会社の成長は、人から始まる。')
+
+    def test_company_sets_focus_and_it_reaches_goal_form(self):
+        url = reverse('genba:focus_update')
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(url, {'items': ['デザイン']}).status_code, 403)
+        self.client.force_login(self.company)
+        self.client.post(url, {'items': ['デザイン', '存在しない項目']})
+        self.assertEqual(growth.focus_items(), ['デザイン'])
+        self.client.force_login(self.member)
+        res = self.client.get(reverse('genba:goal_create', args=[self.site.pk]))
+        self.assertContains(res, '★ デザイン')
+
+    def test_focus_does_not_force_choice(self):
+        FocusSkill.objects.create(skill_item='デザイン')
+        form = forms.GoalPickForm({'item': '業務分析', 'level': 2})
+        self.assertTrue(form.is_valid())
+
+    def test_focus_rate_counts_open_goals(self):
+        FocusSkill.objects.create(skill_item='デザイン')
+        for item in ('デザイン', '業務分析'):
+            Goal.objects.create(site=self.site, author=self.member, skill_item=item, current_level=2, target_text='t')
+        tile = next(t for f in kpi.company_functions() for t in f['tiles'] if t.name == '重点に向かう目標')
+        self.assertEqual(tile.value, '50%')
+
+    def goal(self, author):
+        return Goal.objects.create(site=self.site, author=author, skill_item='デザイン', current_level=2, target_text='t',
+                                   next_text='次', approved_on=self.today, approved_level=3, approved_grade='B')
+
+    def test_assignment_closes_loop(self):
+        goal = self.goal(self.outsider)
+        other = self.make_site('現場B', 'genba-b')
+        self.client.force_login(self.manager)
+        self.assertContains(self.client.get(reverse('genba:management')), '次の目標に合う現場へアサイン')
+        self.client.post(reverse('genba:assignment_create', args=[goal.pk]), {'site': other.pk, 'matched': 'on'})
+        record = Assignment.objects.get()
+        self.assertEqual((record.site, record.matched), (other, True))
+        self.assertTrue(other.memberships.filter(user=self.outsider).exists())
+        self.assertTrue(self.outsider.genba_repository)
+        self.assertEqual(kpi.assignment_candidates(self.manager), [])
+        tile = next(t for f in kpi.management_functions() for t in f['tiles'] if t.name == '目標に合うアサイン')
+        self.assertEqual(tile.value, '100%')
+
+    def test_only_management_records_assignment(self):
+        goal = self.goal(self.member)
+        self.client.force_login(self.company)
+        url = reverse('genba:assignment_create', args=[goal.pk])
+        self.assertEqual(self.client.post(url, {'site': self.site.pk}).status_code, 403)
+
+    def test_archived_site_cannot_be_assigned(self):
+        goal = self.goal(self.member)
+        other = self.make_site('現場B', 'genba-b')
+        other.is_archived = True
+        other.save()
+        self.client.force_login(self.manager)
+        self.assertEqual(self.client.post(reverse('genba:assignment_create', args=[goal.pk]), {'site': other.pk}).status_code, 404)
+
+    def test_seed_has_vision_chain(self):
+        call_command('seed_genba', stdout=StringIO())
+        call_command('seed_genba', stdout=StringIO())
+        self.assertTrue(MemberRepository.objects.filter(user__username='demo_kimura').exists())
+        self.assertEqual(Assignment.objects.count(), 3)
+        self.assertTrue(growth.focus_items())
+
+
 class AboutTests(TestCase):
     def test_about_opens_without_login_and_links_to_app(self):
         res = self.client.get(reverse('genba:about'))
@@ -1509,7 +1619,7 @@ class DemoGuideTests(TestCase):
 class PersonaTests(TestCase):
     def setUp(self):
         call_command('seed_genba', stdout=StringIO())
-        self.leader_site = Site.objects.get(repo_name='genba-demo-order')
+        self.leader_site = Site.objects.get(team_slug='genba-demo-order')
 
     def switch(self, key):
         return self.client.post(reverse('genba:demo_switch', args=[key]))

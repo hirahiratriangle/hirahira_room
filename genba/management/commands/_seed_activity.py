@@ -133,7 +133,7 @@ def seed_activity(cmd, site, key, members, skip=(), quiet_weeks=0):
     skip ：活動を足さない人（切り替えられるメンバーとリーダー）
     quiet_weeks：直近この週数は週報を足さない（0 なら2週前から足す）
     """
-    rnd = random.Random(site.repo_name)
+    rnd = random.Random(site.team_slug)
     topic = TOPICS[key]
     people = [m for m in members if m not in skip]
     if not people:

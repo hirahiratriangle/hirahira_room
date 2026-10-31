@@ -21,9 +21,16 @@ from .forms import (
 from .metrics import DEFINITIONS, THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Goal, GoalEvidence, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question,
+    Assignment, ChecklistItem, Document, FocusSkill, Goal, GoalEvidence, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, MemberRepository, Membership, MonthlyWork, Question,
     Site, Summary, Term, month_start, week_start,
 )
+
+
+def vision_context(role):
+    """職掌の画面の先頭に出す、ビジョンの階層・会社の重点・この立場の役割（憲章 VII）"""
+    aims = {'メンバー': 'member', 'リーダー': 'leader', 'マネジメント': 'management', '会社': 'company'}
+    aim = next((row[1] for row in kit.ROLE_GROWTH if aims[row[0]] == role), '')
+    return {'vision': kit.VISION, 'focus_items': growth.focus_items(), 'role_aim': aim}
 
 
 class PersonaMixin:
@@ -92,7 +99,7 @@ class DemoGuideView(generic.TemplateView):
         for name, entries in kit.DEMO_TEAMS:
             sites = []
             for key, note in entries:
-                site = Site.objects.filter(repo_name=f'{kit.DEMO_PREFIX}{key}').first()
+                site = Site.objects.filter(team_slug=f'{kit.DEMO_PREFIX}{key}').first()
                 if site is None:
                     continue
                 # リーダーを先に、あとは入場した順に並べる
@@ -267,6 +274,7 @@ class MemberHomeView(GenbaMixin, generic.TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         sites = roles.member_sites(user)
+        context['repository'] = MemberRepository.objects.filter(user=user).first()
         context['site_cards'] = [
             {
                 'site': site,
@@ -328,7 +336,7 @@ class SiteDetailView(SiteMixin, generic.TemplateView):
         context['signals'] = signals.signals_for(self.request.user, site)
         context['detected'] = signals.detected_count(context['signals'])
         context['stages'] = checklist_progress(site, self.request.user)
-        context['memberships'] = site.memberships.select_related('user')
+        context['memberships'] = site.memberships.select_related('user', 'user__genba_repository')
         context['open_questions'] = open_issues([site])
         context['closed_questions'] = (
             site.questions.filter(is_open=False, stage='').select_related('author').order_by('-closed_at')[:10]
@@ -893,6 +901,7 @@ class GoalCreateView(SiteMixin, generic.TemplateView):
         context = super().get_context_data(**kwargs)
         pick, item, level = kwargs.get('picked') or self.picked(self.request.GET)
         context['pick'] = pick
+        context['focus_items'] = growth.focus_items()
         context['item'], context['level'] = item, level
         context['usage'] = skillset_data.USAGE[2:]
         if item:
@@ -1175,6 +1184,9 @@ class ManagementView(GenbaMixin, generic.TemplateView):
         context['money_total'] = rollup['total']
         # 階級の見直し：成長を階級につなぐ候補と、会社の決定を待っている提案
         context['grade_candidates'] = grades.candidates(self.request.user)
+        # 次の目標に合う現場へのアサイン（構想書スライド6・7の成長のループ）
+        context['assignment_candidates'] = kpi.assignment_candidates(self.request.user)
+        context['active_sites'] = Site.objects.filter(is_archived=False)
         context['grade_waiting'] = (GradeReview.objects.filter(status=GradeReview.STATUS_OPEN)
                                     .select_related('user', 'current_grade', 'proposed_grade'))
         context['money_span'] = span
@@ -1286,7 +1298,8 @@ class CompanyKpiView(GenbaMixin, generic.TemplateView):
         context.update(functions=functions, charts=[f['chart'] for f in functions],
                        definitions=kpi.DEFINITIONS, excluded=kpi.EXCLUDED, heading='職掌と経営KPI（案）',
                        grade_reviews=GradeReview.objects.filter(status=GradeReview.STATUS_OPEN)
-                       .select_related('user', 'current_grade', 'proposed_grade', 'goal__site'))
+                       .select_related('user', 'current_grade', 'proposed_grade', 'goal__site'),
+                       skill_items=growth.SKILL_ITEMS, **vision_context('company'))
         return context
 
 
@@ -1337,6 +1350,7 @@ class RoleKpiView(GenbaMixin, generic.TemplateView):
             own = [f for panel in context['panels'] for f in panel['functions']]
             functions, reference = [], kpi.for_role('member')
             context.update(heading='メンバーの職掌（案）', reference=reference, own_charts=own)
+        context.update(vision_context(self.audience))
         visible = functions + reference + context.get('own_charts', [])
         context.update(functions=functions, charts=[f['chart'] for f in visible if f['chart']])
         if self.audience != 'management':
@@ -1398,6 +1412,42 @@ class WorkView(SiteMixin, generic.TemplateView):
             work.save()
         messages.success(request, f'{month:%Y年%-m月}の人月を保存しました。')
         return redirect(reverse('genba:work', args=[self.site.pk]) + f'?month={month:%Y-%m}')
+
+
+class FocusSkillUpdateView(PersonaMixin, View):
+    """会社の重点スキル項目を決める（会社）。ビジョンを今の取り組みに落とす"""
+
+    @transaction.atomic
+    def post(self, request):
+        if not roles.is_company(request.user):
+            raise PermissionDenied
+        chosen = [item for item in growth.SKILL_ITEMS if item in request.POST.getlist('items')]
+        FocusSkill.objects.all().delete()
+        FocusSkill.objects.bulk_create(FocusSkill(skill_item=item) for item in chosen)
+        messages.success(request, '会社の重点を保存しました。')
+        return redirect('genba:company_kpi')
+
+
+class AssignmentCreateView(PersonaMixin, View):
+    """アサインを記録する（マネジメント）。次の目標を見て現場へ入れ、成長のループを閉じる。
+
+    まだその現場に入っていなければ、メンバーとして入れる（チェックリストも並ぶ）。
+    次の目標に合う現場かどうかは、マネジメントが判断して残す。
+    """
+
+    @transaction.atomic
+    def post(self, request, goal_pk):
+        if not roles.is_management(request.user):
+            raise PermissionDenied
+        goal = next((g for g in kpi.assignment_candidates(request.user) if g.pk == goal_pk), None)
+        if goal is None:
+            raise PermissionDenied
+        site = get_object_or_404(Site, pk=request.POST.get('site'), is_archived=False)
+        if not site.memberships.filter(user=goal.author).exists():
+            kit.join_site(site, goal.author, Membership.ROLE_MEMBER, timezone.localdate())
+        Assignment.objects.create(goal=goal, site=site, matched=request.POST.get('matched') == 'on', assigned_by=request.user)
+        messages.success(request, f'{goal.author.username} さんのアサインを記録しました。')
+        return redirect('genba:management')
 
 
 class GradeReviewProposeView(PersonaMixin, View):

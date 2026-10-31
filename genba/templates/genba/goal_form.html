@@ -11,6 +11,7 @@
     <div class="col-md-3"><label class="form-label small">{{ pick.level.label }}</label>{{ pick.level }}</div>
     <div class="col-md-3"><button class="btn btn-outline-primary w-100">一つ上の記述を出す</button></div>
 </div></form>
+{% if focus_items %}<p class="small">会社の重点：{% for f in focus_items %}<span class="badge bg-light text-dark border fw-normal me-1">★ {{ f }}</span>{% endfor %}</p>{% endif %}
 
 {% if item %}
 <div class="row g-3">
