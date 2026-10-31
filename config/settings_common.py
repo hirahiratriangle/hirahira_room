@@ -8,6 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY', 'your-default-secret-key')
 ALLOWED_HOSTS = ['*']
 
+# 廃止したアプリのテストを探索から外す
+TEST_RUNNER = 'config.test_runner.ProjectTestRunner'
+
 INSTALLED_APPS = [
     # Django 本体
     'django.contrib.admin',
