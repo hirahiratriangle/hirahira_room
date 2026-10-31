@@ -175,14 +175,18 @@ def paste_text(goal, evidence_titles):
     return '\n'.join(lines)
 
 
-def approved_reaches():
+def approved_reaches(until=None):
     """承認した成長を、本人×項目ごとに最新の1件にする。
 
     同じ人が同じ項目で何度も承認を受けたら（現場をまたいで伸びたら）、最後に承認したものが今の成長。
     台帳・スキル分布・ITSS相当・複雑性の集計は、すべてこの一覧から作る。
+    until を渡すと、その日までに承認したものだけで作る（経営KPIの推移で、過去の時点の台帳を見るため）。
     """
+    goals = Goal.objects.filter(approved_on__isnull=False)
+    if until:
+        goals = goals.filter(approved_on__lte=until)
     latest = {}
-    for g in Goal.objects.filter(approved_on__isnull=False).select_related('author', 'site').order_by('approved_on', 'pk'):
+    for g in goals.select_related('author', 'site').order_by('approved_on', 'pk'):
         latest[(g.author_id, g.skill_item)] = g
     return list(latest.values())
 

@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal
 from io import StringIO
 from unittest import mock
 
@@ -10,12 +11,12 @@ from django.utils import timezone
 
 from accounts.models import CustomUser
 
-from . import growth, kit, kit_data, skillset_data
+from . import growth, kit, kit_data, kpi, money, skillset_data
 from .metrics import site_metrics, weekly_rate
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site,
-    StructureGap, Summary, Term, week_start,
+    ChecklistItem, CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, InterviewQuestion, KitProposal, Membership,
+    MonthlyWork, PromiseCheck, Question, Site, StructureGap, Summary, Term, week_start,
 )
 from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
 from .signals import signals_for, weeks_missing_in_row
@@ -464,9 +465,11 @@ class SeedCommandTests(TestCase):
     def test_seed_twice(self):
         for _ in range(2):
             call_command('seed_genba', stdout=StringIO())
-        self.assertEqual(Site.objects.count(), 4)
+        self.assertEqual(Site.objects.filter(is_archived=False).count(), 4)
+        self.assertEqual(Site.objects.filter(is_archived=True).count(), 2)
         counts = {s.repo_name: (s.memberships.filter(role=Membership.ROLE_LEADER).count(),
-                                s.memberships.filter(role=Membership.ROLE_MEMBER).count()) for s in Site.objects.all()}
+                                s.memberships.filter(role=Membership.ROLE_MEMBER).count())
+                  for s in Site.objects.filter(is_archived=False)}
         self.assertEqual(counts, {'genba-demo-order': (1, 2), 'genba-demo-logistics': (0, 1),
                                   'genba-demo-claims': (1, 4), 'genba-demo-stock': (0, 1)})
         solo = Goal.objects.filter(site__repo_name__in=['genba-demo-logistics', 'genba-demo-stock'])
@@ -939,6 +942,229 @@ class CompanyTests(GenbaTestBase):
         rows = growth.candidates(g)
         self.assertEqual(rows[0]['type'], 'feedback')
         self.assertTrue(rows[0]['matches'])
+
+
+class CompanyKpiTests(GenbaTestBase):
+    """会社の職掌と経営KPI（spec 007）：公開範囲と、数え方"""
+
+    def setUp(self):
+        super().setUp()
+        self.company = CustomUser.objects.create_user('company', 'c@example.com', 'pass12345')
+        self.add_group(self.company, GROUP_COMPANY)
+        self.manager = CustomUser.objects.create_user('manager', 'k@example.com', 'pass12345')
+        self.add_group(self.manager, GROUP_MANAGEMENT)
+
+    def goal(self, author, level, approved_on, item='デザイン', **kw):
+        return Goal.objects.create(site=self.site, author=author, skill_item=item, current_level=level - 1, target_text='t',
+                                   reached_level=level, approved_on=approved_on, approved_level=level if approved_on else None,
+                                   approved_grade='B' if approved_on else '', **kw)
+
+    def tile(self, name):
+        for function in kpi.company_functions():
+            for tile in function['tiles']:
+                if tile.name == name:
+                    return tile
+        raise AssertionError(name)
+
+    def test_only_company_can_read(self):
+        url = reverse('genba:company_kpi')
+        for user in (self.member, self.leader, self.manager):
+            self.client.force_login(user)
+            self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_login(self.company)
+        self.assertContains(self.client.get(url), '職掌と経営KPI')
+
+    def test_page_shows_no_site_or_person(self):
+        self.goal(self.member, 3, self.today, explanation='承認した行動')
+        self.client.force_login(self.company)
+        res = self.client.get(reverse('genba:company_kpi'))
+        self.assertNotContains(res, '現場A')
+        self.assertNotContains(res, '承認した行動')
+        self.assertNoUsername(res, self.member.username)
+
+    def test_periods_are_three_months_ending_this_month(self):
+        spans = kpi.periods(date(2026, 1, 15))
+        self.assertEqual(len(spans), 6)
+        self.assertEqual((spans[-1].start, spans[-1].end), (date(2025, 11, 1), date(2026, 1, 31)))
+        self.assertEqual((spans[-2].start, spans[-2].end), (date(2025, 8, 1), date(2025, 10, 31)))
+        self.assertEqual(spans[-1].label, '25/11–1')
+
+    def test_itss_history_uses_ledger_at_that_time(self):
+        old = self.today - timedelta(days=200)
+        self.goal(self.member, 3, old, role='member', team_size=3)
+        self.goal(self.member, 4, self.today, role='leader', team_size=3)
+        series = {s['label']: s['data'] for s in kpi.company_functions()[1]['chart']['series']}
+        self.assertEqual((series['レベル3相当'][-3], series['レベル4相当'][-3]), (1, 0))
+        self.assertEqual((series['レベル3相当'][-1], series['レベル4相当'][-1]), (0, 1))
+
+    def test_rates_count_people_and_only_approved(self):
+        self.goal(self.member, 3, self.today)
+        self.goal(self.member, 3, self.today, item='業務分析')
+        self.goal(self.leader, 3, None)
+        people = kpi.headcount()
+        self.assertEqual(self.tile('成長した人（直近3か月）').detail, '1人 ／ 前の3か月 0人')
+        self.assertEqual(self.tile('成長した人（直近3か月）').value, f'{round(100 / people)}%')
+
+    def test_archived_site_leaves_headcount(self):
+        people = kpi.headcount()
+        self.site.is_archived = True
+        self.site.save()
+        self.assertLess(kpi.headcount(), people)
+
+    def test_rate_without_data_is_not_judged(self):
+        tile = self.tile('改訂提案の決定率')
+        self.assertEqual((tile.value, tile.met), ('―', None))
+
+    def test_unpublished_is_not_counted(self):
+        term = Term.objects.create(site=self.site, author=self.member, term='出荷', public_title='出荷',
+                                   visibility=VISIBILITY_COMPANY, published_at=timezone.now())
+        self.assertEqual(self.tile('公開したナレッジ（直近3か月）').value, '1件')
+        term.visibility = VISIBILITY_TEAM
+        term.save()
+        self.assertEqual(self.tile('公開したナレッジ（直近3か月）').value, '0件')
+
+    def test_proposal_rates(self):
+        for status in ('adopted', 'declined', 'open', 'open'):
+            KitProposal.objects.create(target='checklist', title='t', proposal='p', author=self.member, status=status)
+        self.assertEqual(self.tile('改訂提案の決定率').value, '50%')
+        self.assertEqual(self.tile('改訂提案の採用率').value, '50%')
+
+    def test_management_lists_only_active_sites(self):
+        self.client.force_login(self.manager)
+        self.assertContains(self.client.get(reverse('genba:management')), '現場A')
+        self.site.is_archived = True
+        self.site.save()
+        self.assertNotContains(self.client.get(reverse('genba:management')), '現場A')
+
+    def test_seeded_page_renders(self):
+        call_command('seed_genba', stdout=StringIO())
+        self.client.post(reverse('genba:demo_switch', args=['company']))
+        res = self.client.get(reverse('genba:company_kpi'))
+        self.assertEqual(res.status_code, 200)
+        for name in ('保険金請求 基本設計', '受発注システム刷新', 'demo_tanaka'):
+            self.assertNotContains(res, name)
+        # 履歴があるので、グラフが右肩上がりになっている
+        knowledge = kpi.company_functions()[3]['chart']['series']
+        self.assertGreater(sum(s['data'][-1] for s in knowledge), sum(s['data'][0] for s in knowledge))
+
+
+class MoneyTests(GenbaTestBase):
+    """階級 × 人月の積み上げ（憲章 VI）と、立場ごとの見え方（spec 008）"""
+
+    def setUp(self):
+        super().setUp()
+        self.company = CustomUser.objects.create_user('company', 'c@example.com', 'pass12345')
+        self.add_group(self.company, GROUP_COMPANY)
+        self.manager = CustomUser.objects.create_user('manager', 'k@example.com', 'pass12345')
+        self.add_group(self.manager, GROUP_MANAGEMENT)
+        self.other = self.make_site('現場B', 'genba-b', industry='保険業')
+        self.g1 = Grade.objects.create(name='G1', standard_price=800000, standard_cost=500000)
+        self.g2 = Grade.objects.create(name='G2', standard_price=930000, standard_cost=700000)
+        GradeAssignment.objects.create(user=self.member, grade=self.g1)
+        GradeAssignment.objects.create(user=self.leader, grade=self.g2)
+        self.month = self.today.replace(day=1)
+        self.work(self.site, self.member, self.g1)
+        self.work(self.site, self.leader, self.g2, '0.5')
+        self.work(self.other, self.member, self.g1)
+
+    def work(self, site, user, grade, man_month='1'):
+        return MonthlyWork.objects.create(membership=site.memberships.get(user=user), month=self.month, grade=grade,
+                                          man_month=Decimal(man_month))
+
+    def test_every_level_adds_up(self):
+        r = money.rollup(self.month, self.today)
+        self.assertEqual(r['sites']['現場A'].revenue, 800000 + 465000)
+        self.assertEqual(r['sites']['現場A'].cost, 500000 + 350000)
+        self.assertEqual(r['total'].revenue, sum(a.revenue for a in r['people'].values()))
+        self.assertEqual(r['total'].revenue, sum(a.revenue for a in r['sites'].values()))
+        self.assertEqual(r['total'].gross, sum(a.gross for a in r['industries'].values()))
+
+    def test_operating_rate_counts_people_once(self):
+        CompanyMonth.objects.create(month=self.month, headcount=4)
+        self.assertEqual(money.operating(self.today), (2, 4, 50))
+
+    def test_operating_rate_without_headcount(self):
+        self.assertEqual(money.operating(self.today), (2, None, None))
+
+    def test_team_reads_all_rows_but_no_cost(self):
+        self.client.force_login(self.member)
+        res = self.client.get(reverse('genba:work', args=[self.site.pk]))
+        self.assertContains(res, '800,000')
+        self.assertContains(res, '465,000')
+        self.assertContains(res, '現場の標準売上')
+        self.assertNotContains(res, '原価')
+        self.assertNotContains(res, '粗利')
+
+    def test_member_enters_own_man_month_only(self):
+        MonthlyWork.objects.all().delete()
+        self.client.force_login(self.member)
+        self.client.post(reverse('genba:work', args=[self.site.pk]), {'man_month': '0.75'})
+        work = MonthlyWork.objects.get()
+        self.assertEqual((work.membership.user, work.grade, work.man_month), (self.member, self.g1, Decimal('0.75')))
+
+    def test_grade_change_keeps_past_month(self):
+        GradeAssignment.objects.filter(user=self.member).update(grade=self.g2)
+        self.client.force_login(self.member)
+        self.client.post(reverse('genba:work', args=[self.site.pk]), {'man_month': '0.5'})
+        work = self.site.memberships.get(user=self.member).works.get()
+        self.assertEqual((work.grade, work.man_month), (self.g1, Decimal('0.5')))
+
+    def test_no_grade_cannot_enter(self):
+        GradeAssignment.objects.filter(user=self.member).delete()
+        self.client.force_login(self.member)
+        url = reverse('genba:work', args=[self.site.pk])
+        self.assertEqual(self.client.post(url, {'man_month': '1'}).status_code, 403)
+        self.assertNotContains(self.client.get(url), 'name="man_month"')
+
+    def test_outsiders_cannot_read(self):
+        for user in (self.outsider, self.manager):
+            self.client.force_login(user)
+            self.assertEqual(self.client.get(reverse('genba:work', args=[self.site.pk])).status_code, 403)
+
+    def test_archived_site_is_read_only(self):
+        self.site.is_archived = True
+        self.site.save()
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(reverse('genba:work', args=[self.site.pk]), {'man_month': '1'}).status_code, 403)
+
+    def test_no_real_price_field(self):
+        names = {f.name for model in (MonthlyWork, Membership) for f in model._meta.get_fields()}
+        self.assertFalse(names & {'unit_price', 'contract_amount', 'salary'})
+
+    def test_member_kpi_has_no_money_or_people(self):
+        self.client.force_login(self.member)
+        res = self.client.get(reverse('genba:role_kpi'))
+        self.assertContains(res, '層の薄い項目')
+        for text in ('売上', '粗利', '稼働率', '成長した人', '在籍'):
+            self.assertNotContains(res, text)
+
+    def test_leader_kpi_adds_growth_and_own_site(self):
+        self.client.force_login(self.leader)
+        res = self.client.get(reverse('genba:role_kpi'))
+        self.assertContains(res, '成長した人')
+        self.assertContains(res, '自分の現場の運営指標')
+        self.assertNotContains(res, '粗利')
+
+    def test_management_sees_each_site(self):
+        self.client.force_login(self.manager)
+        names = [s['label'] for s in kpi.for_role('management')[0]['chart']['series']]
+        self.assertEqual(names, ['現場A', '現場B'])
+        self.assertContains(self.client.get(reverse('genba:role_kpi')), '標準粗利率')
+        self.assertContains(self.client.get(reverse('genba:management')), '現場ごとの標準売上と標準粗利')
+
+    def test_company_sees_industries_not_sites(self):
+        self.client.force_login(self.company)
+        res = self.client.get(reverse('genba:company_kpi'))
+        self.assertContains(res, '保険業')
+        self.assertNotContains(res, '現場A')
+        self.assertRedirects(self.client.get(reverse('genba:role_kpi')), reverse('genba:company_kpi'))
+
+    def test_seed_rolls_up(self):
+        call_command('seed_genba', stdout=StringIO())
+        call_command('seed_genba', stdout=StringIO())
+        r = money.rollup(date(2000, 1, 1), self.today)
+        self.assertGreater(r['total'].revenue, 0)
+        self.assertEqual(r['total'].revenue, sum(w.revenue for w in MonthlyWork.objects.select_related('grade')))
 
 
 class AboutTests(TestCase):

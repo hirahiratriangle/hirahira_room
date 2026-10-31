@@ -341,3 +341,9 @@ class InterviewQuestionForm(BootstrapMixin, forms.ModelForm):
 class SearchForm(forms.Form):
     q = forms.CharField(label='キーワード', required=False, widget=forms.TextInput(
         attrs={'class': 'form-control', 'placeholder': '用語・設計判断・振り返りを検索'}))
+
+
+class WorkForm(BootstrapMixin, forms.Form):
+    """本人が入れるその月の人月。実際の単価は別のシステムの話なので、ここでは聞かない。"""
+
+    man_month = forms.DecimalField(label='人月', min_value=0, max_value=9, decimal_places=2, initial=1)

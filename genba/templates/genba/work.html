@@ -1,0 +1,46 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}階級と人月{% endblock %}
+
+{% block genba_contents %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h2 class="h5 mb-0" style="color: #2c5aa0;">{{ site.name }}：階級と人月</h2>
+    <div class="d-flex align-items-center gap-2 small">
+        <a class="btn btn-outline-secondary btn-sm" href="?month={{ previous|date:'Y-m' }}">前の月</a>
+        <strong>{{ month|date:"Y年n月" }}</strong>
+        <a class="btn btn-outline-secondary btn-sm" href="?month={{ following|date:'Y-m' }}">次の月</a>
+    </div>
+</div>
+
+{% if form %}
+<form method="post" class="d-flex flex-wrap align-items-center gap-2 mb-3 small">
+    {% csrf_token %}
+    <label for="{{ form.man_month.id_for_label }}">自分の人月（{{ grade }}）</label>
+    <div style="width: 7rem;">{{ form.man_month }}</div>
+    <button class="btn btn-primary btn-sm">保存する</button>
+    {% for e in form.man_month.errors %}<span class="text-danger">{{ e }}</span>{% endfor %}
+</form>
+{% endif %}
+
+<div class="table-responsive"><table class="table table-sm align-middle small" style="min-width: 28rem;">
+    <thead class="text-muted"><tr><th>名前</th><th>立場</th><th>階級</th><th>人月</th><th class="text-end">標準売上</th></tr></thead>
+    <tbody>
+        {% for r in rows %}
+        <tr>
+            <td class="text-nowrap">{{ r.membership.user.username }}</td>
+            <td class="text-nowrap">{{ r.membership.get_role_display }}</td>
+            {% if r.work %}
+            <td>{{ r.work.grade }}</td><td>{{ r.work.man_month }}</td><td class="text-end">{{ r.work.revenue|floatformat:"0g" }}円</td>
+            {% else %}
+            <td class="text-muted" colspan="3">未入力</td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table></div>
+
+<h3 class="h6 mt-4">現場の標準売上</h3>
+<div class="table-responsive"><table class="table table-sm small" style="max-width: 24rem;">
+    <tbody>{% for h in history %}<tr><td>{{ h.month|date:"Y年n月" }}</td><td class="text-end">{{ h.revenue|floatformat:"0g" }}円</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

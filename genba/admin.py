@@ -1,8 +1,8 @@
 from django.contrib import admin
 
 from .models import (
-    ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site,
-    StructureGap, Summary, Term,
+    ChecklistItem, CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, InterviewQuestion, KitProposal, Membership,
+    MonthlyWork, PromiseCheck, Question, Site, StructureGap, Summary, Term,
 )
 
 
@@ -84,3 +84,15 @@ class KitProposalAdmin(admin.ModelAdmin):
 @admin.register(InterviewQuestion)
 class InterviewQuestionAdmin(admin.ModelAdmin):
     list_display = ('question', 'industry', 'created_at')
+
+
+@admin.register(MonthlyWork)
+class MonthlyWorkAdmin(admin.ModelAdmin):
+    list_display = ('membership', 'month', 'grade', 'man_month')
+    list_filter = ('month',)
+
+
+# 階級表と在籍人数は経営層の数字。プロトタイプでは入力画面を作らず、管理画面で直す
+admin.site.register(Grade)
+admin.site.register(GradeAssignment)
+admin.site.register(CompanyMonth)

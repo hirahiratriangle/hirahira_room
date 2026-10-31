@@ -1,0 +1,136 @@
+{% extends 'genba/base.html' %}
+
+{% block genba_title %}職掌と経営KPI{% endblock %}
+
+{% block genba_contents %}
+{% if current_role == 'company' %}{% include 'genba/_company_tabs.html' %}{% endif %}
+
+<h2 class="h5 mb-3" style="color: #2c5aa0;">{{ heading }}</h2>
+
+<div class="row g-3">
+    {% for f in functions %}
+    <section class="{% if f.wide %}col-12{% else %}col-lg-6{% endif %} d-flex">
+        <div class="card w-100"><div class="card-body">
+            <h3 class="h6 fw-bold mb-1">{{ f.name }}</h3>
+            <p class="small text-muted mb-3">{{ f.duty }}</p>
+            <div class="row g-2 mb-3">
+                {% for t in f.tiles %}
+                <div class="{% if f.wide %}col-sm-4{% else %}col-sm-6{% endif %} d-flex"><div class="genba-kpi w-100">
+                    <div class="small text-muted">{{ t.name }}</div>
+                    <div class="genba-kpi-value">{{ t.value }}</div>
+                    {% if t.detail %}<div class="small">{{ t.detail }}</div>{% endif %}
+                    <div class="small mt-1">
+                        {% if t.met is True %}<span class="genba-kpi-met"><i class="fas fa-check me-1"></i>達成</span>
+                        {% elif t.met is False %}<span class="genba-kpi-unmet"><i class="fas fa-exclamation-circle me-1"></i>未達</span>{% endif %}
+                        <span class="text-muted">{{ t.target }}</span>
+                    </div>
+                </div></div>
+                {% endfor %}
+            </div>
+            {% if f.chart %}
+            <div class="small fw-bold mb-1">{{ f.chart_title }}</div>
+            <div class="genba-chart {% if f.tall %}genba-chart-tall{% endif %}"><canvas data-chart="{{ f.chart.id }}" role="img" aria-label="{{ f.chart_title }}"></canvas></div>
+            <details class="small mt-2">
+                <summary class="text-muted">表で見る</summary>
+                <div class="table-responsive"><table class="table table-sm small mb-0 mt-1">
+                    <thead class="text-muted"><tr><th></th>{% for s in f.chart.series %}<th>{{ s.label }}</th>{% endfor %}</tr></thead>
+                    <tbody>{% for row in f.rows %}<tr><td class="text-nowrap">{{ row.label }}</td>{% for v in row.values %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+                </table></div>
+            </details>
+            {% endif %}
+        </div></div>
+    </section>
+    {% endfor %}
+</div>
+
+{% if own_sites %}
+<h3 class="h6 mt-4">自分の現場の運営指標</h3>
+{% for m in own_sites %}<div class="small mb-2"><strong>{{ m.site.name }}</strong>　週報の提出率 {% if m.weekly_rate is None %}―{% else %}{{ m.weekly_rate }}%{% endif %} ・ 確認事項の滞留 {% if m.stall_days is None %}―{% else %}{{ m.stall_days }}日{% endif %}{% for a in m.alerts %}<div><i class="fas fa-exclamation-circle text-warning me-1"></i>{{ a }}</div>{% endfor %}</div>{% endfor %}
+{% endif %}
+
+{% if interview_questions %}
+<h3 class="h6 mt-4">営業・面談の質問リスト</h3>
+<ol class="small">{% for q in interview_questions %}<li>{{ q.question }}{% if q.industry %} <span class="text-muted">（{{ q.industry }}）</span>{% endif %}</li>{% endfor %}</ol>
+{% endif %}
+
+{% if definitions %}
+<h3 class="h6 mt-4">指標の定義（案）</h3>
+<div class="table-responsive"><table class="table table-sm small" style="min-width: 44rem;">
+    <thead class="text-muted"><tr><th>職掌</th><th>指標</th><th>定義</th><th>目標（案）</th><th>支える判断</th></tr></thead>
+    <tbody>{% for function, name, definition, target, decision in definitions %}<tr><td class="text-nowrap">{{ function }}</td><td class="text-nowrap">{{ name }}</td><td>{{ definition }}</td><td class="text-nowrap">{{ target }}</td><td>{{ decision }}</td></tr>{% endfor %}</tbody>
+</table></div>
+
+<h3 class="h6 mt-4">使わない指標</h3>
+<p class="small text-muted">{{ excluded }}</p>
+{% endif %}
+
+{{ charts|json_script:"kpi-charts" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var GRID = '#e1e0d9', MUTED = '#6f6d68', INK = '#52514e';
+
+    // 積み上げの先端にいちばん外側の値（合計）を出す。どの棒の高さも数字で読めるように
+    var totals = {
+        id: 'genbaTotals',
+        afterDatasetsDraw: function (chart) {
+            var ctx = chart.ctx, horizontal = chart.options.indexAxis === 'y';
+            ctx.save();
+            ctx.font = '11px sans-serif';
+            ctx.fillStyle = INK;
+            ctx.textAlign = horizontal ? 'left' : 'center';
+            ctx.textBaseline = horizontal ? 'middle' : 'bottom';
+            chart.data.labels.forEach(function (_, index) {
+                var total = 0, top = null;
+                chart.data.datasets.forEach(function (d, i) {
+                    if (!chart.getDatasetMeta(i).hidden && d.data[index]) {
+                        total += d.data[index];
+                        top = chart.getDatasetMeta(i).data[index];
+                    }
+                });
+                if (top) { ctx.fillText(total, top.x + (horizontal ? 5 : 0), top.y - (horizontal ? 0 : 4)); }
+            });
+            ctx.restore();
+        }
+    };
+
+    // 角を丸めるのは積み上げのいちばん外側だけ。途中の区切りは直角のまま、白い隙間で分ける
+    function radius(ctx) {
+        var horizontal = ctx.chart.options.indexAxis === 'y', datasets = ctx.chart.data.datasets;
+        for (var i = datasets.length - 1; i > ctx.datasetIndex; i--) {
+            if (datasets[i].data[ctx.dataIndex] && !ctx.chart.getDatasetMeta(i).hidden) { return 0; }
+        }
+        return horizontal ? {topRight: 4, bottomRight: 4} : {topLeft: 4, topRight: 4};
+    }
+
+    JSON.parse(document.getElementById('kpi-charts').textContent).forEach(function (c) {
+        var valueAxis = {stacked: true, beginAtZero: true, grace: '12%', grid: {color: GRID}, border: {display: false},
+                         ticks: {color: MUTED, precision: 0}};
+        var labelAxis = {stacked: true, grid: {display: false}, border: {color: '#c3c2b7'},
+                         ticks: {color: MUTED, autoSkip: false, font: {size: 11}}};
+        new Chart(document.querySelector('[data-chart="' + c.id + '"]'), {
+            type: 'bar',
+            data: {labels: c.labels, datasets: c.series.map(function (s) {
+                return {label: s.label, data: s.data, backgroundColor: s.color, borderColor: '#fff', borderWidth: 1,
+                        borderSkipped: false, borderRadius: radius, maxBarThickness: 28};
+            })},
+            options: {
+                indexAxis: c.horizontal ? 'y' : 'x',
+                responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: {mode: 'index', intersect: false, axis: c.horizontal ? 'y' : 'x'},
+                scales: c.horizontal ? {x: valueAxis, y: labelAxis} : {x: labelAxis, y: valueAxis},
+                plugins: {
+                    legend: {position: 'top', align: 'start',
+                             labels: {color: INK, boxWidth: 10, boxHeight: 10, font: {size: 11}}},
+                    tooltip: {filter: function (item) { return item.raw > 0; }}
+                }
+            },
+            plugins: [totals]
+        });
+    });
+})();
+</script>
+{% endblock %}

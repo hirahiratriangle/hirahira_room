@@ -546,3 +546,93 @@ class InterviewQuestion(models.Model):
 
     def __str__(self):
         return self.question
+
+
+def month_start(day):
+    """その日を含む月の1日"""
+    return day.replace(day=1)
+
+
+class Grade(models.Model):
+    """会社が定める階級と、その標準単価・標準原価（月額）。経営層が持つ。
+
+    実際の単価・契約金額・給与は別のシステムの話で、genba には置かない（憲章 VI）。
+    ここの金額は経営の傾向を見るための標準値で、請求や精算には使わない。
+    金額を直すと過去の月の標準売上も変わる。傾向を同じ物差しで見るため、版は持たない。
+    """
+
+    name = models.CharField(verbose_name='階級', max_length=20, unique=True)
+    order = models.PositiveSmallIntegerField(verbose_name='並び順', default=0)
+    standard_price = models.PositiveIntegerField(verbose_name='月額の標準単価（円）')
+    standard_cost = models.PositiveIntegerField(verbose_name='月額の標準原価（円）')
+
+    class Meta:
+        verbose_name = verbose_name_plural = '階級'
+        ordering = ['order']
+
+    def __str__(self):
+        return self.name
+
+
+class GradeAssignment(models.Model):
+    """その人の今の階級。会社が決める。本人もチームも読めるので、現場リポジトリに出てよい値。"""
+
+    user = models.OneToOneField(CustomUser, verbose_name='本人', on_delete=models.CASCADE, related_name='genba_grade')
+    grade = models.ForeignKey(Grade, verbose_name='階級', on_delete=models.PROTECT, related_name='assignments')
+
+    class Meta:
+        verbose_name = verbose_name_plural = '人の階級'
+
+    def __str__(self):
+        return f'{self.user} / {self.grade}'
+
+
+class MonthlyWork(models.Model):
+    """現場・人・月ごとの階級と人月。標準売上と標準粗利はすべてここから足し上げる（憲章 VI）。
+
+    人月は本人が入れる。階級はその月の分を写して持つので、あとで階級が変わっても過去の月は変わらない。
+    現場チームの中では全員が読む。実際の単価を含まないので、隠す理由がない。
+    """
+
+    membership = models.ForeignKey(Membership, verbose_name='現場メンバー', on_delete=models.CASCADE, related_name='works')
+    month = models.DateField(verbose_name='対象月')
+    grade = models.ForeignKey(Grade, verbose_name='階級', on_delete=models.PROTECT, related_name='+')
+    man_month = models.DecimalField(verbose_name='人月', max_digits=3, decimal_places=2, default=1)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '月次の人月'
+        ordering = ['-month']
+        constraints = [models.UniqueConstraint(fields=['membership', 'month'], name='genba_unique_work')]
+
+    def __str__(self):
+        return f'{self.membership} {self.month:%Y-%m}'
+
+    def save(self, *args, **kwargs):
+        self.month = month_start(self.month)
+        super().save(*args, **kwargs)
+
+    @property
+    def revenue(self):
+        return round(self.grade.standard_price * self.man_month)
+
+    @property
+    def cost(self):
+        return round(self.grade.standard_cost * self.man_month)
+
+
+class CompanyMonth(models.Model):
+    """月ごとの全社の在籍人数。稼働率の分母。現場に入っていない人も含むので、現場の記録からは数えられない。"""
+
+    month = models.DateField(verbose_name='対象月', unique=True)
+    headcount = models.PositiveIntegerField(verbose_name='在籍人数')
+
+    class Meta:
+        verbose_name = verbose_name_plural = '全社の在籍人数'
+        ordering = ['-month']
+
+    def __str__(self):
+        return f'{self.month:%Y-%m}'
+
+    def save(self, *args, **kwargs):
+        self.month = month_start(self.month)
+        super().save(*args, **kwargs)

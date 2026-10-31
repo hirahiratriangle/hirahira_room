@@ -36,6 +36,15 @@
     </tbody>
 </table></div>
 
+<h2 class="h5 mt-4 mb-2" style="color: #2c5aa0;">現場ごとの標準売上と標準粗利</h2>
+<div class="table-responsive"><table class="table table-sm align-middle small">
+    <thead class="text-muted"><tr><th>現場</th><th class="text-end">標準売上</th><th class="text-end">標準粗利</th><th class="text-end">標準粗利率</th></tr></thead>
+    <tbody>
+        {% for r in money_rows %}<tr><td>{{ r.site.name }}</td><td class="text-end">{{ r.amount.revenue|floatformat:"0g" }}円</td><td class="text-end">{{ r.amount.gross|floatformat:"0g" }}円</td><td class="text-end">{% if r.amount.gross_rate is None %}―{% else %}{{ r.amount.gross_rate }}%{% endif %}</td></tr>{% endfor %}
+    </tbody>
+    <tfoot><tr class="fw-bold"><td>全社（終わった現場を含む）</td><td class="text-end">{{ money_total.revenue|floatformat:"0g" }}円</td><td class="text-end">{{ money_total.gross|floatformat:"0g" }}円</td><td class="text-end">{% if money_total.gross_rate is None %}―{% else %}{{ money_total.gross_rate }}%{% endif %}</td></tr></tfoot>
+</table></div>
+
 <h3 class="h6 mt-3">指標の定義（案）</h3>
 <table class="table table-sm small">
     <thead class="text-muted"><tr><th>指標</th><th>定義</th><th>気づけること</th></tr></thead>

@@ -3,11 +3,7 @@
 {% block genba_title %}会社{% endblock %}
 
 {% block genba_contents %}
-<ul class="nav nav-tabs small mb-3">
-    <li class="nav-item"><a class="nav-link" href="#assets">ナレッジ資産</a></li>
-    <li class="nav-item"><a class="nav-link" href="#ledger">スキル台帳</a></li>
-    <li class="nav-item"><a class="nav-link" href="#growth">成長のつながり</a></li>
-</ul>
+{% include 'genba/_company_tabs.html' %}
 
 <section id="assets" class="mb-5">
     <h2 class="h5 mb-2" style="color: #2c5aa0;">ナレッジ資産：現場をまたいで再利用できる記録</h2>

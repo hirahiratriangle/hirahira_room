@@ -191,7 +191,7 @@ DEMO_PERSONAS = [
     {'key': 'management', 'icon': 'fa-chart-bar', 'label': 'マネジメント', 'username': 'demo_kacho', 'place': 'すべての現場',
      'point': '現場単位の運営指標と、成長の承認待ち', 'home': 'genba:management'},
     {'key': 'company', 'icon': 'fa-building', 'label': '会社', 'username': 'demo_honbu', 'place': '全社',
-     'point': '公開されたナレッジと、個人のスキル台帳', 'home': 'genba:company'},
+     'point': '職掌と経営KPI、公開されたナレッジ、個人のスキル台帳', 'home': 'genba:company'},
 ]
 DEMO_DEFAULT_PERSONA = 'member'  # 立場を選ばずに本体を開いた未ログインの人は、メンバーとして見る
 # チームと、そのチームの現場（キーはリポジトリ名の DEMO_PREFIX より後ろ）・現場の今の状況

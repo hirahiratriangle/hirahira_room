@@ -24,6 +24,8 @@ urlpatterns = [
     path('leader/', views.LeaderHomeView.as_view(), name='leader_home'),
     path('management/', views.ManagementView.as_view(), name='management'),
     path('company/', views.CompanyView.as_view(), name='company'),
+    path('company/kpi/', views.CompanyKpiView.as_view(), name='company_kpi'),
+    path('kpi/', views.RoleKpiView.as_view(), name='role_kpi'),
     # 現場（1現場＝1リポジトリ）
     path('sites/create/', views.SiteCreateView.as_view(), name='site_create'),
     path('sites/<int:site_pk>/', views.SiteDetailView.as_view(), name='site_detail'),
@@ -32,6 +34,7 @@ urlpatterns = [
     path('sites/<int:site_pk>/growth/', views.GrowthView.as_view(), name='growth'),
     path('sites/<int:site_pk>/weekly/', views.WeeklyBoardView.as_view(), name='weekly_board'),
     path('sites/<int:site_pk>/lines/', views.LinesView.as_view(), name='lines'),
+    path('sites/<int:site_pk>/work/', views.WorkView.as_view(), name='work'),
     path('sites/<int:site_pk>/goals/create/', views.GoalCreateView.as_view(), name='goal_create'),
     path('goals/<int:pk>/reach/', views.GoalReachView.as_view(), name='goal_reach'),
     path('goals/<int:pk>/approval/', views.GoalApprovalView.as_view(), name='goal_approval'),

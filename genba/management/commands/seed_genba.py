@@ -31,6 +31,7 @@
   公開された振り返り・用語、質問リスト、改訂の提案も、この現場から出す
 - 店舗在庫の可視化（ひとり現場・demo_nakamura）：成長の確認を依頼していて、マネジメントの画面に
   「確認して承認する」で届いている。スコープ外の作業と体制のズレが運営指標に出る
+- 終わった現場2つ（Archive 済み）：会社の経営KPIの推移に使う履歴。_seed_history.py の説明を参照
 """
 from datetime import timedelta
 
@@ -49,6 +50,7 @@ from genba.models import (
 from genba.roles import GROUP_COMPANY, GROUP_MANAGEMENT
 
 from ._seed_activity import seed_activity
+from ._seed_history import seed_history
 
 DEMO_PREFIX = kit.DEMO_PREFIX
 OLD_DEMO_USERS = ['genba_guest']  # 前の版で4つの立場を兼ねていたゲスト
@@ -100,7 +102,9 @@ class Command(BaseCommand):
             members = [m.user for m in site.memberships.select_related('user')]
             # 店舗在庫（ひとり現場）は直近8週の週報を足さない：見ている人がいないと週報が滞る、という筋書き
             seed_activity(self, site, key, members, skip=(personas['member'], personas['leader']), quiet_weeks=8 if key == 'stock' else 0)
-        self.stdout.write(self.style.SUCCESS('デモの現場を4つ（うちひとり現場2つ）作りました。'))
+        # 経営KPIの推移に使う、終わった現場の履歴（今の4つの現場より前の成長・ナレッジ・提案）
+        seed_history(self, users)
+        self.stdout.write(self.style.SUCCESS('デモの現場を4つ（うちひとり現場2つ）と、終わった現場を2つ作りました。'))
 
     # ---- 共通 ----
 

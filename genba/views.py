@@ -11,18 +11,18 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views import View, generic
 
-from . import concept_data, growth, kit, kit_data, roles, signals, skillset_data
+from . import concept_data, growth, kit, kit_data, kpi, money, roles, signals, skillset_data
 from .forms import (
     ApprovalForm, DocumentForm, FeedbackForm, GoalForm, GoalPickForm, InterviewQuestionForm, IssueForm, KitProposalForm, LineForm,
     PromiseCheckForm, ReachForm, publish_form_for,
     ResponseForm, SearchForm, SiteForm, StructureGapForm, SummaryForm, SummaryReviewForm, SupportForm, TaskProgressForm,
-    TermForm,
+    TermForm, WorkForm,
 )
 from .metrics import DEFINITIONS, THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Goal, GoalEvidence, InterviewQuestion, KitProposal, Membership, Question, Site, Summary,
-    Term, week_start,
+    ChecklistItem, Document, Goal, GoalEvidence, GradeAssignment, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question,
+    Site, Summary, Term, month_start, week_start,
 )
 
 
@@ -273,6 +273,7 @@ class MemberHomeView(GenbaMixin, generic.TemplateView):
                 'stages': checklist_progress(site, user),
                 'signals': [s for s in signals.signals_for(user, site) if s.detected],
                 'goals': site.goals.filter(author=user),
+                'work': MonthlyWork.objects.filter(membership__site=site, membership__user=user).select_related('grade').first(),
             }
             for site in sites.order_by('is_archived', '-started_on')
         ]
@@ -1163,9 +1164,16 @@ class ManagementView(GenbaMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        rows = [site_metrics(s) for s in Site.objects.all()]
+        # 手を打つ現場を決める画面なので、終わった現場（Archive）は出さない
+        rows = [site_metrics(s) for s in Site.objects.filter(is_archived=False)]
         rows.sort(key=lambda m: (-len(m.alerts), m.site.name))
         context['rows'] = rows
+        # 現場ごとの標準売上・標準粗利（直近3か月）。全社の合計は、この行の足し上げと一致する（money.rollup）
+        span = kpi.periods()[-1]
+        rollup = money.rollup(span.start, span.end)
+        context['money_rows'] = [{'site': m.site, 'amount': rollup['sites'].get(m.site.name, money.Amount())} for m in rows]
+        context['money_total'] = rollup['total']
+        context['money_span'] = span
         # 成長の承認待ち：確認が済んだもの、またはひとり現場の確認待ち（自分の成長は自分で承認しない）
         goals = Goal.objects.exclude(author=self.request.user).select_related('author', 'site', 'confirmed_by')
         context['approval_requests'] = [
@@ -1252,6 +1260,119 @@ class CompanyView(GenbaMixin, generic.TemplateView):
         else:
             raise Http404
         return redirect('genba:company')
+
+
+class CompanyKpiView(GenbaMixin, generic.TemplateView):
+    """会社の職掌と経営KPI（案）。職掌ごとに KPI とグラフを並べる（spec 007）。
+
+    集計は kpi.py に持つ。使うのは会社の立場が見てよいデータだけで、現場名・個人名は出さない。
+    グラフは Chart.js で描き、同じ値を表でも読めるようにする。
+    """
+    template_name = 'genba/company_kpi.html'
+    role_name = 'company'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not roles.is_company(request.user):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        functions = kpi.company_functions()
+        context.update(functions=functions, charts=[f['chart'] for f in functions],
+                       definitions=kpi.DEFINITIONS, excluded=kpi.EXCLUDED, heading='職掌と経営KPI（案）')
+        return context
+
+
+class RoleKpiView(GenbaMixin, generic.TemplateView):
+    """経営の数字（マネジメント・リーダー・メンバー）。会社の KPI を、立場ごとに絞って見せる（kpi.for_role）。
+
+    複数の立場を持つ人には、いちばん広い立場の見え方を出す。会社の立場の人は CompanyKpiView を見る。
+    リーダーには自分の現場の運営指標も足す。他の現場とは比べない。
+    """
+    template_name = 'genba/company_kpi.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        user = request.user
+        if roles.is_company(user):
+            return redirect('genba:company_kpi')
+        if roles.is_management(user):
+            self.audience = 'management'
+        elif roles.leader_sites(user).exists():
+            self.audience = 'leader'
+        elif roles.member_sites(user).exists():
+            self.audience = 'member'
+        else:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        functions = kpi.for_role(self.audience)
+        context.update(functions=functions, charts=[f['chart'] for f in functions if f['chart']], heading='経営の数字')
+        if self.audience == 'management':
+            context.update(definitions=kpi.DEFINITIONS, excluded=kpi.EXCLUDED)
+        else:
+            context['interview_questions'] = InterviewQuestion.objects.all()
+        if self.audience == 'leader':
+            context['own_sites'] = [site_metrics(s) for s in roles.leader_sites(self.request.user).filter(is_archived=False)]
+        return context
+
+
+class WorkView(SiteMixin, generic.TemplateView):
+    """階級と人月：金額の積み上げの出発点（憲章 VI）。
+
+    本人が自分の人月だけを入れる。階級は会社が決めるので、ここでは変えられない。
+    現場チームの全員が全員の行と現場の標準売上を読む。実際の単価を含まないので隠さない。標準原価は見せない。
+    入れた月の階級を行に写す。一度入れた月は、人月を直しても階級は変わらない（過去の月を動かさないため）。
+    """
+    template_name = 'genba/work.html'
+    HISTORY_MONTHS = 6
+
+    def get_month(self):
+        try:
+            return month_start(date.fromisoformat(self.request.GET.get('month', '') + '-01'))
+        except ValueError:
+            return month_start(timezone.localdate())
+
+    def own_grade(self):
+        assignment = GradeAssignment.objects.filter(user=self.request.user).select_related('grade').first()
+        return assignment.grade if assignment else None
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        month = self.get_month()
+        works = {w.membership_id: w for w in MonthlyWork.objects.filter(membership__site=self.site, month=month).select_related('grade')}
+        memberships = list(self.site.memberships.select_related('user').order_by('joined_on'))
+        rows = [{'membership': m, 'work': works.get(m.pk)} for m in memberships]
+        mine = next((m for m in memberships if m.user_id == self.request.user.pk), None)
+        grade = self.own_grade()
+        form = kwargs.get('form')
+        if form is None and mine and grade and not self.site.is_archived:
+            work = works.get(mine.pk)
+            form = WorkForm(initial={'man_month': work.man_month if work else 1})
+        context.update(rows=rows, month=month, form=form, grade=grade,
+                       previous=month_start(month - timedelta(days=1)), following=month_start(month + timedelta(days=32)),
+                       history=money.site_history(self.site, month, self.HISTORY_MONTHS))
+        return context
+
+    def post(self, request, *args, **kwargs):
+        check_writable(request.user, self.site)
+        grade = self.own_grade()
+        if grade is None:
+            raise PermissionDenied
+        form = WorkForm(request.POST)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(form=form))
+        month = self.get_month()
+        membership = self.site.memberships.get(user=request.user)
+        work, created = MonthlyWork.objects.get_or_create(
+            membership=membership, month=month, defaults={'grade': grade, 'man_month': form.cleaned_data['man_month']})
+        if not created:
+            work.man_month = form.cleaned_data['man_month']
+            work.save()
+        messages.success(request, f'{month:%Y年%-m月}の人月を保存しました。')
+        return redirect(reverse('genba:work', args=[self.site.pk]) + f'?month={month:%Y-%m}')
 
 
 class KitProposalCreateView(GenbaMixin, generic.CreateView):
