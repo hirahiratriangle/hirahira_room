@@ -1285,7 +1285,10 @@ class CompanyKpiView(GenbaMixin, generic.TemplateView):
 
 
 class RoleKpiView(GenbaMixin, generic.TemplateView):
-    """経営の数字（マネジメント・リーダー・メンバー）。会社の KPI を、立場ごとに絞って見せる（kpi.for_role）。
+    """経営の数字（マネジメント・リーダー・メンバー）。
+
+    リーダーとメンバーには、会社の KPI を立場ごとに絞って見せる（kpi.for_role）。
+    マネジメントには自分の4職掌を主役に出し、会社の KPI は参考として下に置く（spec 009）。
 
     複数の立場を持つ人には、いちばん広い立場の見え方を出す。会社の立場の人は CompanyKpiView を見る。
     リーダーには自分の現場の運営指標も足す。他の現場とは比べない。
@@ -1308,11 +1311,15 @@ class RoleKpiView(GenbaMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        functions = kpi.for_role(self.audience)
-        context.update(functions=functions, charts=[f['chart'] for f in functions if f['chart']], heading='経営の数字')
         if self.audience == 'management':
-            context.update(definitions=kpi.DEFINITIONS, excluded=kpi.EXCLUDED)
+            functions, reference = kpi.management_functions(), kpi.management_reference()
+            context.update(heading='マネジメントの職掌とKPI（案）', reference=reference, excluded=kpi.EXCLUDED,
+                           definitions=kpi.MANAGEMENT_DEFINITIONS + kpi.DEFINITIONS)
         else:
+            functions, reference = kpi.for_role(self.audience), []
+            context['heading'] = '経営の数字'
+        context.update(functions=functions, charts=[f['chart'] for f in functions + reference if f['chart']])
+        if self.audience != 'management':
             context['interview_questions'] = InterviewQuestion.objects.all()
         if self.audience == 'leader':
             context['own_sites'] = [site_metrics(s) for s in roles.leader_sites(self.request.user).filter(is_archived=False)]

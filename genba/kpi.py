@@ -39,6 +39,7 @@ from datetime import date
 from django.utils import timezone
 
 from . import growth, money
+from .metrics import site_metrics
 from .models import VISIBILITY_COMPANY, Document, Goal, InterviewQuestion, KitProposal, Membership, Site, Term
 
 # 期間：3か月ごとに6つ。今月を含む区切りを最後にして、さかのぼる。
@@ -59,6 +60,11 @@ TARGETS = {
     'sales_growth': 100,    # 標準売上の前の3か月比（%）
     'gross_rate': 30,       # 標準粗利率（%）
     'operating_rate': 90,   # 稼働率（%）
+    'alert_sites': 25,      # 兆候が出ている現場の割合（%・これ以下）
+    'approval_days': 7,     # 承認待ちの平均日数（これ以下）
+    'next_rate': 50,        # 次の目標を持つ人の割合（%）
+    'promise_gaps': 3,      # 約束と実際のズレの件数（これ以下）
+    'scope_out': 5,         # スコープ外の件数（これ以下）
 }
 # レベル3以上がこの人数に満たない項目を「層が薄い」とする。1人だけだと、その人が抜けた現場で受けられなくなるため
 THIN_PEOPLE = 2
@@ -82,6 +88,16 @@ DEFINITIONS = [
     ('ナレッジ管理', '業界カバー率', '公開した記録がある業界 ÷ 現場の業界', f'{TARGETS["industry_rate"]}%以上', '得意な業界の知見が残っているか'),
     ('標準化', '改訂提案の決定率', '採用か見送りを決めた提案 ÷ すべての提案', f'{TARGETS["decided_rate"]}%以上', '現場の声を止めていないか'),
     ('標準化', '改訂提案の採用率', '採用した提案 ÷ 決めた提案', f'{TARGETS["adopted_rate"]}%以上', '物差しが現場の教訓で育っているか'),
+]
+
+# マネジメントの職掌の指標。会社が物差しと方針を決め、マネジメントはその物差しで今の現場と人を動かす
+MANAGEMENT_DEFINITIONS = [
+    ('現場の運営', '兆候が出ている現場の割合', '運営指標の目安を超えた現場 ÷ 動いている現場', f'{TARGETS["alert_sites"]}%以下', 'どの現場に手を打つか'),
+    ('人の成長の確定', '承認待ちの平均日数', '確認が済んでから（ひとり現場は依頼から）今日までの日数の平均', f'{TARGETS["approval_days"]}日以下', '成長の確定を止めていないか'),
+    ('アサイン', '次の目標を持つ人の割合', '承認した成長に次の目標がある人 ÷ 成長が承認された人', f'{TARGETS["next_rate"]}%以上', '次のアサインの材料があるか'),
+    ('アサイン', '稼働率', '今月、現場に入っている人数 ÷ 全社の在籍人数', f'{TARGETS["operating_rate"]}%以上', '現場へ動かす人がいるか'),
+    ('約束の調整', '約束と実際のズレ', '動いている現場の、食い違った行の合計', f'{TARGETS["promise_gaps"]}件以下', '営業時の説明を直すか'),
+    ('約束の調整', 'スコープ外の件数', '動いている現場の「スコープ外」の合計', f'{TARGETS["scope_out"]}件以下', '追加交渉や契約の見直しが要るか'),
 ]
 
 # 使わない指標。金額は積み上げるが、人を比べる数字にはしない（憲章 II・VI）
@@ -336,4 +352,98 @@ def for_role(role, today=None):
                 if tile.name not in KEEP_DETAIL:
                     tile.detail = ''
             functions.append({'name': function['name'], 'duty': function['duty'], 'tiles': tiles, 'chart': None})
+    return functions
+
+
+def waiting_approvals():
+    """マネジメントの承認を待っている成長：確認が済んだもの、またはひとり現場の確認待ち"""
+    goals = Goal.objects.filter(approved_on__isnull=True, submitted_at__isnull=False).select_related('site')
+    return [g for g in goals if g.confirmed_at or g.is_solo]
+
+
+def management_functions(today=None):
+    """マネジメントの4職掌。会社の KPI が全社の方向を見るのに対し、ここは今の現場と人を動かすための数字を返す。
+
+    すべて既にある記録から数える。現場ごとの値か、人数と割合だけで、人を並べて比べる数字は返さない（憲章 II）。
+    マネジメントの結果は会社の KPI の元になる。承認した成長はリーダー枠の割合と層の薄い項目に、
+    アサインは稼働率と標準売上に、約束の調整は質問リストと改訂の提案につながる。
+    """
+    spans = periods(today)
+    metrics = sorted((site_metrics(s, today) for s in Site.objects.filter(is_archived=False)), key=lambda m: m.site.name)
+    names = [m.site.name for m in metrics]
+
+    alerted = sum(1 for m in metrics if m.alerts)
+    alert_rate = percent(alerted, len(metrics))
+    operating_sites = {
+        'name': '現場の運営', 'duty': '兆候を見つけ、手を打つ現場を決める',
+        'tiles': [
+            Tile('兆候が出ている現場', show_percent(alert_rate), f'{alerted}現場 ／ {len(metrics)}現場',
+                 f'目標 {TARGETS["alert_sites"]}%以下', judge(alert_rate, TARGETS['alert_sites'], lower_is_better=True)),
+            Tile('出ている兆候', f'{sum(len(m.alerts) for m in metrics)}件', '動いている現場の合計', '', None),
+        ],
+        'chart_title': '現場ごとの兆候の数',
+        'chart': chart('mgmt-alerts', names, [('兆候', [len(m.alerts) for m in metrics])], ORDINAL_3[1:], horizontal=True),
+    }
+
+    waiting = waiting_approvals()
+    now = timezone.now()
+    days = round(sum((now - (g.confirmed_at or g.submitted_at)).days for g in waiting) / len(waiting), 1) if waiting else None
+    approved = [Goal.objects.filter(approved_on__range=(p.start, p.end)).count() for p in spans]
+    growth_confirmation = {
+        'name': '人の成長の確定', 'duty': '成長を確かめて承認し、次の目標を示す。ひとり現場の確認も担う',
+        'tiles': [
+            Tile('承認待ちの平均日数', '―' if days is None else f'{days}日', f'承認待ち {len(waiting)}件',
+                 f'目標 {TARGETS["approval_days"]}日以下', judge(days, TARGETS['approval_days'], lower_is_better=True)),
+            Tile('承認した成長（直近3か月）', f'{approved[-1]}件', f'前の3か月 {approved[-2]}件', '', None),
+        ],
+        'chart_title': '承認した成長の件数',
+        'chart': chart('mgmt-approved', [p.label for p in spans], [('承認', approved)], ORDINAL_3[1:]),
+    }
+
+    reaches = growth.approved_reaches()
+    reached = {g.author_id for g in reaches}
+    planned = {g.author_id for g in reaches if g.next_text}
+    next_rate = percent(len(planned), len(reached))
+    billed, enrolled, operating = money.operating(today or timezone.localdate())
+    history = [money.operating(p.end) for p in spans]
+    assignment = {
+        'name': 'アサイン', 'duty': '次の目標に合う現場へ人を動かす',
+        'tiles': [
+            Tile('次の目標を持つ人', show_percent(next_rate), f'{len(planned)}人 ／ {len(reached)}人',
+                 f'目標 {TARGETS["next_rate"]}%', judge(next_rate, TARGETS['next_rate'])),
+            Tile('稼働率（今月）', show_percent(operating), f'{billed}人 ／ 在籍 {enrolled or "―"}人',
+                 f'目標 {TARGETS["operating_rate"]}%', judge(operating, TARGETS['operating_rate'])),
+        ],
+        'chart_title': '現場に入っている人と待機の人数（各期の最後の月）',
+        'chart': chart('mgmt-assign', [p.label for p in spans],
+                       [('現場', [row[0] for row in history]),
+                        ('待機', [max((row[1] or 0) - row[0], 0) for row in history])], CATEGORICAL),
+    }
+
+    gaps, scope_out = sum(m.promise_gaps for m in metrics), sum(m.scope_out for m in metrics)
+    promises = {
+        'name': '約束の調整', 'duty': '営業時の約束と現場の実態のズレを、顧客や営業と直す',
+        'tiles': [
+            Tile('約束と実際のズレ', f'{gaps}件', '動いている現場の合計',
+                 f'目標 {TARGETS["promise_gaps"]}件以下', judge(gaps, TARGETS['promise_gaps'], lower_is_better=True)),
+            Tile('スコープ外', f'{scope_out}件', '動いている現場の合計',
+                 f'目標 {TARGETS["scope_out"]}件以下', judge(scope_out, TARGETS['scope_out'], lower_is_better=True)),
+        ],
+        'chart_title': '現場ごとの件数',
+        'chart': chart('mgmt-promises', names,
+                       [('約束と実際のズレ', [m.promise_gaps for m in metrics]), ('スコープ外', [m.scope_out for m in metrics]),
+                        ('体制のズレ', [m.structure_gaps for m in metrics])], CATEGORICAL, horizontal=True),
+    }
+
+    functions = [operating_sites, growth_confirmation, assignment, promises]
+    for function in functions:
+        function['rows'] = table_rows(function['chart'])
+    return functions
+
+
+def management_reference(today=None):
+    """マネジメントの画面の下に置く、会社の KPI。主役は自分の職掌なので、標準売上の積み上げのグラフだけを残す"""
+    functions = for_role('management', today)
+    for function in functions[1:]:
+        function['chart'] = None
     return functions

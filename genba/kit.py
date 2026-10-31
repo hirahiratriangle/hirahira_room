@@ -189,7 +189,7 @@ DEMO_PERSONAS = [
     {'key': 'leader', 'icon': 'fa-user-friends', 'label': 'リーダー', 'username': 'demo_kobayashi',
      'place': '受発注システム刷新', 'point': 'メンバーの詰まりと、成長の確認待ちが届いている', 'home': 'genba:leader_home'},
     {'key': 'management', 'icon': 'fa-chart-bar', 'label': 'マネジメント', 'username': 'demo_kacho', 'place': 'すべての現場',
-     'point': '現場単位の運営指標と、成長の承認待ち', 'home': 'genba:management'},
+     'point': '4つの職掌とKPI、現場単位の運営指標、成長の承認待ち', 'home': 'genba:management'},
     {'key': 'company', 'icon': 'fa-building', 'label': '会社', 'username': 'demo_honbu', 'place': '全社',
      'point': '職掌と経営KPI、公開されたナレッジ、個人のスキル台帳', 'home': 'genba:company'},
 ]

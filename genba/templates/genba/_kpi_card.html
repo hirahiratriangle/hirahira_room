@@ -1,0 +1,31 @@
+<section class="{% if f.wide %}col-12{% else %}col-lg-6{% endif %} d-flex">
+    <div class="card w-100"><div class="card-body">
+        <h3 class="h6 fw-bold mb-1">{{ f.name }}</h3>
+        <p class="small text-muted mb-3">{{ f.duty }}</p>
+        <div class="row g-2 mb-3">
+            {% for t in f.tiles %}
+            <div class="{% if f.wide %}col-sm-4{% else %}col-sm-6{% endif %} d-flex"><div class="genba-kpi w-100">
+                <div class="small text-muted">{{ t.name }}</div>
+                <div class="genba-kpi-value">{{ t.value }}</div>
+                {% if t.detail %}<div class="small">{{ t.detail }}</div>{% endif %}
+                <div class="small mt-1">
+                    {% if t.met is True %}<span class="genba-kpi-met"><i class="fas fa-check me-1"></i>達成</span>
+                    {% elif t.met is False %}<span class="genba-kpi-unmet"><i class="fas fa-exclamation-circle me-1"></i>未達</span>{% endif %}
+                    {% if t.target %}<span class="text-muted">{{ t.target }}</span>{% endif %}
+                </div>
+            </div></div>
+            {% endfor %}
+        </div>
+        {% if f.chart %}
+        <div class="small fw-bold mb-1">{{ f.chart_title }}</div>
+        <div class="genba-chart {% if f.tall %}genba-chart-tall{% endif %}"><canvas data-chart="{{ f.chart.id }}" role="img" aria-label="{{ f.chart_title }}"></canvas></div>
+        <details class="small mt-2">
+            <summary class="text-muted">表で見る</summary>
+            <div class="table-responsive"><table class="table table-sm small mb-0 mt-1">
+                <thead class="text-muted"><tr><th></th>{% for s in f.chart.series %}<th>{{ s.label }}</th>{% endfor %}</tr></thead>
+                <tbody>{% for row in f.rows %}<tr><td class="text-nowrap">{{ row.label }}</td>{% for v in row.values %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+            </table></div>
+        </details>
+        {% endif %}
+    </div></div>
+</section>

@@ -1167,6 +1167,65 @@ class MoneyTests(GenbaTestBase):
         self.assertEqual(r['total'].revenue, sum(w.revenue for w in MonthlyWork.objects.select_related('grade')))
 
 
+class ManagementKpiTests(GenbaTestBase):
+    """マネジメントの職掌とKPI（spec 009）"""
+
+    def setUp(self):
+        super().setUp()
+        self.manager = CustomUser.objects.create_user('manager', 'k@example.com', 'pass12345')
+        self.add_group(self.manager, GROUP_MANAGEMENT)
+
+    def tile(self, name):
+        return next(t for f in kpi.management_functions() for t in f['tiles'] if t.name == name)
+
+    def test_four_functions_before_company_reference(self):
+        self.client.force_login(self.manager)
+        res = self.client.get(reverse('genba:role_kpi'))
+        body = res.content.decode()
+        self.assertEqual([f['name'] for f in res.context['functions']], ['現場の運営', '人の成長の確定', 'アサイン', '約束の調整'])
+        self.assertLess(body.index('現場の運営'), body.index('会社のKPI（参考）'))
+        self.assertEqual([f['name'] for f in res.context['reference'] if f['chart']], ['経営の結果'])
+
+    def test_others_do_not_get_management_functions(self):
+        self.client.force_login(self.leader)
+        res = self.client.get(reverse('genba:role_kpi'))
+        self.assertNotContains(res, '承認待ちの平均日数')
+        self.assertNotContains(res, '会社のKPI（参考）')
+
+    def test_alert_sites_ignore_archived(self):
+        self.make_site('現場B', 'genba-b')
+        PromiseCheck.objects.bulk_create([PromiseCheck(site=self.site, author=self.member, promise='p', actual='a', is_gap=True)] * 2)
+        before = self.tile('約束と実際のズレ').value
+        self.assertEqual(before, '2件')
+        self.site.is_archived = True
+        self.site.save()
+        self.assertEqual(self.tile('約束と実際のズレ').value, '0件')
+
+    def test_waiting_days_use_confirmation_date(self):
+        Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=2, target_text='t',
+                            submitted_at=timezone.now() - timedelta(days=9), confirmed_at=timezone.now() - timedelta(days=4))
+        self.assertEqual(self.tile('承認待ちの平均日数').value, '4.0日')
+
+    def test_unconfirmed_goal_with_leader_is_not_waiting(self):
+        Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=2, target_text='t',
+                            submitted_at=timezone.now())
+        tile = self.tile('承認待ちの平均日数')
+        self.assertEqual((tile.value, tile.met), ('―', None))
+
+    def test_next_goal_counts_people(self):
+        for item, text in (('デザイン', '次の目標'), ('業務分析', '')):
+            Goal.objects.create(site=self.site, author=self.member, skill_item=item, current_level=2, target_text='t', next_text=text,
+                                approved_on=self.today, approved_level=3, approved_grade='B')
+        Goal.objects.create(site=self.site, author=self.leader, skill_item='デザイン', current_level=2, target_text='t',
+                            approved_on=self.today, approved_level=3, approved_grade='B')
+        self.assertEqual(self.tile('次の目標を持つ人').detail, '1人 ／ 2人')
+
+    def test_seeded_page_renders(self):
+        call_command('seed_genba', stdout=StringIO())
+        self.client.post(reverse('genba:demo_switch', args=['management']))
+        self.assertContains(self.client.get(reverse('genba:role_kpi')), 'マネジメントの職掌とKPI')
+
+
 class AboutTests(TestCase):
     def test_about_opens_without_login_and_links_to_app(self):
         res = self.client.get(reverse('genba:about'))

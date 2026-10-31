@@ -1,6 +1,6 @@
 {% extends 'genba/base.html' %}
 
-{% block genba_title %}職掌と経営KPI{% endblock %}
+{% block genba_title %}{{ heading }}{% endblock %}
 
 {% block genba_contents %}
 {% if current_role == 'company' %}{% include 'genba/_company_tabs.html' %}{% endif %}
@@ -9,39 +9,18 @@
 
 <div class="row g-3">
     {% for f in functions %}
-    <section class="{% if f.wide %}col-12{% else %}col-lg-6{% endif %} d-flex">
-        <div class="card w-100"><div class="card-body">
-            <h3 class="h6 fw-bold mb-1">{{ f.name }}</h3>
-            <p class="small text-muted mb-3">{{ f.duty }}</p>
-            <div class="row g-2 mb-3">
-                {% for t in f.tiles %}
-                <div class="{% if f.wide %}col-sm-4{% else %}col-sm-6{% endif %} d-flex"><div class="genba-kpi w-100">
-                    <div class="small text-muted">{{ t.name }}</div>
-                    <div class="genba-kpi-value">{{ t.value }}</div>
-                    {% if t.detail %}<div class="small">{{ t.detail }}</div>{% endif %}
-                    <div class="small mt-1">
-                        {% if t.met is True %}<span class="genba-kpi-met"><i class="fas fa-check me-1"></i>達成</span>
-                        {% elif t.met is False %}<span class="genba-kpi-unmet"><i class="fas fa-exclamation-circle me-1"></i>未達</span>{% endif %}
-                        <span class="text-muted">{{ t.target }}</span>
-                    </div>
-                </div></div>
-                {% endfor %}
-            </div>
-            {% if f.chart %}
-            <div class="small fw-bold mb-1">{{ f.chart_title }}</div>
-            <div class="genba-chart {% if f.tall %}genba-chart-tall{% endif %}"><canvas data-chart="{{ f.chart.id }}" role="img" aria-label="{{ f.chart_title }}"></canvas></div>
-            <details class="small mt-2">
-                <summary class="text-muted">表で見る</summary>
-                <div class="table-responsive"><table class="table table-sm small mb-0 mt-1">
-                    <thead class="text-muted"><tr><th></th>{% for s in f.chart.series %}<th>{{ s.label }}</th>{% endfor %}</tr></thead>
-                    <tbody>{% for row in f.rows %}<tr><td class="text-nowrap">{{ row.label }}</td>{% for v in row.values %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}</tbody>
-                </table></div>
-            </details>
-            {% endif %}
-        </div></div>
-    </section>
+    {% include 'genba/_kpi_card.html' %}
     {% endfor %}
 </div>
+
+{% if reference %}
+<h2 class="h5 mt-5 mb-3" style="color: #2c5aa0;">会社のKPI（参考）</h2>
+<div class="row g-3">
+    {% for f in reference %}
+    {% include 'genba/_kpi_card.html' %}
+    {% endfor %}
+</div>
+{% endif %}
 
 {% if own_sites %}
 <h3 class="h6 mt-4">自分の現場の運営指標</h3>
@@ -123,7 +102,7 @@
                 interaction: {mode: 'index', intersect: false, axis: c.horizontal ? 'y' : 'x'},
                 scales: c.horizontal ? {x: valueAxis, y: labelAxis} : {x: labelAxis, y: valueAxis},
                 plugins: {
-                    legend: {position: 'top', align: 'start',
+                    legend: {display: c.series.length > 1, position: 'top', align: 'start',
                              labels: {color: INK, boxWidth: 10, boxHeight: 10, font: {size: 11}}},
                     tooltip: {filter: function (item) { return item.raw > 0; }}
                 }

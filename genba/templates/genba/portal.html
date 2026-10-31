@@ -24,6 +24,10 @@
             <h3 class="h6 fw-bold"><i class="fas fa-chart-bar me-2"></i>マネジメント：運営指標</h3>
             <p class="small text-muted mb-0">現場単位の運営指標、成長の承認</p>
         </div></a></div>
+        <div class="col-md-6"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:role_kpi' %}"><div class="card-body">
+            <h3 class="h6 fw-bold"><i class="fas fa-chart-line me-2"></i>マネジメント：職掌とKPI</h3>
+            <p class="small text-muted mb-0">職掌ごとの KPI とグラフ</p>
+        </div></a></div>
         {% endif %}
         {% if 'company' in roles %}
         <div class="col-md-6"><a class="card shadow-sm h-100 text-decoration-none" href="{% url 'genba:company' %}"><div class="card-body">
