@@ -10,6 +10,8 @@ urlpatterns = [
     path('', views.IndexView.as_view(), name='index'),
     # ID ありの入口。ID で入る・作る・切り替える。入っていればここがダッシュボード
     path('mypage/', views.MyPageView.as_view(), name='mypage'),
+    # 構想ページ（基本情報 取得者80％計画。3つの構想の構想2から開く）
+    path('about/', views.AboutView.as_view(), name='about'),
     # このアプリについて（試験の概要・使い方・対応していない問題・ID と記録）
     path('guide/', views.GuideView.as_view(), name='guide'),
     path('quiz/', views.QuizView.as_view(), name='quiz'),

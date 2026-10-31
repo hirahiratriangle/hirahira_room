@@ -26,7 +26,7 @@ class IndexTests(TestCase):
     def test_links_to_each_concept(self):
         res = self.client.get(reverse('proposals:index'))
         self.assertContains(res, f'href="{reverse("genba:about")}"')
-        self.assertContains(res, f'href="{reverse("fe:index")}"')
+        self.assertContains(res, f'href="{reverse("fe:about")}"')
         self.assertContains(res, f'href="{reverse("welfare_activity:slides")}"')
         self.assertNotContains(res, 'funitclub.org')
 

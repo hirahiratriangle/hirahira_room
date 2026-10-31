@@ -37,6 +37,7 @@ from django.utils.decorators import method_decorator
 from django.views import generic
 from django.views.decorators.csrf import csrf_exempt
 
+from . import about_data
 from .exam import EXAM, build_prompt
 from .forms import LearnerForm, PassReportForm, QuestionUploadForm
 from .importer import (ImportError_, needs_confirmation, parse,
@@ -252,6 +253,22 @@ class IndexView(CountPageViewMixin, generic.View):
         request.fe_learner = learner
         # 入ったら、ブラウザを閉じたら消える Cookie を置く（MyPageView と同じ）
         return remember_entry(request, DashboardView.render_for(request, learner))
+
+
+@method_decorator(login_not_required, name='dispatch')
+class AboutView(generic.TemplateView):
+    """構想ページ。3つの構想の構想2から開き、計画を伝えてから対策アプリへ案内する。
+
+    学習の画面ではないので、ID は見ず、ページビューも数えない。文言は about_data に持つ。
+    """
+
+    template_name = 'fe/about.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(title=about_data.TITLE, lead=about_data.LEAD, message=about_data.MESSAGE, proofs=about_data.PROOFS,
+                       reasons=about_data.REASONS, supports=about_data.SUPPORTS, steps=about_data.STEPS)
+        return context
 
 
 @method_decorator(login_not_required, name='dispatch')

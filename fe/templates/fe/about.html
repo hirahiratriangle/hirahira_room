@@ -1,0 +1,78 @@
+{% extends 'fe/base.html' %}
+
+{% block title %}基本情報 取得者80％計画 | HirahiraRoom{% endblock %}
+
+{% comment %}
+構想ページ。3つの構想の構想2から開き、計画を伝えてから対策アプリへ案内する。形は genba の案内ページに合わせている。
+文言は fe/about_data.py に持つ。
+カードの高さは flex でそろえる。h-100（height: 100%）は Safari（WebKit）でそろわない。
+{% endcomment %}
+
+{% block header %}
+<header style="background-color: #2c5aa0;">
+    <div class="container px-5 py-5 text-center text-white">
+        <h1 class="display-5 fw-bold mb-3">{{ title }}</h1>
+        <p class="h4 mb-0">{{ lead }}</p>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+    <p class="text-center mb-5">{{ message }}</p>
+
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">基本情報が証明する3つのこと</h2>
+        <div class="row g-3">
+            {% for proof in proofs %}
+            <div class="col-md-4 d-flex"><div class="card w-100"><div class="card-body d-flex flex-column">
+                <h3 class="h6 fw-bold">{{ proof.title }}</h3>
+                <p class="small">{{ proof.text }}</p>
+                <p class="small text-muted mb-0 mt-auto">出典：IPA {% for label, url in proof.sources %}{% if not forloop.first %}／{% endif %}<a href="{{ url }}" target="_blank" rel="noopener noreferrer" aria-label="IPA {{ label }}（別タブで開きます）">{{ label }}</a>{% endfor %}</p>
+            </div></div></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">計画で得られるもの</h2>
+        <div class="row g-3">
+            {% for name, text in reasons %}
+            <div class="col-md-4 d-flex"><div class="card w-100"><div class="card-body">
+                <h3 class="h6 fw-bold">{{ name }}</h3>
+                <p class="small mb-0">{{ text }}</p>
+            </div></div></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">会社の制度</h2>
+        <div class="row g-3">
+            {% for name, text in supports %}
+            <div class="col-md-6 d-flex"><div class="card w-100"><div class="card-body">
+                <h3 class="h6 fw-bold">{{ name }}</h3>
+                <p class="small mb-0">{{ text }}</p>
+            </div></div></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="mb-5">
+        <h2 class="h5 mb-3" style="color: #2c5aa0;">取得までの流れ</h2>
+        <div class="row g-3">
+            {% for name, text in steps %}
+            <div class="col-md-4 d-flex"><div class="card w-100"><div class="card-body">
+                <h3 class="h6 fw-bold"><span style="color: #2c5aa0;">{{ forloop.counter }}.</span> {{ name }}</h3>
+                <p class="small mb-0">{{ text }}</p>
+            </div></div></div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="d-flex flex-wrap justify-content-center gap-3">
+        <a class="btn btn-outline-primary btn-lg" href="{% url 'proposals:index' %}#slide-4">3つの構想</a>
+        <a class="btn btn-primary btn-lg" href="{% url 'fe:index' %}">対策アプリ</a>
+    </section>
+</div>
+{% endblock %}

@@ -12,13 +12,13 @@ class IndexTests(TestCase):
 
     def test_links_to_each_page(self):
         res = self.client.get(reverse('pvsys:index'))
-        for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'fe:index', 'fe:stats',
+        for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'fe:about', 'fe:index', 'fe:stats',
                      'welfare_activity:home', 'welfare_activity:slides'):
             self.assertContains(res, f'href="{reverse(name)}"')
 
     def test_links_open_in_new_tab(self):
         res = self.client.get(reverse('pvsys:index'))
-        self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=8)
+        self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=9)
 
 
 class UrlTests(TestCase):
