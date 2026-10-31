@@ -565,6 +565,8 @@ class Grade(models.Model):
     order = models.PositiveSmallIntegerField(verbose_name='並び順', default=0)
     standard_price = models.PositiveIntegerField(verbose_name='月額の標準単価（円）')
     standard_cost = models.PositiveIntegerField(verbose_name='月額の標準原価（円）')
+    # 成長と階級をつなぐ値。承認した成長がこのレベルに届くと、見直しの候補になる（grades.py）
+    required_level = models.PositiveSmallIntegerField(verbose_name='必要なレベル', default=2)
 
     class Meta:
         verbose_name = verbose_name_plural = '階級'
@@ -585,6 +587,31 @@ class GradeAssignment(models.Model):
 
     def __str__(self):
         return f'{self.user} / {self.grade}'
+
+
+class GradeReview(models.Model):
+    """階級の見直し。承認した成長をもとにマネジメントが提案し、会社が決める（grades.py）。"""
+
+    STATUS_OPEN, STATUS_ADOPTED, STATUS_DECLINED = 'open', 'adopted', 'declined'
+    STATUS_CHOICES = [(STATUS_OPEN, '提案中'), (STATUS_ADOPTED, '採用'), (STATUS_DECLINED, '見送り')]
+
+    user = models.ForeignKey(CustomUser, verbose_name='本人', on_delete=models.CASCADE, related_name='genba_grade_reviews')
+    goal = models.ForeignKey(Goal, verbose_name='元になった成長', on_delete=models.CASCADE, related_name='grade_reviews')
+    current_grade = models.ForeignKey(Grade, verbose_name='今の階級', on_delete=models.PROTECT, related_name='+')
+    proposed_grade = models.ForeignKey(Grade, verbose_name='提案する階級', on_delete=models.PROTECT, related_name='+')
+    status = models.CharField(verbose_name='状態', max_length=10, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    proposed_by = models.ForeignKey(CustomUser, verbose_name='提案した人', on_delete=models.PROTECT, related_name='+')
+    decided_by = models.ForeignKey(CustomUser, verbose_name='決めた人', on_delete=models.PROTECT,
+                                   null=True, blank=True, related_name='+')
+    decided_at = models.DateTimeField(verbose_name='決めた日時', null=True, blank=True)
+    created_at = models.DateTimeField(verbose_name='提案した日時', default=timezone.now)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '階級の見直し'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.user}：{self.current_grade} → {self.proposed_grade}'
 
 
 class MonthlyWork(models.Model):

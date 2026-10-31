@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (
-    ChecklistItem, CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, InterviewQuestion, KitProposal, Membership,
+    ChecklistItem, CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership,
     MonthlyWork, PromiseCheck, Question, Site, StructureGap, Summary, Term,
 )
 
@@ -95,4 +95,5 @@ class MonthlyWorkAdmin(admin.ModelAdmin):
 # 階級表と在籍人数は経営層の数字。プロトタイプでは入力画面を作らず、管理画面で直す
 admin.site.register(Grade)
 admin.site.register(GradeAssignment)
+admin.site.register(GradeReview)
 admin.site.register(CompanyMonth)

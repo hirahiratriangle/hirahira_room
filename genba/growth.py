@@ -7,6 +7,8 @@
 from . import skillset_data as data
 from collections import Counter, defaultdict
 
+from django.db.models import Q
+
 from .models import Document, Goal, Question, Summary, Term
 
 SKILL_ITEMS = [i['name'] for i in data.SKILL_ITEMS]
@@ -22,6 +24,7 @@ AUTO_SKILLS = {
     ('issue', 'problem'): ('コンサルティング技法の活用', 'リスクの発見と提起'),
     ('issue', 'scope_out'): ('ネゴシエーション', '方針と責任範囲の合意'),
     ('issue', 'schedule'): ('プロジェクトマネジメント', '担当機能の設計スケジュール管理'),
+    ('issue', 'checklist'): ('業務システム構築', '業務ドメイン知識の獲得'),
     ('summary', None): ('知的資産管理活用', '理解の資料化と再利用'),
     ('feedback', None): ('リーダーシップ', '後進の指導'),
 }
@@ -53,6 +56,8 @@ def _issue_key(q):
         return 'scope_out'
     if q.kind == Question.KIND_PROBLEM:
         return 'problem'
+    if q.is_checklist:
+        return 'checklist'
     if q.kind == Question.KIND_TASK and q.due_on:
         return 'schedule'
     return None
@@ -98,11 +103,16 @@ def record_title(record):
 
 
 def own_records(user, site):
-    """その現場の本人の記録（証拠の候補）。週報は「目標に近づいた行動」を書いた週だけ"""
+    """その現場の本人の記録（証拠の候補）。
+
+    週報は「目標に近づいた行動」を書いた週だけ。作業はチェックリストの分も含めて、終えたものだけ。
+    タスクの消化と成長は両輪なので、やり遂げた作業がそのまま成長の証拠になる（憲章 VII）。
+    """
     records = [
         *site.documents.filter(author=user).exclude(kind=Document.KIND_WEEKLY, goal_action=''),
         *site.terms.filter(author=user),
-        *site.questions.filter(author=user, stage='').exclude(kind=Question.KIND_TASK, due_on__isnull=True),
+        *site.questions.filter(Q(stage='') & ~Q(kind=Question.KIND_TASK) | Q(kind=Question.KIND_TASK, is_open=False, due_on__isnull=False),
+                               author=user),
         *site.summaries.filter(author=user).exclude(submitted_at__isnull=True),
         *(FeedbackGiven(s) for s in site.summaries.filter(feedback_by=user).select_related('author')),
     ]

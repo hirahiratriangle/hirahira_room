@@ -86,3 +86,20 @@ def site_history(site, last_month, months):
         series.append({'month': month, 'revenue': rows.get(month, 0)})
         month = month_start(month - timedelta(days=1))
     return series[::-1]
+
+
+def growth_share(start, end):
+    """start〜end の標準売上のうち、成長で階級が上がった分。(標準売上, 階級が上がった分) を返す。
+
+    人ごとに、最初に記録された月の階級を「入った時の階級」とする。同じ人月を入った時の階級で計算した額との差が、
+    階級が上がったことで増えた分になる。人数が増えた分と、人が育った分を分けて見るための数字。
+    """
+    first = {}
+    for user_id, price in (MonthlyWork.objects.order_by('month').values_list('membership__user', 'grade__standard_price')):
+        first.setdefault(user_id, price)
+    revenue = raised = 0
+    works = MonthlyWork.objects.filter(month__gte=month_start(start), month__lte=end).select_related('grade', 'membership')
+    for w in works:
+        revenue += w.revenue
+        raised += w.revenue - round(first[w.membership.user_id] * w.man_month)
+    return revenue, raised

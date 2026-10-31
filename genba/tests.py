@@ -11,11 +11,11 @@ from django.utils import timezone
 
 from accounts.models import CustomUser
 
-from . import growth, kit, kit_data, kpi, money, skillset_data
+from . import grades, growth, kit, kit_data, kpi, money, skillset_data
 from .metrics import site_metrics, weekly_rate
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, InterviewQuestion, KitProposal, Membership,
+    ChecklistItem, CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership,
     MonthlyWork, PromiseCheck, Question, Site, StructureGap, Summary, Term, week_start,
 )
 from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
@@ -1044,7 +1044,7 @@ class CompanyKpiTests(GenbaTestBase):
         for name in ('保険金請求 基本設計', '受発注システム刷新', 'demo_tanaka'):
             self.assertNotContains(res, name)
         # 履歴があるので、グラフが右肩上がりになっている
-        knowledge = kpi.company_functions()[3]['chart']['series']
+        knowledge = kpi.company_functions()[2]['chart']['series']
         self.assertGreater(sum(s['data'][-1] for s in knowledge), sum(s['data'][0] for s in knowledge))
 
 
@@ -1147,7 +1147,8 @@ class MoneyTests(GenbaTestBase):
 
     def test_management_sees_each_site(self):
         self.client.force_login(self.manager)
-        names = [s['label'] for s in kpi.for_role('management')[0]['chart']['series']]
+        result = next(f for f in kpi.for_role('management') if f['name'] == '経営の結果')
+        names = [s['label'] for s in result['chart']['series']]
         self.assertEqual(names, ['現場A', '現場B'])
         self.assertContains(self.client.get(reverse('genba:role_kpi')), '標準粗利率')
         self.assertContains(self.client.get(reverse('genba:management')), '現場ごとの標準売上と標準粗利')
@@ -1184,7 +1185,7 @@ class ManagementKpiTests(GenbaTestBase):
         body = res.content.decode()
         self.assertEqual([f['name'] for f in res.context['functions']], ['現場の運営', '人の成長の確定', 'アサイン', '約束の調整'])
         self.assertLess(body.index('現場の運営'), body.index('会社のKPI（参考）'))
-        self.assertEqual([f['name'] for f in res.context['reference'] if f['chart']], ['経営の結果'])
+        self.assertEqual([f['name'] for f in res.context['reference'] if f['chart']], ['成長の寄与', '経営の結果'])
 
     def test_others_do_not_get_management_functions(self):
         self.client.force_login(self.leader)
@@ -1361,6 +1362,110 @@ class MemberFunctionTests(GenbaTestBase):
         call_command('seed_genba', stdout=StringIO())
         self.client.post(reverse('genba:demo_switch', args=['member']))
         self.assertContains(self.client.get(reverse('genba:role_kpi')), 'メンバーの職掌')
+
+
+class GrowthChainTests(GenbaTestBase):
+    """成長の連鎖（憲章 VII・spec 012）：タスクの消化 → 成長 → 階級 → 標準売上 → 会社の成長"""
+
+    def setUp(self):
+        super().setUp()
+        self.company = CustomUser.objects.create_user('company', 'c@example.com', 'pass12345')
+        self.add_group(self.company, GROUP_COMPANY)
+        self.manager = CustomUser.objects.create_user('manager', 'k@example.com', 'pass12345')
+        self.add_group(self.manager, GROUP_MANAGEMENT)
+        self.g1 = Grade.objects.create(name='G1', order=0, standard_price=700000, standard_cost=500000, required_level=2)
+        self.g2 = Grade.objects.create(name='G2', order=1, standard_price=800000, standard_cost=550000, required_level=3)
+        GradeAssignment.objects.create(user=self.member, grade=self.g1)
+        self.goal = Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=2, target_text='t',
+                                        approved_on=self.today, approved_level=3, approved_grade='B')
+
+    def test_chain_from_growth_to_sales(self):
+        """承認した成長が、提案と採用を通って、次に入れる月の標準売上まで届く"""
+        membership = self.site.memberships.get(user=self.member)
+        month = self.today.replace(day=1)
+        MonthlyWork.objects.create(membership=membership, month=month, grade=self.g1)
+        self.client.force_login(self.manager)
+        self.assertContains(self.client.get(reverse('genba:management')), '会社に提案する')
+        self.client.post(reverse('genba:grade_propose', args=[self.goal.pk]))
+        review = GradeReview.objects.get()
+        self.assertEqual((review.current_grade, review.proposed_grade), (self.g1, self.g2))
+        self.client.force_login(self.company)
+        self.assertContains(self.client.get(reverse('genba:company_kpi')), '階級の見直し')
+        self.client.post(reverse('genba:grade_decide', args=[review.pk, 'adopt']))
+        self.assertEqual(GradeAssignment.objects.get(user=self.member).grade, self.g2)
+        # 過去の行は動かず、次の月から新しい階級の標準単価になる
+        self.assertEqual(membership.works.get(month=month).grade, self.g1)
+        following = (month + timedelta(days=32)).replace(day=1)
+        self.client.force_login(self.member)
+        self.client.post(reverse('genba:work', args=[self.site.pk]) + f'?month={following:%Y-%m}', {'man_month': '1'})
+        self.assertEqual(membership.works.get(month=following).revenue, 800000)
+        self.assertEqual(money.growth_share(following, following), (800000, 100000))
+
+    def test_only_management_proposes_and_company_decides(self):
+        url = reverse('genba:grade_propose', args=[self.goal.pk])
+        self.client.force_login(self.company)
+        self.assertEqual(self.client.post(url).status_code, 403)
+        self.client.force_login(self.manager)
+        self.client.post(url)
+        decide = reverse('genba:grade_decide', args=[GradeReview.objects.get().pk, 'adopt'])
+        self.assertEqual(self.client.post(decide).status_code, 403)
+        self.assertEqual(GradeAssignment.objects.get(user=self.member).grade, self.g1)
+
+    def test_grade_is_not_raised_automatically(self):
+        self.assertEqual(GradeAssignment.objects.get(user=self.member).grade, self.g1)
+
+    def test_below_required_level_is_not_a_candidate(self):
+        self.goal.approved_level = 2
+        self.goal.save()
+        self.assertEqual(grades.candidates(), [])
+
+    def test_declined_returns_with_next_growth_only(self):
+        review = grades.propose(self.goal, self.manager)
+        grades.decide(review, self.company, adopted=False)
+        self.assertEqual(GradeAssignment.objects.get(user=self.member).grade, self.g1)
+        self.assertEqual(grades.candidates(), [])
+        Goal.objects.create(site=self.site, author=self.member, skill_item='業務分析', current_level=3, target_text='t',
+                            approved_on=self.today, approved_level=4, approved_grade='A')
+        self.assertEqual(len(grades.candidates()), 1)
+
+    def test_candidate_not_shown_to_self(self):
+        self.assertEqual(grades.candidates(self.member), [])
+
+    def test_finished_task_becomes_evidence_candidate(self):
+        site = self.site
+        done = Question.objects.create(site=site, author=self.member, kind=Question.KIND_TASK, title='終えた作業',
+                                       due_on=self.today, is_open=False, done_on=self.today)
+        check = Question.objects.create(site=site, author=self.member, kind=Question.KIND_TASK, title='チェック', stage='day1',
+                                        due_on=self.today, is_open=False, done_on=self.today)
+        Question.objects.create(site=site, author=self.member, kind=Question.KIND_TASK, title='途中の作業', due_on=self.today)
+        ids = {r['id'] for r in growth.candidates(self.goal) if r['type'] == 'issue'}
+        self.assertEqual(ids, {done.pk, check.pk})
+
+    def test_used_task_shows_for_member_and_upward(self):
+        task = Question.objects.create(site=self.site, author=self.member, kind=Question.KIND_TASK, title='作業',
+                                       due_on=self.today, is_open=False, done_on=self.today)
+        GoalEvidence.objects.create(goal=self.goal, record_type='issue', record_id=task.pk, title='作業')
+        member = next(t for f in kpi.member_functions(self.site, self.member) for t in f['tiles'] if t.name == '成長の証拠にした作業')
+        leader = next(t for f in kpi.leader_functions(self.site, self.leader) for t in f['tiles'] if t.name == '成長の証拠になった作業')
+        manager = next(t for f in kpi.management_functions() for t in f['tiles'] if t.name == '作業を証拠にした成長')
+        self.assertEqual((member.value, leader.value, manager.value), ('1件', '100%', '100%'))
+
+    def test_member_sees_next_grade(self):
+        tile = next(t for f in kpi.member_functions(self.site, self.member) for t in f['tiles'] if t.name == '今の階級')
+        self.assertEqual((tile.value, tile.detail), ('G1', '次のG2はレベル3で見直し'))
+
+    def test_company_order_starts_with_growth_and_ends_with_result(self):
+        names = [f['name'] for f in kpi.company_functions()]
+        self.assertEqual(names[0], '人材開発')
+        self.assertEqual(names[-2:], ['成長の寄与', '経営の結果'])
+
+    def test_seed_shows_chain(self):
+        call_command('seed_genba', stdout=StringIO())
+        call_command('seed_genba', stdout=StringIO())
+        self.assertEqual([c['user'].username for c in grades.candidates() if c['user'].username.startswith('demo_')], ['demo_watanabe'])
+        self.assertEqual(GradeReview.objects.filter(status='open').count(), 1)
+        span = kpi.periods()[-1]
+        self.assertGreater(money.growth_share(span.start, span.end)[1], 0)
 
 
 class AboutTests(TestCase):

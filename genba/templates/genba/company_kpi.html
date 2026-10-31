@@ -22,6 +22,21 @@
     {% endfor %}
 </div>
 
+{% if grade_reviews %}
+<h3 class="h6 mt-4">階級の見直し</h3>
+<ul class="list-group">
+    {% for r in grade_reviews %}
+    <li class="list-group-item small d-flex flex-wrap justify-content-between gap-2">
+        <span><strong>{{ r.user.username }}</strong>　{{ r.current_grade }} → {{ r.proposed_grade }}<span class="text-muted"> ／ {{ r.goal.skill_item }}（レベル{{ r.goal.approved_level }}）・{{ r.goal.site.industry }}</span></span>
+        <form method="post" class="d-flex gap-1">{% csrf_token %}
+            <button class="btn btn-outline-success btn-sm py-0" formaction="{% url 'genba:grade_decide' r.pk 'adopt' %}">採用</button>
+            <button class="btn btn-outline-secondary btn-sm py-0" formaction="{% url 'genba:grade_decide' r.pk 'decline' %}">見送り</button>
+        </form>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
 {% if own_sites %}
 <h3 class="h6 mt-4">自分の現場の運営指標</h3>
 {% for m in own_sites %}<div class="small mb-2"><strong>{{ m.site.name }}</strong>　週報の提出率 {% if m.weekly_rate is None %}―{% else %}{{ m.weekly_rate }}%{% endif %} ・ 確認事項の滞留 {% if m.stall_days is None %}―{% else %}{{ m.stall_days }}日{% endif %}{% for a in m.alerts %}<div><i class="fas fa-exclamation-circle text-warning me-1"></i>{{ a }}</div>{% endfor %}</div>{% endfor %}

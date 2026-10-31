@@ -9,20 +9,24 @@
 - 成長は同じ人の後の承認で上書きされる（growth.approved_reaches）ので、低いレベルから順に並べ、伸びていく形にする
 - 日付はすべて今日からの日数で決める。いつ流しても同じ形のグラフになる
 - 月次の人月は、今の現場も終わった現場も、入場した月から入れる。標準売上と標準粗利の積み上げの元になる
-- 階級表と在籍人数は、本物の利用者が入れた値があれば上書きしない
+- 在籍人数は、本物の利用者が入れた値があれば上書きしない。階級表の G1〜G4 はデモの値にそろえる
+- 階級の見直しは、成長が階級に届く流れを見せる。採用済みの人は、それより前の月を元の階級で記録する
 """
 from datetime import timedelta
 
+from genba import growth
 from genba.models import (
     KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY,
-    CompanyMonth, Document, Goal, Grade, GradeAssignment, InterviewQuestion, KitProposal, Membership, MonthlyWork, Site, Term,
+    CompanyMonth, Document, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Site, Term,
     month_start,
 )
 
-# 階級表：(階級, 標準単価, 標準原価)（万円・月額）と、人の階級。架空の数字
-GRADES = [('G1', 70, 48), ('G2', 78, 54), ('G3', 88, 62), ('G4', 98, 70)]
-PEOPLE_GRADES = {'demo_kimura': 'G1', 'demo_sato': 'G2', 'demo_yamamoto': 'G2', 'demo_nakamura': 'G2', 'demo_watanabe': 'G2',
-                 'demo_takahashi': 'G2', 'demo_ito': 'G3', 'demo_suzuki': 'G3', 'demo_kobayashi': 'G4', 'demo_tanaka': 'G4'}
+# 階級表：(階級, 標準単価, 標準原価（万円・月額）, 必要なレベル)と、人の階級。架空の数字
+GRADES = [('G1', 70, 48, 2), ('G2', 78, 54, 3), ('G3', 88, 62, 4), ('G4', 98, 70, 5)]
+PEOPLE_GRADES = {'demo_kimura': 'G1', 'demo_sato': 'G2', 'demo_yamamoto': 'G2', 'demo_nakamura': 'G2', 'demo_watanabe': 'G1',
+                 'demo_takahashi': 'G2', 'demo_ito': 'G2', 'demo_suzuki': 'G3', 'demo_kobayashi': 'G4', 'demo_tanaka': 'G4'}
+# 成長で階級が上がった人：(本人, 元の階級, 元になった成長のスキル項目, 何日前に採用)。それより前の月は元の階級で記録する
+PROMOTED = [('demo_takahashi', 'G1', 'ソフトウェアエンジニアリング', 190), ('demo_yamamoto', 'G1', 'テクノロジ', 120)]
 PAST_ENDED = {'genba-demo-past-sales': 150, 'genba-demo-past-web': 110}   # 終わった現場が何日前に終わったか
 
 # (キー, 現場名, 業界, 入場した日からの日数, リーダー, メンバー)
@@ -37,7 +41,7 @@ GOALS = [
     ('past-sales', 'demo_ito', 'ネゴシエーション', 2, 'C', 'member', 4, '', 440),
     ('past-sales', 'demo_tanaka', 'リーダーシップ', 3, 'B', 'leader', 4, '1,4', 400),
     ('past-sales', 'demo_sato', '業務分析', 2, 'C', 'member', 4, '', 350),
-    ('past-sales', 'demo_watanabe', 'テクノロジ', 2, 'C', 'member', 4, '', 300),
+    ('past-sales', 'demo_watanabe', 'テクノロジ', 3, 'B', 'member', 4, '', 300),
     ('past-web', 'demo_suzuki', 'コミュニケーション', 3, 'B', 'leader', 3, '2', 250),
     ('past-web', 'demo_takahashi', 'ソフトウェアエンジニアリング', 3, 'B', 'member', 3, '2', 200),
     ('past-sales', 'demo_ito', 'コミュニケーション', 3, 'B', 'leader', 4, '3', 170),
@@ -123,9 +127,11 @@ def seed_history(cmd, users):
 def seed_work(cmd):
     """階級を決め、すべてのデモの現場に入場した月から現場が終わった月まで人月を入れる。在籍は現場に入っている人＋待機1人にする"""
     grades = {}
-    for order, (name, price, cost) in enumerate(GRADES):
-        grades[name] = Grade.objects.get_or_create(
-            name=name, defaults={'order': order, 'standard_price': price * 10000, 'standard_cost': cost * 10000})[0]
+    for order, (name, price, cost, level) in enumerate(GRADES):
+        grades[name] = Grade.objects.update_or_create(
+            name=name, defaults={'order': order, 'standard_price': price * 10000, 'standard_cost': cost * 10000,
+                                 'required_level': level})[0]
+    raised = {user: (grades[old], cmd.today - timedelta(days=days)) for user, old, _, days in PROMOTED}
     people = {}
     for m in Membership.objects.filter(site__repo_name__startswith='genba-demo-').select_related('site', 'user'):
         grade = grades[PEOPLE_GRADES[m.user.username]]
@@ -133,8 +139,32 @@ def seed_work(cmd):
         last = cmd.today - timedelta(days=PAST_ENDED.get(m.site.repo_name, 0))
         month = month_start(m.joined_on)
         while month <= last:
-            MonthlyWork.objects.create(membership=m, month=month, grade=grade)
+            old, since = raised.get(m.user.username, (None, None))
+            MonthlyWork.objects.create(membership=m, month=month, grade=old if old and month < month_start(since) else grade)
             people.setdefault(month, set()).add(m.user_id)
             month = (month + timedelta(days=32)).replace(day=1)
     for month, users in people.items():
         CompanyMonth.objects.get_or_create(month=month, defaults={'headcount': len(users) + 1})
+    seed_reviews(cmd, grades)
+    seed_task_evidence()
+
+
+def seed_reviews(cmd, grades):
+    """階級の見直し：採用済み2件と、会社の決定を待っている1件（demo_ito）。demo_watanabe はマネジメントの候補に出る"""
+    for user, old, item, days in PROMOTED:
+        goal = Goal.objects.get(author__username=user, skill_item=item, site__is_archived=True)
+        GradeReview.objects.create(user=goal.author, goal=goal, current_grade=grades[old], proposed_grade=grades[PEOPLE_GRADES[user]],
+                                   status=GradeReview.STATUS_ADOPTED, proposed_by=cmd.kacho, decided_by=cmd.honbu,
+                                   decided_at=cmd.ago(days), created_at=cmd.ago(days + 3))
+    goal = Goal.objects.get(author__username='demo_ito', skill_item='ネゴシエーション', approved_level=4)
+    GradeReview.objects.create(user=goal.author, goal=goal, current_grade=grades['G2'], proposed_grade=grades['G3'],
+                               proposed_by=cmd.kacho, created_at=cmd.ago(5))
+
+
+def seed_task_evidence():
+    """動いている現場の目標に、本人が終えた作業を2件ずつ証拠として付ける。やり遂げた作業が成長につながる形を見せる"""
+    for goal in Goal.objects.filter(site__repo_name__startswith='genba-demo-', site__is_archived=False):
+        tasks = goal.site.questions.filter(author=goal.author, kind='task', is_open=False, due_on__isnull=False)[:2]
+        for task in tasks:
+            GoalEvidence.objects.get_or_create(goal=goal, record_type='issue', record_id=task.pk,
+                                               defaults={'title': growth.record_title(task)[:150]})

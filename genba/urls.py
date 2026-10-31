@@ -26,6 +26,9 @@ urlpatterns = [
     path('company/', views.CompanyView.as_view(), name='company'),
     path('company/kpi/', views.CompanyKpiView.as_view(), name='company_kpi'),
     path('kpi/', views.RoleKpiView.as_view(), name='role_kpi'),
+    # 階級の見直し（マネジメントが提案し、会社が決める）
+    path('grades/propose/<int:goal_pk>/', views.GradeReviewProposeView.as_view(), name='grade_propose'),
+    path('grades/<int:pk>/<str:action>/', views.GradeReviewDecideView.as_view(), name='grade_decide'),
     # 現場（1現場＝1リポジトリ）
     path('sites/create/', views.SiteCreateView.as_view(), name='site_create'),
     path('sites/<int:site_pk>/', views.SiteDetailView.as_view(), name='site_detail'),

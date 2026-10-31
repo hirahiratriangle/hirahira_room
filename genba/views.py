@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views import View, generic
 
-from . import concept_data, growth, kit, kit_data, kpi, money, roles, signals, skillset_data
+from . import concept_data, grades, growth, kit, kit_data, kpi, money, roles, signals, skillset_data
 from .forms import (
     ApprovalForm, DocumentForm, FeedbackForm, GoalForm, GoalPickForm, InterviewQuestionForm, IssueForm, KitProposalForm, LineForm,
     PromiseCheckForm, ReachForm, publish_form_for,
@@ -21,7 +21,7 @@ from .forms import (
 from .metrics import DEFINITIONS, THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    ChecklistItem, Document, Goal, GoalEvidence, GradeAssignment, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question,
+    ChecklistItem, Document, Goal, GoalEvidence, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question,
     Site, Summary, Term, month_start, week_start,
 )
 
@@ -1173,6 +1173,10 @@ class ManagementView(GenbaMixin, generic.TemplateView):
         rollup = money.rollup(span.start, span.end)
         context['money_rows'] = [{'site': m.site, 'amount': rollup['sites'].get(m.site.name, money.Amount())} for m in rows]
         context['money_total'] = rollup['total']
+        # 階級の見直し：成長を階級につなぐ候補と、会社の決定を待っている提案
+        context['grade_candidates'] = grades.candidates(self.request.user)
+        context['grade_waiting'] = (GradeReview.objects.filter(status=GradeReview.STATUS_OPEN)
+                                    .select_related('user', 'current_grade', 'proposed_grade'))
         context['money_span'] = span
         # 成長の承認待ち：確認が済んだもの、またはひとり現場の確認待ち（自分の成長は自分で承認しない）
         goals = Goal.objects.exclude(author=self.request.user).select_related('author', 'site', 'confirmed_by')
@@ -1280,7 +1284,9 @@ class CompanyKpiView(GenbaMixin, generic.TemplateView):
         context = super().get_context_data(**kwargs)
         functions = kpi.company_functions()
         context.update(functions=functions, charts=[f['chart'] for f in functions],
-                       definitions=kpi.DEFINITIONS, excluded=kpi.EXCLUDED, heading='職掌と経営KPI（案）')
+                       definitions=kpi.DEFINITIONS, excluded=kpi.EXCLUDED, heading='職掌と経営KPI（案）',
+                       grade_reviews=GradeReview.objects.filter(status=GradeReview.STATUS_OPEN)
+                       .select_related('user', 'current_grade', 'proposed_grade', 'goal__site'))
         return context
 
 
@@ -1392,6 +1398,31 @@ class WorkView(SiteMixin, generic.TemplateView):
             work.save()
         messages.success(request, f'{month:%Y年%-m月}の人月を保存しました。')
         return redirect(reverse('genba:work', args=[self.site.pk]) + f'?month={month:%Y-%m}')
+
+
+class GradeReviewProposeView(PersonaMixin, View):
+    """階級の見直しを提案する（マネジメント）。候補にない成長は受け付けない（grades.propose）"""
+
+    def post(self, request, goal_pk):
+        if not roles.is_management(request.user):
+            raise PermissionDenied
+        goal = get_object_or_404(Goal, pk=goal_pk)
+        if grades.propose(goal, request.user) is None:
+            raise PermissionDenied
+        messages.success(request, f'{goal.author.username} さんの階級の見直しを会社に提案しました。')
+        return redirect('genba:management')
+
+
+class GradeReviewDecideView(PersonaMixin, View):
+    """階級の見直しを決める（会社）。階級を定めるのは会社の役割"""
+
+    def post(self, request, pk, action):
+        if not roles.is_company(request.user) or action not in ('adopt', 'decline'):
+            raise PermissionDenied
+        review = get_object_or_404(GradeReview, pk=pk, status=GradeReview.STATUS_OPEN)
+        grades.decide(review, request.user, action == 'adopt')
+        messages.success(request, f'{review.user.username} さんの階級の見直しを{review.get_status_display()}にしました。')
+        return redirect('genba:company_kpi')
 
 
 class KitProposalCreateView(GenbaMixin, generic.CreateView):

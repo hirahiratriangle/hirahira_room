@@ -62,6 +62,20 @@
 </ul>
 {% if approved_recently %}<p class="small text-muted mb-0">最近30日に承認：{% for g in approved_recently %}{{ g.author.username }}（{{ g.skill_item }}・レベル{{ g.approved_level }}・{{ g.approved_grade }}）{% if not forloop.last %}、{% endif %}{% endfor %}</p>{% endif %}
 
+<h3 class="h6 mt-4">階級の見直し</h3>
+<ul class="list-group mb-2">
+    {% for c in grade_candidates %}
+    <li class="list-group-item small d-flex flex-wrap justify-content-between gap-2">
+        <span><strong>{{ c.user.username }}</strong>　{{ c.current }} → {{ c.proposed }}<span class="text-muted"> ／ {{ c.goal.skill_item }}（レベル{{ c.goal.approved_level }}）</span></span>
+        <form method="post" action="{% url 'genba:grade_propose' c.goal.pk %}">{% csrf_token %}<button class="btn btn-outline-primary btn-sm py-0">会社に提案する</button></form>
+    </li>
+    {% endfor %}
+    {% for r in grade_waiting %}
+    <li class="list-group-item small"><strong>{{ r.user.username }}</strong>　{{ r.current_grade }} → {{ r.proposed_grade }}<span class="text-muted"> ／ 会社の決定待ち</span></li>
+    {% endfor %}
+    {% if not grade_candidates and not grade_waiting %}<li class="list-group-item small text-muted">見直しの候補はありません</li>{% endif %}
+</ul>
+
 <h3 class="h6 mt-4">使わない指標</h3>
 <p class="small text-muted">個人のコミット数・記述量／個人別の稼働時間の比較。個人は運営指標ではなく、成長基軸で評価する。</p>
 {% endblock %}

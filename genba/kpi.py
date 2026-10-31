@@ -9,7 +9,10 @@
 | ナレッジ管理 | 現場の経験を会社の資産に変える | 公開の増分、業界カバー率 |
 | 標準化 | 現場の教訓で物差しとテンプレートを育てる | 改訂提案の決定率・採用率 |
 
-4つの職掌の上に「経営の結果」として、標準売上・標準粗利率・稼働率を置く。金額は階級 × 人月から足し上げる（money.py）。
+画面の順序は構想の因果に合わせる。人材開発から始まり、経営の結果は最後に置く。メンバーの成長が会社の成長を決めるので、
+成長が原因で、売上は結果になる（憲章 VII）。「成長の寄与」で、階級が上がった分が標準売上にどれだけ効いたかを見る。
+
+経営の結果として、標準売上・標準粗利率・稼働率を置く。金額は階級 × 人月から足し上げる（money.py）。
 実際の売上・粗利は別のシステムの話で、ここの数字は傾向を見るための標準値。
 4つの職掌の数字は、その手前で動く先行指標になる。リーダー枠を担える人が増えれば高い立場で受注でき、
 質問リストが育てば営業時の説明と実態のズレが減り、利益に効く、という順につながる。
@@ -38,10 +41,10 @@ from datetime import date, timedelta
 
 from django.utils import timezone
 
-from . import growth, kit, money, signals
+from . import grades, growth, kit, money, signals
 from .metrics import THRESHOLDS, WEEKLY_RATE_MIN, site_metrics
 from .models import (
-    KNOWLEDGE_CANDIDATE, VISIBILITY_COMPANY, Document, Goal, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question, Site, Term,
+    KNOWLEDGE_CANDIDATE, VISIBILITY_COMPANY, Document, Goal, GoalEvidence, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question, Site, Term,
     month_start, week_start,
 )
 
@@ -84,6 +87,8 @@ ORDINAL_4 = ['#86b6ef', '#3987e5', '#256abf', '#0d366b']
 CATEGORICAL = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
 
 DEFINITIONS = [
+    ('成長の寄与', '成長による標準売上', '標準売上 − 同じ人月を入った時の階級で計算した額（直近3か月）', '―', '人の成長が売上を押し上げているか'),
+    ('成長の寄与', '階級が上がった人', '直近3か月に階級の見直しを採用した人数', '―', '成長を階級で報いているか'),
     ('経営の結果', '標準売上', '階級の標準単価 × 人月 を全社で足し上げた額（直近3か月）', f'前の3か月の{TARGETS["sales_growth"]}%以上', '事業が伸びているか'),
     ('経営の結果', '標準粗利率', '（標準売上 − 階級の標準原価 × 人月）÷ 標準売上', f'{TARGETS["gross_rate"]}%以上', '今の階級の構成で利益が残るか'),
     ('経営の結果', '稼働率', '今月、現場に入っている人数 ÷ 全社の在籍人数', f'{TARGETS["operating_rate"]}%以上', '次のアサインを急ぐ人がいるか'),
@@ -102,6 +107,7 @@ DEFINITIONS = [
 MANAGEMENT_DEFINITIONS = [
     ('現場の運営', '兆候が出ている現場の割合', '運営指標の目安を超えた現場 ÷ 動いている現場', f'{TARGETS["alert_sites"]}%以下', 'どの現場に手を打つか'),
     ('人の成長の確定', '承認待ちの平均日数', '確認が済んでから（ひとり現場は依頼から）今日までの日数の平均', f'{TARGETS["approval_days"]}日以下', '成長の確定を止めていないか'),
+    ('人の成長の確定', '作業を証拠にした成長', '承認した成長のうち、終えた作業を証拠にしたものの割合', '―', 'タスクの消化が成長につながっているか'),
     ('アサイン', '次の目標を持つ人の割合', '承認した成長に次の目標がある人 ÷ 成長が承認された人', f'{TARGETS["next_rate"]}%以上', '次のアサインの材料があるか'),
     ('アサイン', '稼働率', '今月、現場に入っている人数 ÷ 全社の在籍人数', f'{TARGETS["operating_rate"]}%以上', '現場へ動かす人がいるか'),
     ('約束の調整', '約束と実際のズレ', '動いている現場の、食い違った行の合計', f'{TARGETS["promise_gaps"]}件以下', '営業時の説明を直すか'),
@@ -114,6 +120,7 @@ LEADER_DEFINITIONS = [
     ('詰まりの解消', '説明の時間を割り当てた割合', '未解決の「読めない」のうち、説明の時間が決まったもの', f'{TARGETS["support_rate"]}%以上', '読めないまま放っていないか'),
     ('メンバーの育成', 'まとめに返した割合', 'メンバーが出したまとめのうち、リーダーが返したもの', f'{TARGETS["feedback_rate"]}%以上', '理解の差を返せているか'),
     ('メンバーの育成', '成長の確認待ち', 'メンバーが確認を依頼し、まだ確認していない成長', f'{TARGETS["reach_waiting"]}件以下', '成長の確認を止めていないか'),
+    ('メンバーの育成', '成長の証拠になった作業', 'メンバーが終えた作業のうち、成長の証拠に使われたものの割合', '―', 'タスクの消化が成長につながっているか'),
     ('チームの運営', '週報の提出率', '週報がある週の割合（現場単位）', f'{WEEKLY_RATE_MIN}%以上', '週次共有が回っているか'),
     ('チームの運営', '裁量の線を書いた人', 'リーダーを除くメンバーのうち、裁量の線を書いた人の割合', f'{TARGETS["line_rate"]}%以上', '決めてよい範囲を言葉にしたか'),
     ('知見の資産化', '公開待ちの候補', 'ナレッジ候補のまま、まだ公開していない記録', f'{TARGETS["candidates"]}件以下', '現場の経験を止めていないか'),
@@ -342,12 +349,34 @@ def result_function(spans, today, group):
     }
 
 
+def growth_contribution_function(spans):
+    """成長の寄与：人数が増えた分と、人が育って階級が上がった分を分けて見る"""
+    shares = [money.growth_share(p.start, p.end) for p in spans]
+    revenue, raised = shares[-1]
+    latest = spans[-1]
+    promoted = (GradeReview.objects.filter(status=GradeReview.STATUS_ADOPTED, decided_at__date__range=(latest.start, latest.end))
+                .order_by().values('user').distinct().count())
+    return {
+        'name': '成長の寄与', 'duty': 'メンバーの成長が標準売上をどれだけ押し上げたかを見る',
+        'tiles': [
+            Tile('成長による標準売上（直近3か月）', yen(raised), f'標準売上の {show_percent(percent(raised, revenue))}', '', None),
+            Tile('階級が上がった人（直近3か月）', f'{promoted}人', f'提案中 {GradeReview.objects.filter(status=GradeReview.STATUS_OPEN).count()}件', '', None),
+        ],
+        'chart_title': '標準売上の内訳（万円）',
+        'chart': chart('kpi-growth', [p.label for p in spans],
+                       [('入った時の階級の分', [round((r - g) / 10000) for r, g in shares]),
+                        ('階級が上がった分', [round(g / 10000) for _, g in shares])], CATEGORICAL),
+        'wide': True,
+    }
+
+
 def company_functions(today=None, group='industries'):
     """職掌ごとの KPI とグラフ（画面の並び順）。テンプレートには chart の値と、同じ値の表を渡す"""
     spans = periods(today)
     people = headcount()
-    functions = [result_function(spans, today, group), sales_function(spans, people),
-                 development_function(spans, people), knowledge_function(spans), standard_function()]
+    # 構想の因果の順：人が育つ → 担える仕事が広がる → 経験が資産になる → 物差しが育つ → 売上に表れる
+    functions = [development_function(spans, people), sales_function(spans, people), knowledge_function(spans),
+                 standard_function(), growth_contribution_function(spans), result_function(spans, today, group)]
     for function in functions:
         function['rows'] = table_rows(function['chart'])
     return functions
@@ -413,12 +442,17 @@ def management_functions(today=None):
     now = timezone.now()
     days = round(sum((now - (g.confirmed_at or g.submitted_at)).days for g in waiting) / len(waiting), 1) if waiting else None
     approved = [Goal.objects.filter(approved_on__range=(p.start, p.end)).count() for p in spans]
+    # タスクの消化が成長に届いているか。承認した成長のうち、終えた作業を証拠にしたもの
+    recent = list(Goal.objects.filter(approved_on__range=(spans[-1].start, spans[-1].end)).prefetch_related('evidence'))
+    tasks = set(Question.objects.filter(kind=Question.KIND_TASK, is_open=False).values_list('pk', flat=True))
+    with_task = sum(1 for g in recent if any(e.record_type == 'issue' and e.record_id in tasks for e in g.evidence.all()))
     growth_confirmation = {
         'name': '人の成長の確定', 'duty': '成長を確かめて承認し、次の目標を示す。ひとり現場の確認も担う',
         'tiles': [
             Tile('承認待ちの平均日数', '―' if days is None else f'{days}日', f'承認待ち {len(waiting)}件',
                  f'目標 {TARGETS["approval_days"]}日以下', judge(days, TARGETS['approval_days'], lower_is_better=True)),
             Tile('承認した成長（直近3か月）', f'{approved[-1]}件', f'前の3か月 {approved[-2]}件', '', None),
+            Tile('作業を証拠にした成長', show_percent(percent(with_task, len(recent))), f'{with_task}件 ／ {len(recent)}件', '', None),
         ],
         'chart_title': '承認した成長の件数',
         'chart': chart('mgmt-approved', [p.label for p in spans], [('承認', approved)], ORDINAL_3[1:]),
@@ -466,11 +500,20 @@ def management_functions(today=None):
 
 
 def management_reference(today=None):
-    """マネジメントの画面の下に置く、会社の KPI。主役は自分の職掌なので、標準売上の積み上げのグラフだけを残す"""
+    """マネジメントの画面の下に置く、会社の KPI。主役は自分の職掌なので、成長の寄与と標準売上のグラフだけを残す"""
     functions = for_role('management', today)
-    for function in functions[1:]:
-        function['chart'] = None
+    for function in functions:
+        if function['name'] not in ('成長の寄与', '経営の結果'):
+            function['chart'] = None
     return functions
+
+
+def task_evidence(queryset):
+    """終えた作業のうち、成長の証拠に使われたもの (使われた件数, 終えた件数)。現場単位で数え、人ごとには返さない"""
+    finished = list(queryset.filter(kind=Question.KIND_TASK, is_open=False).values_list('pk', flat=True))
+    used = (GoalEvidence.objects.filter(record_type='issue', record_id__in=finished).order_by()
+            .values('record_id').distinct().count())
+    return used, len(finished)
 
 
 LEADER_WEEKS = 8  # 週ごとのグラフで見る週の数
@@ -517,6 +560,7 @@ def leader_functions(site, user, today=None):
     feedback_rate = percent(answered, submitted.count())
     waiting = sum(1 for g in goals if g.stage == Goal.STAGE_SUBMITTED)
     stages = list(Goal.STAGE_LABELS.items())
+    used, finished_tasks = task_evidence(site.questions.all())
     developing = {
         'name': 'メンバーの育成', 'duty': 'まとめに返し、成長を事実で確認する',
         'tiles': [
@@ -524,6 +568,7 @@ def leader_functions(site, user, today=None):
                  f'目標 {TARGETS["feedback_rate"]}%', judge(feedback_rate, TARGETS['feedback_rate'])),
             Tile('成長の確認待ち', f'{waiting}件', 'メンバーが確認を依頼した成長',
                  f'目標 {TARGETS["reach_waiting"]}件以下', judge(waiting, TARGETS['reach_waiting'], lower_is_better=True)),
+            Tile('成長の証拠になった作業', show_percent(percent(used, finished_tasks)), f'{used}件 ／ 終えた {finished_tasks}件', '', None),
         ],
         'chart_title': 'メンバーの成長の段階',
         'chart': chart(f'lead-stage-{site.pk}', [label for _, label in stages],
@@ -621,11 +666,17 @@ def member_functions(site, user, today=None):
     on_time = sum(1 for q in finished if q.done_on <= q.due_on)
     overdue = sum(1 for q in tasks if q.is_open and q.due_on < today)
     late_met, late_status = state(not overdue, 'なし', '確かめる')
+    # タスクの消化と成長は両輪。やり遂げた作業のうち、自分の目標の証拠に使ったものを見せる
+    evidenced = (GoalEvidence.objects.filter(goal__author=user, goal__site=site, record_type='issue',
+                                             record_id__in=[q.pk for q in finished]).order_by()
+                 .values('record_id').distinct().count())
+    evidence_met, evidence_status = state(evidenced)
     delivery = {
-        'name': '担当の遂行', 'duty': '自分の作業を予定どおりやり遂げ、遅れは早く伝える',
+        'name': '担当の遂行', 'duty': '作業を予定どおりやり遂げ、成長の証拠にする。遅れは早く伝える',
         'tiles': [
             Tile('予定どおり終えた作業', show_percent(percent(on_time, len(finished))), f'{on_time}件 ／ 終えた {len(finished)}件', '', None),
             Tile('予定日を過ぎた作業', f'{overdue}件', '遅れの原因と見込みを書く', '', late_met, late_status),
+            Tile('成長の証拠にした作業', f'{evidenced}件', f'終えた {len(finished)}件のうち', '', evidence_met, evidence_status),
         ],
         'chart_title': '自分の作業',
         'chart': chart(f'member-task-{site.pk}', ['予定どおり', '遅れて完了', '進行中', '予定日を過ぎた'],
@@ -659,12 +710,17 @@ def member_functions(site, user, today=None):
     goal_met, goal_status = state(approved, '承認済み')
     planned = any(g.next_text for g in goals)
     next_met, next_status = state(planned)
+    # 自分の成長が階級につながることを見せる。階級は会社が決めるので、状態は出さない
+    assignment = GradeAssignment.objects.filter(user=user).select_related('grade').first()
+    following = grades.next_grade(assignment.grade) if assignment else None
+    ahead = f'次の{following.name}はレベル{following.required_level}で見直し' if following else ''
     labels = list(Goal.STAGE_LABELS.items())
     growing = {
         'name': '自分の成長', 'duty': '目標を立て、行動と証拠で成長を説明する',
         'tiles': [
             Tile('目標の段階', latest.stage_label if latest else '目標がまだ', latest.skill_item if latest else '', '', goal_met, goal_status),
             Tile('次の目標', 'ある' if planned else 'まだ', '', '', next_met, next_status),
+            Tile('今の階級', assignment.grade.name if assignment else '―', ahead, '', None),
         ],
         'chart_title': '目標の段階',
         'chart': chart(f'member-stage-{site.pk}', [label for _, label in labels],
