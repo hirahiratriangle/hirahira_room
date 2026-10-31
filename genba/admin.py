@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (
-    Assignment, ChecklistItem, CompanyMonth, Document, FocusSkill, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, MemberRepository,
+    Assignment, ChecklistItem, CompanyMonth, Document, FocusSkill, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, KnowledgeUse, MemberRepository,
     Membership, MonthlyWork, PromiseCheck, Question, Site, StructureGap, Summary, Term,
 )
 
@@ -92,10 +92,20 @@ class MonthlyWorkAdmin(admin.ModelAdmin):
     list_filter = ('month',)
 
 
+@admin.register(KnowledgeUse)
+class KnowledgeUseAdmin(admin.ModelAdmin):
+    list_display = ('document', 'used_on')
+
+
+@admin.register(MemberRepository)
+class MemberRepositoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'user', 'job_type', 'template_version')
+    list_filter = ('job_type',)
+
+
 # 階級表と在籍人数は経営層の数字。プロトタイプでは入力画面を作らず、管理画面で直す
 admin.site.register(Grade)
 admin.site.register(GradeAssignment)
-admin.site.register(MemberRepository)
 admin.site.register(Assignment)
 admin.site.register(FocusSkill)
 admin.site.register(GradeReview)

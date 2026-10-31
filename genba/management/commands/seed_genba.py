@@ -56,6 +56,8 @@ DEMO_PREFIX = kit.DEMO_PREFIX
 OLD_DEMO_USERS = ['genba_guest']  # 前の版で4つの立場を兼ねていたゲスト
 DEMO_USERS = ['demo_sato', 'demo_suzuki', 'demo_takahashi',
               'demo_tanaka', 'demo_ito', 'demo_watanabe', 'demo_yamamoto', 'demo_nakamura']
+# 職種がプログラマーの人。ここにない人は SE。現場の役割（duty）も製造の言葉にそろえる
+DEMO_JOBS = {'demo_takahashi': kit.JOB_PROGRAMMER, 'demo_yamamoto': kit.JOB_PROGRAMMER}
 
 # チェックリストの段階ごとの予定日（入場日からの日数）
 STAGE_DUE = {'pre': -1, 'day1': 0, 'week1': 4, 'week2': 14}
@@ -131,7 +133,7 @@ class Command(BaseCommand):
     def join(self, site, user, role=Membership.ROLE_MEMBER, joined_on=None, duty=''):
         """現場に入る（その人のチェックリストが並ぶ）。予定日は入場日から決める"""
         joined_on = joined_on or site.started_on
-        kit.join_site(site, user, role, joined_on, duty)
+        kit.join_site(site, user, role, joined_on, duty, job_type=DEMO_JOBS.get(user.username, kit.JOB_SE))
         for q in site.questions.filter(author=user).exclude(stage=''):
             q.due_on = joined_on + timedelta(days=STAGE_DUE[q.stage])
             q.created_at = self.now - timedelta(days=(self.today - joined_on).days + 1)
@@ -309,7 +311,7 @@ class Command(BaseCommand):
         )
         others = (ito, watanabe, yamamoto)
         self.join(site, tanaka, Membership.ROLE_LEADER, duty='PM')
-        for user, duty in zip(others, ('交渉・要件調整', '画面設計', '帳票設計')):
+        for user, duty in zip(others, ('交渉・要件調整', '画面設計', '帳票開発')):
             self.join(site, user, duty=duty)
         # demo_kimura だけ後から入場した（危険信号は入場日から数えるので、1週目の途中の筋書きになる）
         joined = self.today - timedelta(days=6)
@@ -422,7 +424,7 @@ class Command(BaseCommand):
             description='倉庫の出荷指示バッチを、締め時刻の変更に合わせて改修する。', started_on=started,
         )
         # ひとり現場：本人だけがメンバーとして入る（自社のリーダーはいない）
-        self.join(site, takahashi, duty='バッチ設計')
+        self.join(site, takahashi, duty='バッチ開発')
         for stage in kit.STAGE_LABELS:
             self.check_items(site, takahashi, stage)
         for n in range(0, 6):

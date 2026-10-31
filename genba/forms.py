@@ -1,8 +1,9 @@
 from django import forms
 
-from . import growth
+from . import growth, kit
 from .models import (
-    Document, Goal, InterviewQuestion, KitProposal, Membership, PromiseCheck, Question, Site, StructureGap, Summary, Term,
+    Document, Goal, InterviewQuestion, KitProposal, MemberRepository, Membership, PromiseCheck, Question, Site, StructureGap,
+    Summary, Term,
 )
 
 
@@ -19,9 +20,13 @@ class BootstrapMixin:
 
 
 class SiteForm(BootstrapMixin, forms.ModelForm):
-    """テンプレートから現場を作る。作った人はメンバーかリーダーとして入る。"""
+    """テンプレートから現場を作る。作った人はメンバーかリーダーとして入る。
+
+    職種はその人のリポジトリに残り、入場時チェックリストの版を決める。
+    """
 
     my_role = forms.ChoiceField(label='自分の立場', choices=Membership.ROLE_CHOICES, initial=Membership.ROLE_MEMBER)
+    job_type = forms.ChoiceField(label='職種', choices=kit.JOB_TYPES, initial=kit.JOB_SE)
 
     class Meta:
         model = Site
@@ -36,6 +41,15 @@ class SiteForm(BootstrapMixin, forms.ModelForm):
         if not name.startswith('genba-'):
             raise forms.ValidationError('現場チーム名は genba- で始めてください。')
         return name
+
+
+class RepositoryJobForm(BootstrapMixin, forms.ModelForm):
+    """自分のリポジトリの職種を変える。次に入る現場のテンプレートから効く。"""
+
+    class Meta:
+        model = MemberRepository
+        fields = ['job_type']
+        widgets = {'job_type': forms.Select(attrs={'aria-label': '職種', 'style': 'width: auto;'})}
 
 
 class IssueForm(BootstrapMixin, forms.ModelForm):

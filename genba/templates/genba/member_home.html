@@ -5,7 +5,7 @@
 {% block genba_contents %}
 <section class="mb-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <div><h2 class="h5 mb-0" style="color: #2c5aa0;">自分の現場</h2>{% if repository %}<div class="small text-muted"><i class="fab fa-github me-1"></i>{{ repository.name }}</div>{% endif %}</div>
+        <div><h2 class="h5 mb-0" style="color: #2c5aa0;">自分の現場</h2>{% if repository %}<form method="post" action="{% url 'genba:repository_job' %}" class="d-flex flex-wrap align-items-center gap-2 mt-1 small text-muted">{% csrf_token %}<span><i class="fab fa-github me-1"></i>{{ repository.name }}</span>{{ repository_form.job_type }}<button type="submit" class="btn btn-outline-secondary btn-sm">変える</button></form>{% endif %}</div>
         <a class="btn btn-primary btn-sm" href="{% url 'genba:site_create' %}"><i class="fas fa-plus me-1"></i>テンプレートから現場を作る</a>
     </div>
     <div class="row g-3">

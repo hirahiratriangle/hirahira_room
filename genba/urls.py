@@ -21,6 +21,7 @@ urlpatterns = [
     path('kit/proposals/create/', views.KitProposalCreateView.as_view(), name='kit_proposal_create'),
     # 立場ごとのホーム
     path('member/', views.MemberHomeView.as_view(), name='member_home'),
+    path('member/repository/', views.RepositoryJobView.as_view(), name='repository_job'),
     path('leader/', views.LeaderHomeView.as_view(), name='leader_home'),
     path('management/', views.ManagementView.as_view(), name='management'),
     path('company/', views.CompanyView.as_view(), name='company'),

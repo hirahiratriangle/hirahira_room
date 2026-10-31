@@ -4,7 +4,7 @@
 評価A〜E・ITSSレベル相当は目安で、本人が記入に使い、マネジメントが承認で確定する（憲章 V）。
 会社のスキル台帳と集計に使うのは、承認した成長だけ（構想書スライド20）。
 """
-from . import skillset_data as data
+from . import kit, skillset_data as data
 from collections import Counter, defaultdict
 
 from django.db.models import Q
@@ -275,6 +275,7 @@ def ledger(reaches=None):
     itss  ：承認した成長から見た ITSS レベル相当の一番高いもの
     next  ：次の目標がある成長（目標に合う現場へのアサインに使う）
     sheet ：skill_sheet() の文章
+    job   ：職種の名前（SE・プログラマー）
     """
     reaches = approved_reaches() if reaches is None else reaches
     people = defaultdict(list)
@@ -288,5 +289,6 @@ def ledger(reaches=None):
         rows.append({
             'author': author, 'goals': goals, 'levels': [levels.get(item) for item in SKILL_ITEMS],
             'itss': best or None, 'next': [g for g in goals if g.next_text], 'sheet': skill_sheet(goals),
+            'job': kit.job_label(kit.job_type_of(author)),
         })
     return rows

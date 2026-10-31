@@ -65,10 +65,12 @@ class MemberRepository(models.Model):
     """メンバー1人に1つのリポジトリ。テンプレートから作り、現場が変わっても使い続ける（構想書スライド2）。
 
     プロトタイプでは名前だけ持ち、GitHub には作らない。記録はアプリの DB に書く。
+    職種（SE・プログラマー）でテンプレートを分ける。リポジトリは1人に1つのままで、職種が変わっても作り直さない（spec 014）。
     """
 
     user = models.OneToOneField(CustomUser, verbose_name='本人', on_delete=models.CASCADE, related_name='genba_repository')
     name = models.CharField(verbose_name='リポジトリ名', max_length=100, unique=True)
+    job_type = models.CharField(verbose_name='職種', max_length=10, choices=kit.JOB_TYPES, default=kit.JOB_SE)
     template_version = models.CharField(verbose_name='テンプレートの版', max_length=20, default=kit.TEMPLATE_VERSION)
     created_at = models.DateTimeField(verbose_name='作成日時', default=timezone.now)
 
@@ -177,6 +179,25 @@ class Document(KnowledgeMixin):
     @property
     def is_publishable(self):
         return self.kind in self.PUBLISHABLE_KINDS
+
+
+class KnowledgeUse(models.Model):
+    """会社公開した文書が、別の現場の人に開かれた日。ナレッジ資産が使われているかを数える（spec 015）。
+
+    誰が開いたかは持たない。人ごとに数えられる形にしないため（憲章 II）。1つの文書で1日1行にして、再読み込みで増えないようにする。
+    本人の入力は増えない（憲章 I）。
+    """
+
+    document = models.ForeignKey(Document, verbose_name='文書', on_delete=models.CASCADE, related_name='uses')
+    used_on = models.DateField(verbose_name='開かれた日', default=timezone.localdate)
+
+    class Meta:
+        verbose_name = verbose_name_plural = 'ナレッジの活用'
+        ordering = ['-used_on']
+        constraints = [models.UniqueConstraint(fields=['document', 'used_on'], name='genba_unique_knowledge_use')]
+
+    def __str__(self):
+        return f'{self.document} {self.used_on}'
 
 
 class Term(KnowledgeMixin):

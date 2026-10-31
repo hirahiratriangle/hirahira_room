@@ -9,6 +9,9 @@
 | ナレッジ管理 | 現場の経験を会社の資産に変える | 公開の増分、業界カバー率 |
 | 標準化 | 現場の教訓で物差しとテンプレートを育てる | 改訂提案の決定率・採用率 |
 
+4つの職掌とは別に、資産ベースの見方として「ナレッジ資産」を置く（spec 015）。ナレッジ管理と標準化が日々の流れ（公開の増分・提案の決定）を
+見るのに対し、こちらは構想書の6つの資産の残高と、それが増えているか、別の現場で開かれているかを見る。溜まっているだけでは資産と呼べないため。
+
 画面の順序は構想の因果に合わせる。人材開発から始まり、経営の結果は最後に置く。メンバーの成長が会社の成長を決めるので、
 成長が原因で、売上は結果になる（憲章 VII）。「成長の寄与」で、階級が上がった分が標準売上にどれだけ効いたかを見る。
 
@@ -78,6 +81,9 @@ TARGETS = {
     'candidates': 3,        # 公開待ちの候補の件数（これ以下）
     'focus_rate': 50,       # 重点に向かう目標の割合（%）
     'matched_rate': 70,     # 次の目標に合うアサインの割合（%）
+    'asset_added': 5,       # 直近3か月に増えたナレッジ資産の件数
+    'asset_kinds': 3,       # 直近3か月に増えた資産の種類（6種類のうち）
+    'asset_use_rate': 50,   # 別の現場で開かれた公開文書の割合（%）
 }
 # レベル3以上がこの人数に満たない項目を「層が薄い」とする。1人だけだと、その人が抜けた現場で受けられなくなるため
 THIN_PEOPLE = 2
@@ -104,6 +110,9 @@ DEFINITIONS = [
     ('ナレッジ管理', '業界カバー率', '公開した記録がある業界 ÷ 現場の業界', f'{TARGETS["industry_rate"]}%以上', '得意な業界の知見が残っているか'),
     ('標準化', '改訂提案の決定率', '採用か見送りを決めた提案 ÷ すべての提案', f'{TARGETS["decided_rate"]}%以上', '現場の声を止めていないか'),
     ('標準化', '改訂提案の採用率', '採用した提案 ÷ 決めた提案', f'{TARGETS["adopted_rate"]}%以上', '物差しが現場の教訓で育っているか'),
+    ('ナレッジ資産', 'ナレッジ資産の残高', '公開中の用語と設計判断、質問リスト、採用した改訂提案の合計', f'直近3か月に{TARGETS["asset_added"]}件以上増える', '経験が会社に残っているか'),
+    ('ナレッジ資産', '育っている資産', '6種類の資産のうち、直近3か月に増えた種類の数', f'{TARGETS["asset_kinds"]}種類以上', 'どの資産へ手を入れるか'),
+    ('ナレッジ資産', '別の現場で開かれた文書', '書いた現場の外の人に開かれた公開文書 ÷ 公開文書', f'{TARGETS["asset_use_rate"]}%以上', '資産が次の現場の人を支えているか'),
 ]
 
 # マネジメントの職掌の指標。会社が物差しと方針を決め、マネジメントはその物差しで今の現場と人を動かす
@@ -329,6 +338,58 @@ def standard_function():
     }
 
 
+def asset_dates():
+    """構想書の6つの資産（スライド18）ごとの、増えた日の一覧。
+
+    公開をやめた記録は入らない。改訂の提案は採用した日を持たないので、提案した日で数える。
+    """
+    published = dict(published_dates())
+
+    def adopted(target):
+        days = KitProposal.objects.filter(target=target, status='adopted').values_list('created_at', flat=True)
+        return [timezone.localdate(t) for t in days]
+
+    return [
+        ('業界別の用語辞書', published['用語']),
+        ('設計判断の先例', published['設計判断']),
+        ('営業・面談の質問リスト', [timezone.localdate(t) for t in InterviewQuestion.objects.values_list('created_at', flat=True)]),
+        ('チェックリストの改訂', adopted('checklist')),
+        ('言い回し集', adopted('phrases')),
+        ('成長の物差しの更新', adopted('skillset')),
+    ]
+
+
+def asset_function(spans):
+    """ナレッジ資産：資産ベースの見方。残高・増えた種類・別の現場での活用を見る（spec 015）。
+
+    金額には換算しない。実際の金額を置かない方針で、資産の値段を決める根拠もないため（憲章 VI）。
+    文書の活用は件数と割合だけを返し、誰が開いたかは持たない（憲章 II）。
+    """
+    groups = asset_dates()
+    latest = spans[-1]
+    added = {name: sum(1 for d in dates if latest.start <= d <= latest.end) for name, dates in groups}
+    total = sum(len(dates) for _, dates in groups)
+    growing = sum(1 for n in added.values() if n)
+    public = Document.objects.filter(visibility=VISIBILITY_COMPANY)
+    used = public.filter(uses__isnull=False).distinct().count()
+    use_rate = percent(used, public.count())
+    return {
+        'name': 'ナレッジ資産', 'duty': '現場の経験が、使える資産として積み上がっているかを見る',
+        'tiles': [
+            Tile('ナレッジ資産の残高', f'{total}件', f'直近3か月 +{sum(added.values())}件',
+                 f'目標 +{TARGETS["asset_added"]}件', judge(sum(added.values()), TARGETS['asset_added'])),
+            Tile('育っている資産', f'{growing}種類', f'6種類のうち、直近3か月に増えたもの',
+                 f'目標 {TARGETS["asset_kinds"]}種類', judge(growing, TARGETS['asset_kinds'])),
+            Tile('別の現場で開かれた文書', show_percent(use_rate), f'{used}件 ／ 公開 {public.count()}件',
+                 f'目標 {TARGETS["asset_use_rate"]}%', judge(use_rate, TARGETS['asset_use_rate'])),
+        ],
+        'chart_title': 'ナレッジ資産の残高（種類ごとの累計）',
+        'chart': chart('kpi-assets', [p.label for p in spans],
+                       [(name, [sum(1 for d in dates if d <= p.end) for p in spans]) for name, dates in groups], CATEGORICAL),
+        'wide': True,
+    }
+
+
 def yen(amount):
     """画面に出す額（万円）"""
     return f'{round(amount / 10000):,}万円'
@@ -385,9 +446,10 @@ def company_functions(today=None, group='industries'):
     """職掌ごとの KPI とグラフ（画面の並び順）。テンプレートには chart の値と、同じ値の表を渡す"""
     spans = periods(today)
     people = headcount()
-    # 構想の因果の順：人が育つ → 担える仕事が広がる → 経験が資産になる → 物差しが育つ → 売上に表れる
+    # 構想の因果の順：人が育つ → 担える仕事が広がる → 経験が資産になる → 物差しが育つ → 資産として残る → 売上に表れる
     functions = [development_function(spans, people), sales_function(spans, people), knowledge_function(spans),
-                 standard_function(), growth_contribution_function(spans), result_function(spans, today, group)]
+                 standard_function(), asset_function(spans), growth_contribution_function(spans),
+                 result_function(spans, today, group)]
     for function in functions:
         function['rows'] = table_rows(function['chart'])
     return functions

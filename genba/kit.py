@@ -8,6 +8,32 @@ from . import kit_data
 
 TEMPLATE_VERSION = '2026-10'
 
+# 職種。リポジトリは1人に1つのまま、職種でテンプレート（入場時チェックリスト）を分ける（spec 014）。
+# プログラマーが SE になっても、リポジトリを作り直さず職種だけ変える。記録と成長はそのまま続く。
+JOB_SE = 'se'
+JOB_PROGRAMMER = 'programmer'
+JOB_TYPES = [(JOB_SE, 'SE'), (JOB_PROGRAMMER, 'プログラマー')]
+
+# プログラマーのテンプレート。元資料は上流編だけなので、製造編は上流に固有の項目を差し替えた案（spec 014）。
+# 段階・小見出し・残す場所は SE と同じにして、進捗の見え方と危険信号の判定をそろえる。
+PROGRAMMER_CHECKLIST_TITLE = '入場時チェックリスト製造編'
+PROGRAMMER_CHECKLIST_INTRO = [
+    '製造工程（詳細設計・製造・テスト）の現場に入るときは、最初の1週間で「担当機能と全体像を把握し、'
+    '設計書とコードのつながりを自分の言葉で説明できる」ことが求められる。このチェックリストは、'
+    '入場前・初日・1週目・2週目以降の順に、確認しておくことを並べたもの。',
+    kit_data.CHECKLIST_INTRO[1],
+]
+PROGRAMMER_REPLACED_ITEMS = {
+    '担当工程（要件定義／基本設計／詳細設計）と担当機能の範囲': '担当工程（詳細設計／製造／単体テスト／結合テスト）と担当機能の範囲',
+    '成果物の種類と形式（設計書テンプレート、レビューの進め方）': '成果物の種類と形式（ソースコード、テスト仕様書と結果、コードレビューの進め方）',
+    '既存設計書の矛盾・記載漏れをメモする': '担当機能の設計書を読み、実装で迷う箇所・矛盾・記載漏れをメモする',
+    '設計書の指摘は、課題管理表など残る場所に記録する（口頭だけで終えない）': 'コードレビューや設計書の指摘は、課題管理表など残る場所に記録する（口頭だけで終えない）',
+}
+PROGRAMMER_ADDED_ITEMS = {
+    'ドキュメントと環境': ['開発環境の作り方、ソースコードの置き場所とブランチの運用、コーディング規約'],
+    '担当機能（3〜4日目）': ['開発環境で既存のコードを動かし、担当機能の処理を追う'],
+}
+
 # docs/ の区分（スライド7）。キーは Document.kind に使う。
 DOC_SECTIONS = [
     ('pre', '00_参画前', '面談メモ、言葉のズレの確認'),
@@ -92,13 +118,34 @@ def phrase(scene):
     raise KeyError(scene)
 
 
-def checklist():
-    """段階 → 小見出し → 項目。残す場所と目標の項目を足したもの"""
+def job_label(job_type):
+    return dict(JOB_TYPES)[job_type]
+
+
+def job_type_of(user):
+    """その人の職種。リポジトリをまだ持たない人は SE のテンプレートで見る"""
+    repository = getattr(user, 'genba_repository', None)
+    return repository.job_type if repository else JOB_SE
+
+
+def checklist_title(job_type):
+    return PROGRAMMER_CHECKLIST_TITLE if job_type == JOB_PROGRAMMER else kit_data.CHECKLIST_TITLE
+
+
+def checklist_intro(job_type):
+    return PROGRAMMER_CHECKLIST_INTRO if job_type == JOB_PROGRAMMER else kit_data.CHECKLIST_INTRO
+
+
+def checklist(job_type=JOB_SE):
+    """段階 → 小見出し → 項目。残す場所と目標の項目を足したもの。職種で項目が変わる"""
     stages = []
     for stage in kit_data.CHECKLIST_STAGES:
         sections = []
         for section in stage['sections']:
             items = list(section['items'])
+            if job_type == JOB_PROGRAMMER:
+                items = [PROGRAMMER_REPLACED_ITEMS.get(item, item) for item in items]
+                items += PROGRAMMER_ADDED_ITEMS.get(section['title'], [])
             if section['title'] == GOAL_ITEM[0]:
                 items.append(GOAL_ITEM[1])
             targets = _SECTION_TARGETS[section['title']]
@@ -108,29 +155,43 @@ def checklist():
     return stages
 
 
-def join_site(site, user, role, joined_on, duty=''):
-    """現場に入る。その人の入場時チェックリストを作業 Issue として並べる"""
+def join_site(site, user, role, joined_on, duty='', job_type=None):
+    """現場に入る。その人の職種の入場時チェックリストを作業 Issue として並べる。
+
+    job_type を省くと、リポジトリの今の職種のまま入る（マネジメントのアサインなど、本人が選ばない入り方）。
+    """
     from .models import Membership
 
-    ensure_repository(user)
+    repository = ensure_repository(user, job_type)
     membership = Membership.objects.create(site=site, user=user, role=role, joined_on=joined_on, duty=duty)
-    create_checklist(site, user)
+    create_checklist(site, user, repository.job_type)
     return membership
 
 
-def ensure_repository(user):
-    """メンバー1人に1つのリポジトリを用意する（構想書スライド2）。現場が変わっても同じリポジトリを使い続ける"""
+def ensure_repository(user, job_type=None):
+    """メンバー1人に1つのリポジトリを用意する（構想書スライド2）。現場が変わっても同じリポジトリを使い続ける。
+
+    job_type を渡すと、作るときはその職種で作り、既にあれば職種だけ変える。リポジトリは増えない。
+    """
     from .models import MemberRepository
 
-    return MemberRepository.objects.get_or_create(user=user, defaults={'name': f'genba-{user.username}'})[0]
+    repository, created = MemberRepository.objects.get_or_create(
+        user=user, defaults={'name': f'genba-{user.username}', 'job_type': job_type or JOB_SE})
+    if not created and job_type and repository.job_type != job_type:
+        repository.job_type = job_type
+        repository.save(update_fields=['job_type'])
+    return repository
 
 
-def create_checklist(site, user):
-    """その人のチェックリストを、作業 Issue とチェック項目として並べる"""
+def create_checklist(site, user, job_type=JOB_SE):
+    """その人のチェックリストを、作業 Issue とチェック項目として並べる。
+
+    入場のときの職種で写すので、あとで職種を変えても、作成済みの現場のチェックリストは変わらない。
+    """
     from .models import ChecklistItem, Question
 
     order = 0
-    for stage in checklist():
+    for stage in checklist(job_type):
         for section in stage['sections']:
             order += 1
             q = Question.objects.create(
@@ -208,7 +269,7 @@ DEMO_PERSONAS = [
     {'key': 'management', 'icon': 'fa-chart-bar', 'label': 'マネジメント', 'username': 'demo_kacho', 'place': 'すべての現場',
      'point': '4つの職掌とKPI、現場単位の運営指標、成長の承認待ち', 'home': 'genba:management'},
     {'key': 'company', 'icon': 'fa-building', 'label': '会社', 'username': 'demo_honbu', 'place': '全社',
-     'point': '職掌と経営KPI、公開されたナレッジ、個人のスキル台帳', 'home': 'genba:company'},
+     'point': '職掌と経営KPI、ナレッジ資産の残高と活用、個人のスキル台帳', 'home': 'genba:company'},
 ]
 DEMO_DEFAULT_PERSONA = 'member'  # 立場を選ばずに本体を開いた未ログインの人は、メンバーとして見る
 # チームと、そのチームの現場（キーは現場チーム名の DEMO_PREFIX より後ろ）・現場の今の状況

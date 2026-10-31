@@ -15,7 +15,7 @@ from . import forms, grades, growth, kit, kit_data, kpi, money, skillset_data
 from .metrics import site_metrics, weekly_rate
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    Assignment, ChecklistItem, CompanyMonth, Document, FocusSkill, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, MemberRepository,
+    Assignment, ChecklistItem, CompanyMonth, Document, FocusSkill, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, KnowledgeUse, MemberRepository,
     Membership, MonthlyWork, PromiseCheck, Question, Site, StructureGap, Summary, Term, week_start,
 )
 from .roles import GROUP_COMPANY, GROUP_MANAGEMENT
@@ -75,7 +75,7 @@ class SiteCreateTests(GenbaTestBase):
         self.client.force_login(self.outsider)
         res = self.client.post(reverse('genba:site_create'), {
             'name': '新現場', 'team_slug': 'genba-new', 'industry': '物流業',
-            'started_on': self.today.isoformat(), 'description': '', 'my_role': 'member',
+            'started_on': self.today.isoformat(), 'description': '', 'my_role': 'member', 'job_type': 'se',
         })
         site = Site.objects.get(team_slug='genba-new')
         self.assertRedirects(res, reverse('genba:site_detail', args=[site.pk]) + '?tab=checklist')
@@ -91,7 +91,7 @@ class SiteCreateTests(GenbaTestBase):
     def test_team_slug_must_start_with_genba(self):
         self.client.force_login(self.member)
         res = self.client.post(reverse('genba:site_create'), {
-            'name': 'x', 'team_slug': 'other', 'industry': 'x', 'started_on': self.today.isoformat(), 'my_role': 'member',
+            'name': 'x', 'team_slug': 'other', 'industry': 'x', 'started_on': self.today.isoformat(), 'my_role': 'member', 'job_type': 'se',
         })
         self.assertEqual(res.status_code, 200)
         self.assertFalse(Site.objects.filter(team_slug='other').exists())
@@ -151,7 +151,7 @@ class AccessTests(GenbaTestBase):
         self.assertEqual(self.client.get(reverse('genba:company')).status_code, 403)
         res = self.client.post(reverse('genba:site_create'), {
             'name': 'デモの現場', 'team_slug': 'genba-persona', 'industry': '物流業',
-            'started_on': self.today.isoformat(), 'description': '', 'my_role': 'leader',
+            'started_on': self.today.isoformat(), 'description': '', 'my_role': 'leader', 'job_type': 'se',
         })
         site = Site.objects.get(team_slug='genba-persona')
         self.assertRedirects(res, reverse('genba:site_detail', args=[site.pk]) + '?tab=checklist')
@@ -1048,6 +1048,77 @@ class CompanyKpiTests(GenbaTestBase):
         self.assertGreater(sum(s['data'][-1] for s in knowledge), sum(s['data'][0] for s in knowledge))
 
 
+class KnowledgeAssetTests(GenbaTestBase):
+    """資産ベースの KPI（spec 015）：6つの資産の残高・増えた種類・別の現場での活用"""
+
+    def setUp(self):
+        super().setUp()
+        self.company = CustomUser.objects.create_user('company', 'c@example.com', 'pass12345')
+        self.add_group(self.company, GROUP_COMPANY)
+        self.other_site = self.make_site('現場B', 'genba-b')
+        kit.join_site(self.other_site, self.outsider, Membership.ROLE_MEMBER, self.today)
+
+    def publish(self, **kw):
+        return Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='t',
+                                       visibility=VISIBILITY_COMPANY, public_title='t', published_at=timezone.now(), **kw)
+
+    def tile(self, name):
+        function = next(f for f in kpi.company_functions() if f['name'] == 'ナレッジ資産')
+        return next(t for t in function['tiles'] if t.name == name)
+
+    def test_balance_counts_six_assets_and_only_live_ones(self):
+        self.publish()
+        Document.objects.create(site=self.site, author=self.member, kind=Document.KIND_DESIGN, title='非公開')
+        Term.objects.create(site=self.site, author=self.member, term='a', visibility=VISIBILITY_COMPANY, published_at=timezone.now())
+        InterviewQuestion.objects.create(question='q', author=self.member)
+        for status, target in (('adopted', 'checklist'), ('adopted', 'phrases'), ('open', 'skillset'), ('declined', 'skillset')):
+            KitProposal.objects.create(target=target, title='t', proposal='p', status=status, author=self.member)
+        tile = self.tile('ナレッジ資産の残高')
+        self.assertEqual((tile.value, tile.detail), ('5件', '直近3か月 +5件'))
+        self.assertTrue(tile.met)
+        self.assertEqual(self.tile('育っている資産').value, '5種類')
+
+    def test_opened_from_other_site_counts_once_a_day(self):
+        doc = self.publish()
+        self.publish()
+        self.client.force_login(self.outsider)
+        url = reverse('genba:document_detail', args=[doc.pk])
+        self.client.get(url)
+        self.client.get(url)
+        self.assertEqual(KnowledgeUse.objects.filter(document=doc).count(), 1)
+        tile = self.tile('別の現場で開かれた文書')
+        self.assertEqual((tile.value, tile.detail), ('50%', '1件 ／ 公開 2件'))
+
+    def test_own_site_and_company_do_not_count(self):
+        doc = self.publish()
+        url = reverse('genba:document_detail', args=[doc.pk])
+        for user in (self.member, self.company):
+            self.client.force_login(user)
+            self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertFalse(KnowledgeUse.objects.exists())
+
+    def test_no_public_documents_is_not_judged(self):
+        self.assertIsNone(self.tile('別の現場で開かれた文書').met)
+
+    def test_use_does_not_keep_who_opened(self):
+        """人ごとに数えられる形にしない（憲章 II）"""
+        names = {f.name for f in KnowledgeUse._meta.get_fields()}
+        self.assertEqual(names, {'id', 'document', 'used_on'})
+
+    def test_shown_to_company_but_not_to_member(self):
+        self.client.force_login(self.company)
+        self.assertContains(self.client.get(reverse('genba:company_kpi')), 'ナレッジ資産の残高')
+        self.assertNotIn('ナレッジ資産', [f['name'] for f in kpi.for_role('member')])
+
+    def test_demo_has_assets_growing_and_used(self):
+        call_command('seed_genba', stdout=StringIO())
+        function = next(f for f in kpi.company_functions() if f['name'] == 'ナレッジ資産')
+        self.assertEqual(len(function['chart']['series']), 6)
+        totals = [sum(s['data'][i] for s in function['chart']['series']) for i in (0, -1)]
+        self.assertGreater(totals[1], totals[0])
+        self.assertTrue(KnowledgeUse.objects.exists())
+
+
 class MoneyTests(GenbaTestBase):
     """階級 × 人月の積み上げ（憲章 VI）と、立場ごとの見え方（spec 008）"""
 
@@ -1486,6 +1557,85 @@ class VisionTests(GenbaTestBase):
         kit.join_site(other, self.outsider, Membership.ROLE_MEMBER, self.today)
         self.assertEqual(MemberRepository.objects.filter(user=self.outsider).count(), 1)
         self.assertEqual(self.outsider.genba_repository, first)
+
+    def test_programmer_gets_programmer_checklist(self):
+        site = self.make_site('現場B', 'genba-b')
+        kit.join_site(site, self.outsider, Membership.ROLE_MEMBER, self.today, job_type=kit.JOB_PROGRAMMER)
+        items = list(ChecklistItem.objects.filter(question__site=site, question__author=self.outsider).values_list('text', flat=True))
+        self.assertIn('担当工程（詳細設計／製造／単体テスト／結合テスト）と担当機能の範囲', items)
+        self.assertIn('開発環境で既存のコードを動かし、担当機能の処理を追う', items)
+        self.assertNotIn('担当工程（要件定義／基本設計／詳細設計）と担当機能の範囲', items)
+
+    def test_programmer_replacements_match_source_items(self):
+        """元資料の文言が変わったら、差し替えが黙って効かなくなるので気づけるようにする"""
+        items = {i for stage in kit_data.CHECKLIST_STAGES for section in stage['sections'] for i in section['items']}
+        titles = {section['title'] for stage in kit_data.CHECKLIST_STAGES for section in stage['sections']}
+        self.assertLessEqual(set(kit.PROGRAMMER_REPLACED_ITEMS), items)
+        self.assertLessEqual(set(kit.PROGRAMMER_ADDED_ITEMS), titles)
+
+    def test_programmer_checklist_keeps_stages_and_targets(self):
+        def shape(job):
+            return [(sec['title'], sec['targets']) for stage in kit.checklist(job) for sec in stage['sections']]
+        self.assertEqual(shape(kit.JOB_PROGRAMMER), shape(kit.JOB_SE))
+
+    def test_changing_job_keeps_one_repository_and_existing_checklist(self):
+        """プログラマーが SE になっても、リポジトリは増えず、入っている現場のチェックリストも変わらない"""
+        site = self.make_site('現場B', 'genba-b')
+        kit.join_site(site, self.outsider, Membership.ROLE_MEMBER, self.today, job_type=kit.JOB_PROGRAMMER)
+        before = ChecklistItem.objects.filter(question__author=self.outsider).count()
+        self.client.force_login(self.outsider)
+        res = self.client.post(reverse('genba:repository_job'), {'job_type': kit.JOB_SE})
+        self.assertRedirects(res, reverse('genba:member_home'))
+        self.outsider.genba_repository.refresh_from_db()
+        self.assertEqual(self.outsider.genba_repository.job_type, kit.JOB_SE)
+        self.assertEqual(MemberRepository.objects.filter(user=self.outsider).count(), 1)
+        self.assertEqual(ChecklistItem.objects.filter(question__author=self.outsider).count(), before)
+        other = self.make_site('現場C', 'genba-c')
+        kit.join_site(other, self.outsider, Membership.ROLE_MEMBER, self.today)
+        self.assertTrue(ChecklistItem.objects.filter(question__site=other, text__startswith='担当工程（要件定義').exists())
+
+    def test_invalid_job_is_ignored(self):
+        repository = kit.ensure_repository(self.member, kit.JOB_PROGRAMMER)
+        self.client.force_login(self.member)
+        self.client.post(reverse('genba:repository_job'), {'job_type': 'manager'})
+        repository.refresh_from_db()
+        self.assertEqual(repository.job_type, kit.JOB_PROGRAMMER)
+
+    def test_site_create_sets_job_and_starts_from_current_job(self):
+        kit.ensure_repository(self.outsider, kit.JOB_PROGRAMMER)
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(reverse('genba:site_create')).context['form'].initial['job_type'], kit.JOB_PROGRAMMER)
+        self.client.post(reverse('genba:site_create'), {
+            'name': '現場D', 'team_slug': 'genba-d', 'industry': '製造業', 'started_on': self.today,
+            'my_role': Membership.ROLE_MEMBER, 'job_type': kit.JOB_SE})
+        self.outsider.genba_repository.refresh_from_db()
+        self.assertEqual(self.outsider.genba_repository.job_type, kit.JOB_SE)
+
+    def test_kit_page_shows_own_job_and_switches(self):
+        kit.ensure_repository(self.member, kit.JOB_PROGRAMMER)
+        self.client.force_login(self.member)
+        self.assertContains(self.client.get(reverse('genba:kit')), kit.PROGRAMMER_CHECKLIST_TITLE)
+        self.assertContains(self.client.get(reverse('genba:kit'), {'job': kit.JOB_SE}), kit_data.CHECKLIST_TITLE)
+
+    def test_members_tab_shows_job(self):
+        kit.ensure_repository(self.member, kit.JOB_PROGRAMMER)
+        self.client.force_login(self.member)
+        res = self.client.get(reverse('genba:site_detail', args=[self.site.pk]), {'tab': 'members'})
+        self.assertContains(res, '<td>プログラマー</td>')
+
+    def test_ledger_separates_jobs(self):
+        """スキル台帳は職種で分けて見られる。集計も同じ絞り込みになる"""
+        kit.ensure_repository(self.member, kit.JOB_PROGRAMMER)
+        kit.ensure_repository(self.leader, kit.JOB_SE)
+        for author, item in ((self.member, 'デザイン'), (self.leader, 'テクノロジ')):
+            Goal.objects.create(site=self.site, author=author, skill_item=item, current_level=2, target_text='t',
+                                approved_on=self.today, approved_by=self.manager, approved_level=3, approved_grade='B')
+        self.client.force_login(self.company)
+        def people(**params):
+            return [row['author'] for row in self.client.get(reverse('genba:company'), params).context['ledger']]
+        self.assertCountEqual(people(), [self.member, self.leader])
+        self.assertEqual(people(job=kit.JOB_PROGRAMMER), [self.member])
+        self.assertEqual(people(job=kit.JOB_SE), [self.leader])
 
     def test_members_tab_shows_template_version_of_repository(self):
         """テンプレートの版は現場ではなくメンバーのリポジトリが持つ"""

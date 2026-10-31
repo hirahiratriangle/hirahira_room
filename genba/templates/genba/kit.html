@@ -35,6 +35,7 @@
 </div>
 
 <section class="mb-4">
+    <div class="btn-group btn-group-sm mb-2" role="group" aria-label="職種">{% for key, label in job_types %}<a class="btn {% if key == job_type %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?job={{ key }}">{{ label }}</a>{% endfor %}</div>
     <h3 class="h6">{{ checklist_title }}（現場を作ると、小見出しごとの作業 Issue として並ぶ）</h3>
     {% for p in checklist_intro %}<p class="small">{{ p }}</p>{% endfor %}
     <div class="row g-3">

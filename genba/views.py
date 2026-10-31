@@ -14,14 +14,14 @@ from django.views import View, generic
 from . import concept_data, grades, growth, kit, kit_data, kpi, money, roles, signals, skillset_data
 from .forms import (
     ApprovalForm, DocumentForm, FeedbackForm, GoalForm, GoalPickForm, InterviewQuestionForm, IssueForm, KitProposalForm, LineForm,
-    PromiseCheckForm, ReachForm, publish_form_for,
+    PromiseCheckForm, ReachForm, RepositoryJobForm, publish_form_for,
     ResponseForm, SearchForm, SiteForm, StructureGapForm, SummaryForm, SummaryReviewForm, SupportForm, TaskProgressForm,
     TermForm, WorkForm,
 )
 from .metrics import DEFINITIONS, THRESHOLDS, WEEKLY_RATE_MIN, WEEKLY_WINDOW, site_metrics
 from .models import (
     KNOWLEDGE_CANDIDATE, KNOWLEDGE_NONE, KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY, VISIBILITY_TEAM,
-    Assignment, ChecklistItem, Document, FocusSkill, Goal, GoalEvidence, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, MemberRepository, Membership, MonthlyWork, Question,
+    Assignment, ChecklistItem, Document, FocusSkill, Goal, GoalEvidence, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, KnowledgeUse, MemberRepository, Membership, MonthlyWork, Question,
     Site, Summary, Term, month_start, week_start,
 )
 
@@ -239,10 +239,15 @@ class KitView(GenbaMixin, generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        # 開いた人の職種のチェックリストを先に見せ、?job= でもう一方も読める
+        job_type = self.request.GET.get('job')
+        if job_type not in dict(kit.JOB_TYPES):
+            job_type = kit.job_type_of(self.request.user)
         context.update(
             version=kit.TEMPLATE_VERSION, doc_sections=kit.DOC_SECTIONS, issue_kinds=kit.ISSUE_KINDS,
-            issue_labels=kit.ISSUE_LABELS, lifecycle=kit.LIFECYCLE, checklist=kit.checklist(),
-            checklist_title=kit_data.CHECKLIST_TITLE, checklist_intro=kit_data.CHECKLIST_INTRO,
+            issue_labels=kit.ISSUE_LABELS, lifecycle=kit.LIFECYCLE, checklist=kit.checklist(job_type),
+            job_types=kit.JOB_TYPES, job_type=job_type,
+            checklist_title=kit.checklist_title(job_type), checklist_intro=kit.checklist_intro(job_type),
             danger_signs=kit_data.DANGER_SIGNS,
             proposals=KitProposal.objects.select_related('author'),
         )
@@ -275,6 +280,7 @@ class MemberHomeView(GenbaMixin, generic.TemplateView):
         user = self.request.user
         sites = roles.member_sites(user)
         context['repository'] = MemberRepository.objects.filter(user=user).first()
+        context['repository_form'] = RepositoryJobForm(instance=context['repository'])
         context['site_cards'] = [
             {
                 'site': site,
@@ -305,11 +311,15 @@ class SiteCreateView(GenbaMixin, generic.CreateView):
     template_name = 'genba/form.html'
     role_name = 'member'
 
+    def get_initial(self):
+        return {**super().get_initial(), 'job_type': kit.job_type_of(self.request.user)}
+
     @transaction.atomic
     def form_valid(self, form):
         response = super().form_valid(form)
         site = self.object
-        kit.join_site(site, self.request.user, form.cleaned_data['my_role'], site.started_on)
+        kit.join_site(site, self.request.user, form.cleaned_data['my_role'], site.started_on,
+                      job_type=form.cleaned_data['job_type'])
         messages.success(self.request, f'テンプレートから「{site.name}」を作りました。入場時チェックリストが並んでいます。')
         return response
 
@@ -731,6 +741,9 @@ class DocumentDetailView(GenbaMixin, generic.DetailView):
         self.can_read_site = roles.can_read_site(self.request.user, doc.site)
         if not self.can_read_site and not doc.is_public:
             raise PermissionDenied
+        # 別の現場の人が開いたら、資産が使われたと数える。書いた現場の人と、現場に入っていない会社の立場は数えない
+        if not self.can_read_site and roles.member_sites(self.request.user).exists():
+            KnowledgeUse.objects.get_or_create(document=doc, used_on=timezone.localdate())
         return doc
 
     def get_context_data(self, **kwargs):
@@ -1245,7 +1258,15 @@ class CompanyView(GenbaMixin, generic.TemplateView):
         context['question_form'] = kwargs.get('question_form') or InterviewQuestionForm()
         context['proposals'] = KitProposal.objects.select_related('author', 'decided_by')
         # スキル台帳（承認した成長だけ）：1. 個人の台帳 2. スキルシート 3. 次の目標 4. 台帳の集計
+        # ?job= で職種ごとに分けて見る。台帳の4つの表はすべて同じ絞り込みにする
         reaches = growth.approved_reaches()
+        job_type = self.request.GET.get('job')
+        if job_type in dict(kit.JOB_TYPES):
+            reaches = [g for g in reaches if kit.job_type_of(g.author) == job_type]
+        else:
+            job_type = ''
+        context['job_type'] = job_type
+        context['job_types'] = kit.JOB_TYPES
         distribution = growth.skill_distribution(reaches)
         context['ledger'] = growth.ledger(reaches)
         context['skill_items'] = growth.SKILL_ITEMS
@@ -1412,6 +1433,21 @@ class WorkView(SiteMixin, generic.TemplateView):
             work.save()
         messages.success(request, f'{month:%Y年%-m月}の人月を保存しました。')
         return redirect(reverse('genba:work', args=[self.site.pk]) + f'?month={month:%Y-%m}')
+
+
+class RepositoryJobView(PersonaMixin, View):
+    """自分のリポジトリの職種を変える（本人）。
+
+    リポジトリは作り直さないので、記録と成長はそのまま続く。作成済みの現場のチェックリストも変わらず、次に入る現場から効く。
+    """
+
+    def post(self, request):
+        repository = get_object_or_404(MemberRepository, user=request.user)
+        form = RepositoryJobForm(request.POST, instance=repository)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'職種を{repository.get_job_type_display()}にしました。次に入る現場のテンプレートから変わります。')
+        return redirect('genba:member_home')
 
 
 class FocusSkillUpdateView(PersonaMixin, View):

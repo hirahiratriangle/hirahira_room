@@ -14,10 +14,12 @@
 """
 from datetime import timedelta
 
+from django.utils import timezone
+
 from genba import growth, kit
 from genba.models import (
     KNOWLEDGE_PUBLISHED, VISIBILITY_COMPANY,
-    Assignment, CompanyMonth, Document, FocusSkill, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, Membership, MonthlyWork, Site, Term,
+    Assignment, CompanyMonth, Document, FocusSkill, Goal, GoalEvidence, Grade, GradeAssignment, GradeReview, InterviewQuestion, KitProposal, KnowledgeUse, Membership, MonthlyWork, Site, Term,
     month_start,
 )
 
@@ -31,6 +33,7 @@ FOCUS = ['業務分析', '知的資産管理活用', 'ネゴシエーション']
 # 過去のアサイン：(本人, 元になった成長のスキル項目, 入った現場, 次の目標に合うか, 何日前)
 ASSIGNED = [('demo_tanaka', 'リーダーシップ', 'claims', True, 85), ('demo_suzuki', 'リーダーシップ', 'order', True, 70),
             ('demo_takahashi', 'ソフトウェアエンジニアリング', 'logistics', False, 56)]
+USED_AFTER = (14, 45)   # 公開した文書が、公開から何日後に別の現場で開かれたか
 PAST_ENDED = {'genba-demo-past-sales': 150, 'genba-demo-past-web': 110}   # 終わった現場が何日前に終わったか
 
 # (キー, 現場名, 業界, 入場した日からの日数, リーダー, メンバー)
@@ -120,12 +123,26 @@ def seed_history(cmd, users):
     for key, author, kind, title, body, days in DOCUMENTS:
         Document.objects.create(site=sites[key], author=users[author], kind=kind, title=title, body=body,
                                 created_at=cmd.ago(days + 7), **public(key, title, body, days))
-    for question, industry in QUESTIONS:
-        InterviewQuestion.objects.create(question=question, industry=industry, author=users['demo_tanaka'])
+    # 質問リストは振り返りのたびに少しずつ増えた筋書きにする（資産の残高の推移に出る）
+    for number, (question, industry) in enumerate(QUESTIONS, 1):
+        InterviewQuestion.objects.create(question=question, industry=industry, author=users['demo_tanaka'],
+                                         created_at=cmd.ago(number * 100))
     for target, title, proposal, status, author, days in PROPOSALS:
         KitProposal.objects.create(target=target, title=title, proposal=proposal, status=status, author=users[author],
                                    decided_by=cmd.honbu, created_at=cmd.ago(days))
+    seed_knowledge_use(cmd)
     seed_work(cmd)
+
+
+def seed_knowledge_use(cmd):
+    """公開した文書のうち、古いものほど別の現場で開かれている筋書きにする。新しい文書はまだ開かれていない"""
+    documents = Document.objects.filter(visibility=VISIBILITY_COMPANY, site__team_slug__startswith='genba-demo-').order_by('published_at')
+    documents = list(documents)
+    for document in documents[:len(documents) * 2 // 3]:
+        for days in USED_AFTER:
+            used_on = timezone.localdate(document.published_at) + timedelta(days=days)
+            if used_on <= cmd.today:
+                KnowledgeUse.objects.create(document=document, used_on=used_on)
 
 
 def seed_work(cmd):
