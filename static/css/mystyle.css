@@ -9,7 +9,7 @@ footer {
 }
 
 .my-div-style {
-    margin-top: 6rem;
+    margin-top: 2rem;
 }
 
 /* ==========================================================================
@@ -197,11 +197,6 @@ footer {
 .progress { --bs-progress-bar-bg: #2c5aa0; }
 .list-group { --bs-list-group-active-bg: #2c5aa0; --bs-list-group-active-border-color: #2c5aa0; }
 .dropdown-menu, .dropdown-menu-dark { --bs-dropdown-link-active-bg: #2c5aa0; }
-
-/* テーマの既定はピンク。ナビの現在地と hover もここで決まる */
-.navbar-custom .navbar-nav .nav-item .nav-link:hover,
-.navbar-custom .navbar-nav .nav-item .nav-link:focus,
-.navbar-custom .navbar-nav .nav-item .nav-link.active { color: #8aa8d0; }
 
 .alert-primary {
     --bs-alert-color: #24497f;

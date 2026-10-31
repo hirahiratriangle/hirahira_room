@@ -1,12 +1,8 @@
 {% extends 'base.html' %}
 
 {% comment %}
-fe の画面の土台。サイト共通の黒いナビゲーションバー（HIRAHIRAROOM）は出さず、
-各画面の青いヘッダー（fe/_header.html）だけにする。
-フッターには、IPA の問題の出典と、自作の問題・解説の扱いを書く。
+fe の画面の土台。フッターには、IPA の問題の出典と、自作の問題・解説の扱いを書く。
 {% endcomment %}
-
-{% block site_nav %}{% endblock %}
 
 {% block footer_note %}
 <p class="mb-2 text-center small" style="color:#bbb;">

@@ -949,7 +949,7 @@ class AboutTests(TestCase):
         self.assertContains(res, 'デモ（genba）')
         self.assertContains(res, f'href="{reverse("genba:concept")}"')
 
-    def test_no_site_header_like_fe(self):
+    def test_no_site_header(self):
         for name in ('about', 'concept', 'demo', 'portal'):
             res = self.client.get(reverse(f'genba:{name}'))
             self.assertEqual(res.status_code, 200)
