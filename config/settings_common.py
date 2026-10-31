@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'fe',
     'bk_houmu3',
     'genba',
+    'proposals',
 ]
 
 MIDDLEWARE = [

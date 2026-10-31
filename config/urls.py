@@ -40,6 +40,8 @@ urlpatterns = [
     path('bk_houmu3/', include('bk_houmu3.urls', namespace='bk_houmu3')),
     # genba（1現場1リポジトリの記録を4つの立場で使う）
     path('genba/', include('genba.urls', namespace='genba')),
+    # 社内活動の3つの構想（「社内活動 3つの構想.pptx」を順に読むページ）
+    path('proposals/', include('proposals.urls', namespace='proposals')),
 ]
 
 # メディアファイルの配信設定
