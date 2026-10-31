@@ -85,7 +85,7 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
     .slide-card .pair strong { color: var(--deck-ink); }
     /* 20枚目：立場名が見出しで、題は緑の小見出し */
     .card-role .slide-label { color: var(--deck-ink); font-size: 1.05em; margin-bottom: .3em; }
-    .card-role h3 { color: var(--deck-green); font-size: .85em; margin-bottom: .2em; }
+    .card-role h3 { color: var(--deck-green); font-size: .85em; margin-bottom: .2em; white-space: pre-line; }
     .slide-label.is-big { font-size: 1.9em; line-height: 1.2; margin-bottom: .25em; }
     .slide-chip { margin-top: auto; background: var(--deck-mint); color: var(--deck-green); border-radius: .25em; padding: .3em .55em; font-size: .75em; }
     .slide-label { color: var(--deck-green); font-weight: 700; font-size: .85em; margin-bottom: .55em; }
@@ -109,8 +109,9 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
     /* 表紙と結びは元と同じく左に緑の帯。表紙の題は元の比率（幅の約 6%）で1行に */
     .slide-cover { justify-content: flex-start; padding-top: 6%; border-left: .75em solid var(--deck-green-mid); }
     .slide-cover .cover-kicker { color: var(--deck-green-light); font-weight: 700; letter-spacing: .15em; font-size: .95em; }
-    .slide-cover .cover-title { color: var(--deck-dark-text); font-size: 3.7em; font-weight: 700; line-height: 1.25; margin: .75em 0 .85em; white-space: nowrap; }
+    .slide-cover .cover-title { color: var(--deck-dark-text); font-size: 3.95em; font-weight: 700; line-height: 1.25; margin: .7em 0 .7em -.04em; white-space: nowrap; }
     .slide-cover .cover-lead { color: var(--deck-green-light); font-size: 1.4em; font-weight: 700; margin-bottom: .3em; }
+    .slide-cover .cover-word { font-size: 1.45em; letter-spacing: .03em; }
     .slide-cover .cover-text { color: var(--deck-dark-sub); font-size: 1.05em; margin-bottom: 0; }
     .slide-cover .cover-meta { position: absolute; left: 6.6%; right: 6.6%; bottom: 12%; display: flex; justify-content: space-between; color: var(--deck-dark-sub); font-size: .9em; }
     .slide-end { justify-content: center; border-left: .75em solid var(--deck-green-mid); }
@@ -149,6 +150,7 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
         .slide-diagram .diagram-label { writing-mode: horizontal-tb; align-self: center; }
         .slide-cover .cover-meta { position: static; flex-direction: column; gap: .25em; margin-top: 1.5em; }
         .slide-cover .cover-lead { font-size: 1.1em; }
+        .slide-cover .cover-word { font-size: 1.2em; }
         .slide-cover .cover-title, .slide-part .part-title { font-size: 1.8em; }
         .slide-end .end-title { font-size: 1.5em; }
         .slide-cover { padding-top: 1.5em; }
@@ -174,7 +176,7 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
         {% if s.kind == 'cover' %}
             <div class="cover-kicker">{{ s.kicker }}</div>
             <div class="cover-title">{{ s.title }}</div>
-            <p class="cover-lead">{{ s.lead }}</p>
+            <p class="cover-lead"><span class="cover-word">{{ s.lead_word }}</span>{{ s.lead }}</p>
             <p class="cover-text">{{ s.text }}</p>
             <div class="cover-meta"><span>{{ s.meta }}</span><span>{{ s.date }}</span></div>
         {% elif s.kind == 'part' %}
