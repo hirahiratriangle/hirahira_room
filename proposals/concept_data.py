@@ -10,15 +10,15 @@
 
 - 'title'：kicker・大きな題（lines）・sub のあとに、下の段を置く。下の段は chips=True なら3つの構想の札（CONCEPTS）、
   words があれば当社の言葉の帯。plain=True は結びの形（題が黒で、sub がない）
-- 'concept'：kicker・title・詳しくはこちらの帯（url、note は URL のあとの補足）、左に目的のカード（purpose）、
+- 'concept'：kicker・title・詳しくはこちらの帯（url）、左に目的のカード（purpose）、
   右に3つの項目（items）
 
-リンクはプレゼンと同じく本番の URL を絶対パスで持つ。fun IT club はこのサイトの外にある。
+リンクはプレゼンと同じく本番の URL を絶対パスで持つ。
 """
 
 GENBA_URL = 'https://hirahira-room.net/genba/about/'
 FE_URL = 'https://hirahira-room.net/fe/'
-WG_URL = 'https://funitclub.org/wg/'
+WELFARE_URL = 'https://hirahira-room.net/welfare/slides/'
 
 
 def strip_scheme(url):
@@ -30,7 +30,7 @@ def strip_scheme(url):
 CONCEPTS = [
     {'label': '構想 1', 'name': '主力事業の縦の成長', 'url': GENBA_URL, 'link': strip_scheme(GENBA_URL)},
     {'label': '構想 2', 'name': '基本情報 取得者80％計画', 'url': FE_URL, 'link': strip_scheme(FE_URL)},
-    {'label': '構想 3', 'name': 'AIを使った社会貢献', 'url': WG_URL, 'link': strip_scheme(WG_URL)},
+    {'label': '構想 3', 'name': 'AIを使った社会貢献', 'url': WELFARE_URL, 'link': strip_scheme(WELFARE_URL)},
 ]
 
 SLIDES = [
@@ -60,12 +60,12 @@ SLIDES = [
                ('いま', '苦手分野を重点出題する対策アプリが稼働中。受験費用は取得後に会社が負担')]},
     # 5 構想3
     {'kind': 'concept', 'kicker': '構想 3　AIを使った社会貢献',
-     'title': '福祉従事者の勘を支える伴奏者をつくる', 'url': WG_URL, 'note': '（WG一覧 → WG-03 の「活動ページ」）',
+     'title': '福祉従事者の勘を支える伴奏者をつくる', 'url': WELFARE_URL,
      'purpose': {'lines': ['ストックビジネス', 'への挑戦'], 'text': '対象は、サービス管理責任者（サビ管）のアセスメントと計画の仕事。',
                  'close': ['主旋律を奏でるのは、', 'いつも従事者自身。']},
      'items': [('中身', 'アセスメントと計画をAIが担い、仕事から生まれる知見を学び続ける'),
                ('当社とのつながり', 'SDGs「障がい者とその親御さんへの支援」を、本業のITで一歩進める'),
-               ('いま', 'fun IT club の WG-03 で構想資料と活動ページを公開し、意見を集めている')]},
+               ('いま', '構想資料と活動ページを公開し、意見を集めている（fun IT club WG-03）')]},
     # 6 おわりに
     {'kind': 'title', 'kicker': 'おわりに', 'lines': ['多様な人こそ会社の礎。', '行けるところまで、皆で行こう。'],
      'plain': True, 'chips': True},
@@ -91,7 +91,7 @@ NOTES = [
     '3つ目の構想は、AIを使った社会貢献で、ストックビジネスへの挑戦でもあります。対象はサービス管理責任者、サビ管のアセスメントと計画の仕事です。'
     'その仕事をAIが担い、仕事から生まれる知見を学び続けることで、従事者の勘を支える伴奏者をつくります。主旋律を奏でるのは、いつも従事者自身です。'
     '当社はSDGsの取り組みとして、障がいのある方とその親御さんを支援してきました。この構想は、それを本業のITで一歩進めるものです。'
-    'いまはfun IT clubのWG-03で構想資料と活動ページを公開し、意見を集めています。詳しくは、fun IT clubのWG一覧から、WG-03の活動ページをご覧ください。',
+    'いまはfun IT clubのWG-03として、構想資料と活動ページを公開し、意見を集めています。詳しくは構想資料をご覧ください。',
     'エンジニアも、営業も、管理部門も、それぞれの強みを持つ多様な人の集まりが、この会社の礎だと思います。'
     '当社の採用ページでも、多様性を認め合い、尊重し合える組織を目指すと掲げています。一緒に取り組んでくれる仲間を募集しています。',
 ]

@@ -8,7 +8,7 @@ class IndexView(generic.TemplateView):
 
     内容は concept_data.SLIDES に持つ（文言はプレゼンのまま）。スライド番号はプレゼンと同じになるよう、並び順から振る。
     発表はせず各自に読んでもらうので、発表者ノートの説明もスライドの下に出す。
-    このページは入り口で、詳しい中身は各構想のページ（genba の案内ページ、基本情報の対策アプリ、fun IT club）にある。
+    このページは入り口で、詳しい中身は各構想のページ（genba の案内ページ、基本情報の対策アプリ、福祉従事者の構想資料）にある。
     """
     template_name = 'proposals/index.html'
 

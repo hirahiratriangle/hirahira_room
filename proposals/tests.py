@@ -13,7 +13,7 @@ class IndexTests(TestCase):
         self.assertEqual(res.context['total'], 6)
         for text in ('人と会社と社会をつなぐ、', '一人ひとりの成長が、', '商流を縦に上がる。それは genba だ。',
                      '基本情報を、全社の共通言語にする', '福祉従事者の勘を支える伴奏者をつくる', '行けるところまで、皆で行こう。',
-                     '（WG一覧 → WG-03 の「活動ページ」）', concept_data.FOOTER):
+                     '構想資料と活動ページを公開し、意見を集めている（fun IT club WG-03）', concept_data.FOOTER):
             self.assertContains(res, text)
         self.assertContains(res, 'id="slide-6"')
         self.assertContains(res, 'id="deck-next"')
@@ -29,7 +29,8 @@ class IndexTests(TestCase):
         res = self.client.get(reverse('proposals:index'))
         self.assertContains(res, f'href="https://hirahira-room.net{reverse("genba:about")}"')
         self.assertContains(res, f'href="https://hirahira-room.net{reverse("fe:index")}"')
-        self.assertContains(res, 'href="https://funitclub.org/wg/"')
+        self.assertContains(res, f'href="https://hirahira-room.net{reverse("welfare_activity:slides")}"')
+        self.assertNotContains(res, 'funitclub.org')
 
     def test_home_links_here(self):
         self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))

@@ -67,7 +67,6 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     .concept-link { position: absolute; left: 5.04em; right: 5.04em; top: 14.04em; height: 5.04em; display: flex; align-items: center; gap: 1.6em; background: var(--deck-bar); border: .15em solid var(--deck-blue); border-radius: .9em; padding: 0 2.05em; }
     .link-lead { color: var(--deck-ink); font-size: 1.6em; font-weight: 700; white-space: nowrap; }
     .link-url { color: var(--deck-link); font-size: 1.8em; font-weight: 700; text-decoration: underline !important; white-space: nowrap; }
-    .link-note { color: var(--deck-body); font-size: 1.4em; white-space: nowrap; }
     .concept-body { position: absolute; left: 5.04em; right: 5.04em; top: 21.24em; height: 26.64em; display: grid; grid-template-columns: 32.4em minmax(0, 1fr); gap: 2.88em; }
     .purpose { background: var(--deck-card); border-radius: .9em; padding: 2.3em 2.16em 0; }
     .purpose-label { color: var(--deck-blue); font-size: 1.3em; font-weight: 700; line-height: 1.2; }
@@ -97,7 +96,6 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
         .concept-title { font-size: 2.1em; line-height: 1.4; margin-top: .3em; }
         .concept-link { flex-wrap: wrap; gap: .3em .8em; margin-top: 1.6em; padding: 1em 1.4em; }
         .link-url { font-size: 1.45em; white-space: normal; overflow-wrap: anywhere; }
-        .link-note { white-space: normal; }
         .concept-body { grid-template-columns: minmax(0, 1fr); gap: 1.6em; margin-top: 1.6em; }
         .purpose { padding: 1.6em 1.6em 1.6em; }
         .items { grid-template-rows: none; }
@@ -149,7 +147,6 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
             <div class="concept-link">
                 <span class="link-lead">詳しくはこちら ▶</span>
                 <a class="link-url" href="{{ s.url }}">{{ s.url }}</a>
-                {% if s.note %}<span class="link-note">{{ s.note }}</span>{% endif %}
             </div>
             <div class="concept-body">
                 <div class="purpose">
