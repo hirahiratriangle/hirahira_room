@@ -1,7 +1,9 @@
-<div class="slide-card{% if c.tone %} tone-{{ c.tone }}{% endif %}">
-    {% if c.label %}<div class="slide-label">{{ c.label }}</div>{% endif %}
+<div class="slide-card{% if c.tone %} tone-{{ c.tone }}{% endif %}{% if c.role %} card-role{% endif %}">
+    {% if c.label %}<div class="slide-label{% if c.big_label %} is-big{% endif %}">{{ c.label }}</div>{% endif %}
     {% if c.title %}<h3>{{ c.title }}</h3>{% endif %}
     {% if c.text %}<p>{{ c.text }}</p>{% endif %}
-    {% if c.lines %}<ul>{% for line in c.lines %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+    {% if c.lines %}{% if c.numbered %}<ol>{% for line in c.lines %}<li>{{ line }}</li>{% endfor %}</ol>{% else %}<ul>{% for line in c.lines %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}{% endif %}
+    {% for head, body in c.pairs %}<p class="pair"><strong>{{ head }}</strong>{{ body }}</p>{% endfor %}
     {% if c.sub %}<div class="slide-sub">{{ c.sub }}</div>{% endif %}
+    {% if c.chip %}<div class="slide-chip">{{ c.chip }}</div>{% endif %}
 </div>

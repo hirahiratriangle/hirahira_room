@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}構想プレゼン - genba | HirahiraRoom{% endblock %}
 
@@ -15,11 +16,12 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
         --deck-ink: #1F2A2E; --deck-dark: #1E2B2A; --deck-dark-text: #EEF2EE; --deck-dark-sub: #B9CBC5; --deck-dark-muted: #8FA49F;
         --deck-dark-card: #3F5A55; --deck-paper: #F6F4EE; --deck-card: #FDFCF9; --deck-line: #DAD6CB; --deck-sand: #ECEAE2;
         --deck-sand-line: #B9B4A6; --deck-rule: #BCBBB4; --deck-mint: #E3EEE9; --deck-green: #2F6B5E; --deck-green-light: #7CC1A9;
-        --deck-green-mid: #4FA58E; --deck-body: #4A5257; --deck-muted: #7A8288; --deck-part-kicker: #CFE6DD; --deck-part-sub: #DCEBE5;
+        --deck-green-mid: #4FA58E; --deck-arrow: #A7AFA9; --deck-body: #4A5257; --deck-muted: #7A8288; --deck-part-kicker: #CFE6DD; --deck-part-sub: #DCEBE5;
     }
     body { background: var(--deck-dark); }
     .deck { font-family: "Yu Gothic", YuGothic, "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; color: var(--deck-ink); }
-    .deck-wrap { max-width: 1120px; margin: 0 auto; padding: 1rem; }
+    /* 枠は画面に収まる大きさまで広げる（帯と進み具合の線の分 6.5rem を除いた高さから、16:9 で幅を決める） */
+    .deck-wrap { max-width: min(1500px, calc((100vh - 6.5rem) * 16 / 9 + 2rem)); margin: 0 auto; padding: 1rem; }
 
     /* 操作の帯 */
     .deck-bar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; color: var(--deck-dark-sub); font-size: .85rem; padding: .25rem 0 .75rem; }
@@ -33,62 +35,102 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
     .deck-progress div { height: 100%; width: 0; background: var(--deck-green-mid); }
     .deck-demo { display: inline-block; background: var(--deck-green-light); color: var(--deck-dark) !important; border-radius: .25rem; padding: .3rem .85rem; text-decoration: none; font-weight: 700; }
 
-    /* スライド */
-    .slide { position: relative; display: flex; flex-direction: column; background: var(--deck-paper); padding: 2.25rem 3rem 2.75rem; margin-bottom: 1rem; }
+    /* スライド。文字の大きさはすべて em で書き、.slide の font-size を変えると全体が同じ比率で伸びる（下の fitSlide） */
+    /* 余白は元のスライドの比率に固定する（padding の % は幅が基準）。左右は幅の 6.6%、上は高さの 10%、本文の下端は高さの 87% */
+    .slide { position: relative; display: flex; flex-direction: column; background: var(--deck-paper); padding: 5.6% 6.6% 7.3%; margin-bottom: 1rem; font-size: 16px; }
     .concept-paged .slide { display: none; margin-bottom: 0; }
     .concept-paged .slide.is-current { display: flex; }
-    @media (min-width: 768px) { .concept-paged .slide { aspect-ratio: 16 / 9; overflow-y: auto; } }
-    .slide-kicker { color: var(--deck-green); font-weight: 700; font-size: .85rem; }
-    .slide-title { color: var(--deck-ink); font-size: 1.6rem; font-weight: 700; margin: .1rem 0 1.25rem; }
-    .slide-foot { position: absolute; left: 3rem; right: 3rem; bottom: .9rem; display: flex; justify-content: space-between; color: var(--deck-muted); font-size: .7rem; }
-    .slide-block { margin-bottom: .9rem; }
+    @media (min-width: 768px) { .concept-paged .slide { aspect-ratio: 16 / 9; overflow: hidden; } }
+    .slide-kicker { color: var(--deck-green); font-weight: 700; font-size: .85em; margin-bottom: .2em; }
+    .slide-title { color: var(--deck-ink); font-size: 2.1em; font-weight: 700; line-height: 1.3; margin: 0 0 .55em; }
+    .slide-foot { position: absolute; left: 6.6%; right: 6.6%; bottom: 6.5%; display: flex; justify-content: space-between; color: var(--deck-muted); font-size: .7em; }
 
-    .slide-card { height: 100%; background: var(--deck-card); border: 1px solid var(--deck-line); border-radius: .35rem; padding: .85rem 1rem; }
+    /* 中身は残りの高さいっぱいに広げる。カードと段階は block-grow で伸び、文字はカードの縦の中央に置く */
+    .slide-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 1.3em; }
+    /* min-height は既定（中身の高さ）のまま。縮めると、はみ出しが .slide-body に現れず、文字の自動調整が気づけない */
+    .slide-block { flex: 0 0 auto; }
+    /* 高さは flex でつなぐ。height: 100% は Safari（WebKit）で計算がずれ、はみ出しと判定されて文字が最小まで縮む */
+    .slide-block.block-grow { flex: 1 1 auto; display: flex; flex-direction: column; }
+    .block-grow > .slide-cards, .block-grow > .slide-steps, .block-grow > .slide-diagram { flex: 1 1 auto; }
+    .slide-cards { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-auto-rows: 1fr; gap: .8em; }
+    .slide-steps { display: flex; align-items: stretch; gap: .75em; }
+    .slide-step { flex: 1 1 0; min-width: 0; display: flex; }
+    .slide-step > .slide-card { flex: 1 1 auto; min-width: 0; }
+    .slide-step h3 { font-size: 1em; }
+    .slide-arrow { flex: 0 0 auto; align-self: center; color: var(--deck-arrow); font-size: 1.25em; }
+    /* 5枚目の図：カード → カード → 縦書きの語 → 縦に積んだカード */
+    .slide-diagram { display: flex; align-items: center; gap: .7em; }
+    .slide-diagram .diagram-first { flex: 1.55 1 0; min-width: 0; }
+    .slide-diagram .diagram-second { flex: 1.9 1 0; min-width: 0; }
+    .slide-diagram .diagram-first .slide-card, .slide-diagram .diagram-second .slide-card { justify-content: center; text-align: center; padding: 1.5em .8em; }
+    .slide-diagram .diagram-second .slide-card { padding: 2.4em .8em; }
+    .slide-diagram .diagram-first h3, .slide-diagram .diagram-second h3 { font-size: 1.25em; }
+    .slide-diagram .diagram-label { flex: 0 0 auto; writing-mode: vertical-rl; text-orientation: upright; color: var(--deck-green); font-weight: 700; font-size: 1.1em; }
+    .slide-diagram .diagram-stack { flex: 3.6 1 0; min-width: 0; display: flex; flex-direction: column; gap: .45em; align-self: stretch; }
+    .slide-diagram .diagram-stack .slide-card { flex: 1 1 0; justify-content: center; padding: .4em .8em; }
+    .slide-card { display: flex; flex-direction: column; background: var(--deck-card); border: 1px solid var(--deck-line); border-radius: .5em; padding: 1.15em 1.1em; }
     .slide-card.tone-mint { background: var(--deck-mint); border-color: var(--deck-green); }
-    .slide-card.tone-sand { background: var(--deck-sand); border-color: var(--deck-sand-line); }
-    .slide-card h3 { color: var(--deck-ink); font-size: 1rem; font-weight: 700; margin-bottom: .35rem; }
-    .slide-card p, .slide-card ul { color: var(--deck-body); font-size: .85rem; margin-bottom: 0; }
-    .slide-card ul { padding-left: 1.1rem; }
-    .slide-label { color: var(--deck-green); font-weight: 700; font-size: .9rem; margin-bottom: .2rem; }
-    .slide-sub { color: var(--deck-green); font-size: .8rem; font-weight: 700; margin-top: .45rem; }
-    .slide-steps { display: flex; flex-wrap: wrap; gap: .6rem; }
-    .slide-steps > div { flex: 1 1 9rem; min-width: 0; }
+    /* 例の帯（10・12枚目）：題は本文と同じ大きさの緑で、行は詰める */
+    .slide-card.tone-mint-flat { background: var(--deck-mint); border-color: var(--deck-mint); padding: .9em 1.1em; }
+    .slide-card.tone-mint-flat h3 { color: var(--deck-green); font-size: .88em; margin-bottom: .25em; }
+    .slide-card.tone-mint-flat p, .slide-card.tone-mint-flat .pair { color: var(--deck-ink); font-size: .88em; line-height: 1.6; margin: 0; }
+    .slide-card.tone-sand { background: var(--deck-sand); border-color: var(--deck-sand); }
+    .slide-card.tone-sand-line { background: var(--deck-sand); border-color: var(--deck-sand-line); }
+    .slide-card h3 { color: var(--deck-ink); font-size: 1.1em; font-weight: 700; margin-bottom: .65em; line-height: 1.35; }
+    .slide-card p, .slide-card ul { color: var(--deck-body); font-size: .88em; line-height: 1.7; margin-bottom: 0; }
+    .slide-card ul, .slide-card ol { padding-left: 1.3em; }
+    /* 番号付きリストの行間は元のスライドに合わせる（文字の 1.45 倍）。広いと文字が小さくなり、カード内が空いて見える */
+    .slide-card ol { color: var(--deck-body); font-size: .88em; line-height: 1.45; margin-bottom: 0; }
+    .slide-card .pair { color: var(--deck-body); font-size: .84em; line-height: 1.55; margin: .5em 0 0; }
+    .slide-card .pair strong { color: var(--deck-ink); }
+    /* 20枚目：立場名が見出しで、題は緑の小見出し */
+    .card-role .slide-label { color: var(--deck-ink); font-size: 1.05em; margin-bottom: .3em; }
+    .card-role h3 { color: var(--deck-green); font-size: .85em; margin-bottom: .2em; }
+    .slide-label.is-big { font-size: 1.9em; line-height: 1.2; margin-bottom: .25em; }
+    .slide-chip { margin-top: auto; background: var(--deck-mint); color: var(--deck-green); border-radius: .25em; padding: .3em .55em; font-size: .75em; }
+    .slide-label { color: var(--deck-green); font-weight: 700; font-size: .85em; margin-bottom: .55em; }
+    .slide-sub { color: var(--deck-green); font-size: .88em; font-weight: 700; margin-top: .4em; }
     .slide-heading { color: var(--deck-green); font-weight: 700; }
-    .slide-note { background: var(--deck-mint); border-left: 4px solid var(--deck-green); color: var(--deck-ink); padding: .5rem .75rem; font-size: .9rem; }
-    .slide-note.tone-sand { background: var(--deck-sand); border-left-color: var(--deck-sand-line); }
-    .slide-flow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .45rem; font-size: .85rem; color: var(--deck-green); }
-    .slide-flow span { background: var(--deck-mint); color: var(--deck-ink); border-radius: .25rem; padding: .25rem .7rem; }
+    .slide-note { background: var(--deck-mint); border-left: .25em solid var(--deck-green); color: var(--deck-ink); padding: .45em .7em; font-size: .9em; }
+    .slide-note.tone-sand { background: var(--deck-sand); border-left: 0; border-radius: .25em; }
+    .slide-note.tone-plain { background: none; border-left: 0; padding: 0; color: var(--deck-body); }
+    .slide-flow { display: flex; align-items: center; gap: .55em; font-size: .85em; color: var(--deck-arrow); }
+    .slide-flow span { flex: 1 1 auto; text-align: center; background: var(--deck-mint); color: var(--deck-ink); font-weight: 700; border-radius: .3em; padding: .4em .7em; }
 
-    .slide table { width: 100%; min-width: 32rem; border-collapse: collapse; font-size: .85rem; }
-    .slide th, .slide td { border: 1px solid var(--deck-rule); padding: .35rem .55rem; color: var(--deck-ink); background: var(--deck-card); vertical-align: middle; }
+    .slide .table-responsive { overflow-y: hidden; }
+    .slide table { width: 100%; min-width: 32em; border-collapse: collapse; font-size: .85em; }
+    .slide th, .slide td { border: 1px solid var(--deck-rule); padding: .4em .6em; color: var(--deck-ink); background: var(--deck-card); vertical-align: middle; }
     .slide th { background: var(--deck-sand); font-weight: 700; }
     .slide th:first-child, .slide td:first-child { white-space: nowrap; }
+    .slide table.bold-first td:first-child { font-weight: 700; }
 
     /* 表紙・結び・濃い背景のスライド */
     .slide-cover, .slide-end, .slide-dark { background: var(--deck-dark); }
-    .slide-cover { justify-content: center; border-left: 12px solid var(--deck-green-mid); }
-    .slide-cover .cover-kicker { color: var(--deck-green-light); font-weight: 700; letter-spacing: .15em; }
-    .slide-cover .cover-title { color: var(--deck-dark-text); font-size: 2.7rem; font-weight: 700; margin: 1.5rem 0; }
-    .slide-cover .cover-lead { color: var(--deck-green-light); font-size: 1.15rem; font-weight: 700; margin-bottom: .4rem; }
-    .slide-cover .cover-text { color: var(--deck-dark-sub); margin-bottom: 2rem; }
-    .slide-cover .cover-meta { color: var(--deck-dark-sub); font-size: .85rem; margin-bottom: 0; }
-    .slide-end { justify-content: center; }
-    .slide-end .end-title { color: var(--deck-dark-text); font-size: 2.2rem; font-weight: 700; margin: 0; }
+    /* 表紙と結びは元と同じく左に緑の帯。表紙の題は元の比率（幅の約 6%）で1行に */
+    .slide-cover { justify-content: flex-start; padding-top: 6%; border-left: .75em solid var(--deck-green-mid); }
+    .slide-cover .cover-kicker { color: var(--deck-green-light); font-weight: 700; letter-spacing: .15em; font-size: .95em; }
+    .slide-cover .cover-title { color: var(--deck-dark-text); font-size: 3.7em; font-weight: 700; line-height: 1.25; margin: .75em 0 .85em; white-space: nowrap; }
+    .slide-cover .cover-lead { color: var(--deck-green-light); font-size: 1.4em; font-weight: 700; margin-bottom: .3em; }
+    .slide-cover .cover-text { color: var(--deck-dark-sub); font-size: 1.05em; margin-bottom: 0; }
+    .slide-cover .cover-meta { position: absolute; left: 6.6%; right: 6.6%; bottom: 12%; display: flex; justify-content: space-between; color: var(--deck-dark-sub); font-size: .9em; }
+    .slide-end { justify-content: center; border-left: .75em solid var(--deck-green-mid); }
+    .slide-end .end-title { color: var(--deck-dark-text); font-size: 3em; font-weight: 700; line-height: 1.45; margin: 0; white-space: pre-line; }
     .slide-dark .slide-kicker { color: var(--deck-green-light); }
     .slide-dark .slide-title { color: var(--deck-dark-text); }
-    .slide-dark .slide-card { background: var(--deck-dark-card); border-color: var(--deck-dark-card); }
-    .slide-dark .slide-card p { color: var(--deck-dark-text); }
-    .slide-dark .slide-label { color: var(--deck-green-light); }
-    .slide-dark .slide-note { background: var(--deck-green-light); border-left: 0; color: var(--deck-dark); font-weight: 700; }
+    /* 22枚目：カードではなく、上に罫線を引いた項目。番号は本文の頭に並べる */
+    .slide-dark .slide-card { flex-direction: row; gap: .45em; background: none; border: 0; border-top: 1px solid var(--deck-dark-card); border-radius: 0; padding: .55em 0; }
+    .slide-dark .slide-card p { color: var(--deck-dark-text); font-size: 1em; }
+    .slide-dark .slide-label { color: var(--deck-green-light); font-size: 1em; font-weight: 400; margin-bottom: 0; line-height: 1.5; }
+    .slide-dark .slide-note { background: var(--deck-green-light); border-left: 0; border-radius: .25em; color: var(--deck-dark); font-weight: 700; }
     .slide-cover .slide-foot, .slide-end .slide-foot, .slide-dark .slide-foot { color: var(--deck-dark-muted); }
 
     /* 章の扉 */
     .slide-part { background: var(--deck-green); justify-content: center; }
     .slide-part .part-kicker { color: var(--deck-part-kicker); font-weight: 700; }
-    .slide-part .part-title { color: var(--deck-paper); font-size: 2.7rem; font-weight: 700; margin: .75rem 0 1rem; }
-    .slide-part .part-text { color: var(--deck-part-sub); margin-bottom: 0; }
-    .slide-part .part-roles { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; padding: 0; margin: 1.5rem 0 0; }
-    .slide-part .part-roles li { border: 1px solid var(--deck-part-kicker); color: var(--deck-paper); border-radius: .25rem; padding: .25rem .7rem; font-size: .85rem; font-weight: 700; }
+    .slide-part .part-title { color: var(--deck-paper); font-size: 3.7em; font-weight: 700; line-height: 1.25; margin: .2em 0 .4em; }
+    .slide-part .part-text { color: var(--deck-part-sub); font-size: 1.1em; margin-bottom: 0; }
+    .slide-part .part-roles { display: flex; flex-wrap: wrap; gap: .5em; list-style: none; padding: 0; margin: 1.25em 0 0; }
+    .slide-part .part-roles li { border: 1px solid var(--deck-part-kicker); color: var(--deck-paper); border-radius: 2em; padding: .3em .9em; font-size: .85em; font-weight: 700; }
     .slide-part .part-roles li:first-child { background: var(--deck-paper); border-color: var(--deck-paper); color: var(--deck-ink); }
     .slide-part .slide-foot { color: var(--deck-part-sub); }
 
@@ -97,11 +139,20 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
         .deck-bar { font-size: .75rem; gap: .35rem; }
         .deck-btn, .deck-demo { padding: .25rem .55rem; }
         .deck-count { min-width: 3rem; }
-        .slide { padding: 1.5rem 1.25rem 2.5rem; }
-        .slide-foot { left: 1.25rem; right: 1.25rem; }
-        .slide-title { font-size: 1.3rem; }
-        .slide-cover .cover-title, .slide-part .part-title { font-size: 1.8rem; }
-        .slide-end .end-title { font-size: 1.5rem; }
+        .slide { padding: 1.5em 1.25em 2.5em; }
+        .slide-foot { left: 1.8em; right: 1.8em; bottom: 1.2em; }
+        .slide-title { font-size: 1.3em; }
+        .slide-cards { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
+        .slide-steps, .slide-diagram, .slide-flow { flex-direction: column; align-items: stretch; }
+        .slide-step, .slide-diagram .diagram-first, .slide-diagram .diagram-second, .slide-diagram .diagram-stack { flex: 0 0 auto; }
+        .slide-arrow, .slide-flow i { align-self: center; transform: rotate(90deg); }
+        .slide-diagram .diagram-label { writing-mode: horizontal-tb; align-self: center; }
+        .slide-cover .cover-meta { position: static; flex-direction: column; gap: .25em; margin-top: 1.5em; }
+        .slide-cover .cover-lead { font-size: 1.1em; }
+        .slide-cover .cover-title, .slide-part .part-title { font-size: 1.8em; }
+        .slide-end .end-title { font-size: 1.5em; }
+        .slide-cover { padding-top: 1.5em; }
+        .slide-cover .cover-title { white-space: normal; }
     }
 </style>
 {% endblock %}
@@ -119,13 +170,13 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
     </nav>
 
     {% for s in slides %}
-    <section id="slide-{{ forloop.counter }}" class="slide{% if s.kind == 'cover' %} slide-cover{% elif s.kind == 'part' %} slide-part{% elif s.kind == 'end' %} slide-end{% elif s.dark %} slide-dark{% endif %}">
+    <section id="slide-{{ forloop.counter }}" class="slide{% if s.kind == 'cover' %} slide-cover{% elif s.kind == 'part' %} slide-part{% elif s.kind == 'end' %} slide-end{% elif s.dark %} slide-dark{% endif %}" data-size="{{ s.size|unlocalize }}">
         {% if s.kind == 'cover' %}
             <div class="cover-kicker">{{ s.kicker }}</div>
             <div class="cover-title">{{ s.title }}</div>
             <p class="cover-lead">{{ s.lead }}</p>
             <p class="cover-text">{{ s.text }}</p>
-            <p class="cover-meta">{{ s.meta }}</p>
+            <div class="cover-meta"><span>{{ s.meta }}</span><span>{{ s.date }}</span></div>
         {% elif s.kind == 'part' %}
             <div class="part-kicker">{{ s.kicker }}</div>
             <div class="part-title">{{ s.title }}</div>
@@ -136,34 +187,45 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
         {% else %}
             <div class="slide-kicker">{{ s.kicker }}</div>
             <h2 class="slide-title">{{ s.title }}</h2>
+            <div class="slide-body">
             {% for b in s.blocks %}
-            <div class="slide-block">
+            <div class="slide-block{% if b.grow or b.type == 'steps' or b.type == 'diagram' or b.type == 'table' %} block-grow{% endif %}">
                 {% if b.type == 'cards' %}
-                <div class="row g-2">
-                    {% for c in b.items %}<div class="col-md-{{ b.width }}">{% include 'genba/_concept_card.html' %}</div>{% endfor %}
+                <div class="slide-cards" style="--cols: {{ b.cols }};">
+                    {% for c in b.items %}{% include 'genba/_concept_card.html' %}{% endfor %}
                 </div>
                 {% elif b.type == 'steps' %}
                 <div class="slide-steps">
-                    {% for c in b.items %}<div>{% include 'genba/_concept_card.html' %}</div>{% endfor %}
+                    {% for c in b.items %}<div class="slide-step">{% include 'genba/_concept_card.html' %}</div>{% if b.arrows and not forloop.last %}<i class="fas fa-arrow-right slide-arrow"></i>{% endif %}{% endfor %}
+                </div>
+                {% elif b.type == 'diagram' %}
+                <div class="slide-diagram">
+                    <div class="diagram-first">{% include 'genba/_concept_card.html' with c=b.first %}</div>
+                    <i class="fas fa-arrow-right slide-arrow"></i>
+                    <div class="diagram-second">{% include 'genba/_concept_card.html' with c=b.second %}</div>
+                    <i class="fas fa-arrow-right slide-arrow"></i>
+                    <div class="diagram-label">{{ b.label }}</div>
+                    <div class="diagram-stack">{% for c in b.stack %}{% include 'genba/_concept_card.html' %}{% endfor %}</div>
                 </div>
                 {% elif b.type == 'table' %}
-                <div class="table-responsive"><table>
+                <div class="table-responsive"><table{% if b.bold_first %} class="bold-first"{% endif %}>
                     <thead><tr>{% for h in b.head %}<th>{{ h }}</th>{% endfor %}</tr></thead>
                     <tbody>{% for row in b.rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% endfor %}</tbody>
                 </table></div>
                 {% elif b.type == 'flow' %}
                 <div class="slide-flow">
-                    {% for item in b.items %}<span>{{ item }}</span>{% if not forloop.last %}<i class="fas fa-arrow-right"></i>{% elif b.loop %}<i class="fas fa-redo"></i>{% endif %}{% endfor %}
+                    {% for item in b.items %}<span>{{ item }}</span>{% if not forloop.last %}<i class="fas fa-arrow-right"></i>{% endif %}{% endfor %}
                 </div>
                 {% elif b.type == 'heading' %}
                 <div class="slide-heading">{{ b.text }}</div>
                 {% else %}
-                <div class="slide-note{% if b.tone %} tone-{{ b.tone }}{% endif %}">{{ b.text }}</div>
+                <div class="slide-note{% if b.tone %} tone-{{ b.tone }}{% endif %}">{% if b.lead %}<strong>{{ b.lead }}</strong>{% endif %}{{ b.text }}</div>
                 {% endif %}
             </div>
             {% endfor %}
+            </div>
         {% endif %}
-        {% if s.kind != 'cover' %}<div class="slide-foot"><span>{{ s.footer }}</span><span>{{ forloop.counter }}</span></div>{% endif %}
+        {% if s.kind == 'slide' or s.kind == 'end' %}<div class="slide-foot"><span>{{ s.footer }}</span><span>{{ forloop.counter }}</span></div>{% endif %}
     </section>
     {% endfor %}
 
@@ -188,9 +250,44 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
         return n >= 1 && n <= total ? n : 1;
     }
 
+    // 文字の自動調整：今のスライドが枠に収まる一番大きい文字サイズを二分探索で求める。
+    // スライドの中身の大きさはすべて em なので、font-size だけで全体が伸び縮みする。
+    // スマホは 16:9 の枠を使わず縦に伸ばすので、調整しない。
+    var wide = window.matchMedia('(min-width: 768px)');
+    var FIT_RATIO = 0.96;       // 収まる最大の文字に掛ける比率
+    var FIT_MAX_DIVISOR = 64;   // 文字の上限は、枠の幅をこれで割った大きさ（元のスライドの本文の比率）
+    // 収まったかは本文の領域（.slide-body）とカードごとに見る。スライド全体で見ると、下の余白まで使って左下の文言に重なる。
+    function overflows(el) {
+        var body = el.querySelector('.slide-body');
+        if (!body) { return el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1; }
+        var cards = el.querySelectorAll('.slide-card');
+        for (var i = 0; i < cards.length; i++) {
+            if (cards[i].scrollHeight > cards[i].clientHeight + 1) { return true; }
+        }
+        return body.scrollHeight > body.clientHeight + 1;
+    }
+
+    function fitSlide(el) {
+        var table = el.querySelector('table');
+        if (table) { table.style.height = ''; }
+        if (!wide.matches) { el.style.fontSize = ''; return; }
+        var low = 10, high = el.clientWidth / 38;
+        for (var i = 0; i < 12; i++) {
+            var trial = (low + high) / 2;
+            el.style.fontSize = trial + 'px';
+            if (overflows(el)) { high = trial; } else { low = trial; }
+        }
+        // 枠いっぱいだと文字が大きすぎるので、収まる最大より一回り小さくし、上限も設けて少し余白を残す
+        var size = parseFloat(el.dataset.size) || 1;  // スライドごとの比率（concept_data.TEXT_SIZES）
+        el.style.fontSize = Math.min(low * FIT_RATIO, el.clientWidth / FIT_MAX_DIVISOR * size) + 'px';
+        // 表は CSS の高さ指定では広がらないので、広がった .slide-block の高さを渡して行を伸ばす（元のスライドも枠いっぱいの表）
+        if (table) { table.style.height = table.closest('.slide-block').clientHeight + 'px'; }
+    }
+
     function show(n, keepHash) {
         current = Math.min(Math.max(n, 1), total);
         slides.forEach(function (el, i) { el.classList.toggle('is-current', i === current - 1); });
+        fitSlide(slides[current - 1]);
         document.getElementById('deck-count').textContent = current + ' / ' + total;
         document.getElementById('deck-progress').style.width = (current / total * 100) + '%';
         prev.disabled = current === 1;
@@ -204,6 +301,9 @@ fe と同じく、サイト共通の黒いナビゲーションバー（HIRAHIRA
     prev.addEventListener('click', function () { show(current - 1); });
     next.addEventListener('click', function () { show(current + 1); });
     window.addEventListener('hashchange', function () { show(numberFromHash(), true); });
+    window.addEventListener('resize', function () { fitSlide(slides[current - 1]); });
+    // 書体の読み込みで文字の幅が変わるので、読み込み後にもう一度合わせる
+    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function () { fitSlide(slides[current - 1]); }); }
 
     document.addEventListener('keydown', function (e) {
         if (e.altKey || e.ctrlKey || e.metaKey) { return; }

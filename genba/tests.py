@@ -1040,7 +1040,7 @@ class ConceptTests(TestCase):
         res = self.client.get(reverse('genba:concept'))
         self.assertEqual(res.context['total'], 23)
         for text in ('genbaは、GitHubを土台として実現する', '現場の経験が、個人の中に閉じている', '立場ごとの成長のharmony',
-                     '始める前に、6つを決める', '多様な人こそ会社の礎。行けるところまで、皆で行こう。', 'Pull Request のレビュー'):
+                     '始める前に、6つを決める', '多様な人こそ会社の礎。\n行けるところまで、皆で行こう。', 'Pull Request のレビュー'):
             self.assertContains(res, text)
         self.assertContains(res, 'id="slide-23"')
         self.assertContains(res, 'id="deck-next"')
