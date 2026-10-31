@@ -24,9 +24,9 @@
             </h5>
             <p class="mb-2 text-muted">人の成長と会社の成長をつなぐプラットフォーム（プロトタイプ）</p>
             <div class="mt-2">
-                <a href="{% url 'genba:about' %}" class="btn btn-sm btn-outline-primary me-2">案内</a>
-                <a href="{% url 'genba:concept' %}" class="btn btn-sm btn-outline-primary me-2">構想プレゼン</a>
-                <a href="{% url 'genba:demo' %}" class="btn btn-sm btn-outline-primary">デモ</a>
+                <a href="{% url 'genba:about' %}" target="_blank" rel="noopener noreferrer" aria-label="genba の案内（別タブで開きます）" class="btn btn-sm btn-outline-primary me-2">案内</a>
+                <a href="{% url 'genba:concept' %}" target="_blank" rel="noopener noreferrer" aria-label="genba の構想プレゼン（別タブで開きます）" class="btn btn-sm btn-outline-primary me-2">構想プレゼン</a>
+                <a href="{% url 'genba:demo' %}" target="_blank" rel="noopener noreferrer" aria-label="genba のデモ（別タブで開きます）" class="btn btn-sm btn-outline-primary">デモ</a>
             </div>
         </div>
 
@@ -38,7 +38,7 @@
             </h5>
             <p class="mb-2 text-muted">人と会社と社会をつなぐ、3つの構想</p>
             <div class="mt-2">
-                <a href="{% url 'proposals:index' %}" class="btn btn-sm btn-outline-primary">開く</a>
+                <a href="{% url 'proposals:index' %}" target="_blank" rel="noopener noreferrer" aria-label="社内活動 3つの構想（別タブで開きます）" class="btn btn-sm btn-outline-primary">開く</a>
             </div>
         </div>
 
@@ -50,8 +50,8 @@
             </h5>
             <p class="mb-2 text-muted">シラバス準拠の1問1答。分野ごとの正答率を集計し，苦手分野を重点的に出題</p>
             <div class="mt-2">
-                <a href="{% url 'fe:index' %}" class="btn btn-sm btn-outline-primary me-2">ダッシュボード</a>
-                <a href="{% url 'fe:stats' %}" class="btn btn-sm btn-outline-primary">分野別正答率</a>
+                <a href="{% url 'fe:index' %}" target="_blank" rel="noopener noreferrer" aria-label="基本情報のダッシュボード（別タブで開きます）" class="btn btn-sm btn-outline-primary me-2">ダッシュボード</a>
+                <a href="{% url 'fe:stats' %}" target="_blank" rel="noopener noreferrer" aria-label="基本情報の分野別正答率（別タブで開きます）" class="btn btn-sm btn-outline-primary">分野別正答率</a>
             </div>
         </div>
 
@@ -63,8 +63,8 @@
             </h5>
             <p class="mb-2 text-muted">福祉従事者の勘を支える伴奏者となるプラットフォームの構想と活動の様子</p>
             <div class="mt-2">
-                <a href="{% url 'welfare_activity:home' %}" class="btn btn-sm btn-outline-primary me-2">活動ページ</a>
-                <a href="{% url 'welfare_activity:slides' %}" class="btn btn-sm btn-outline-primary">構想資料</a>
+                <a href="{% url 'welfare_activity:home' %}" target="_blank" rel="noopener noreferrer" aria-label="福祉従事者の活動ページ（別タブで開きます）" class="btn btn-sm btn-outline-primary me-2">活動ページ</a>
+                <a href="{% url 'welfare_activity:slides' %}" target="_blank" rel="noopener noreferrer" aria-label="福祉従事者の構想資料（別タブで開きます）" class="btn btn-sm btn-outline-primary">構想資料</a>
             </div>
         </div>
     </div>

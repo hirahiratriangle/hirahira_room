@@ -126,7 +126,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
                 {% if s.chips %}
                 <div class="concept-chips">
                     {% for c in concepts %}
-                    <a class="concept-chip" href="{{ c.url }}">
+                    <a class="concept-chip" href="{{ c.path }}" target="_blank" rel="noopener noreferrer" aria-label="{{ c.label }} {{ c.name }}（別タブで開きます）">
                         <span class="chip-label">{{ c.label }}</span>
                         <span class="chip-name">{{ c.name }}</span>
                         <span class="chip-link">{{ c.link }} ▶</span>
@@ -146,7 +146,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
             <h2 class="concept-title">{{ s.title }}</h2>
             <div class="concept-link">
                 <span class="link-lead">詳しくはこちら ▶</span>
-                <a class="link-url" href="{{ s.url }}">{{ s.url }}</a>
+                <a class="link-url" href="{{ s.path }}" target="_blank" rel="noopener noreferrer" aria-label="{{ s.url }}（別タブで開きます）">{{ s.url }}</a>
             </div>
             <div class="concept-body">
                 <div class="purpose">

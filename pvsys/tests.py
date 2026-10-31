@@ -16,6 +16,10 @@ class IndexTests(TestCase):
                      'welfare_activity:home', 'welfare_activity:slides'):
             self.assertContains(res, f'href="{reverse(name)}"')
 
+    def test_links_open_in_new_tab(self):
+        res = self.client.get(reverse('pvsys:index'))
+        self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=8)
+
 
 class UrlTests(TestCase):
     def test_pages_live_under_pvsys(self):

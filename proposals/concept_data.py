@@ -13,13 +13,14 @@
 - 'concept'：kicker・title・詳しくはこちらの帯（url）、左に目的のカード（purpose）、
   右に3つの項目（items）
 
-リンクはプレゼンと同じく本番の URL を絶対パスで持つ。3つのページは /pvsys/ の下へ移したので、ここだけプレゼンと違う
-（プレゼンに残る古い URL は config/urls.py で転送する）。
+リンクの文字はプレゼンと同じく本番の URL で見せる。3つのページは /pvsys/ の下へ移したので、ここだけプレゼンと違う
+（プレゼンに残る古い URL は config/urls.py で転送する）。リンク先はサイト内のパス（path）にして、開発環境でも切れないようにする。
 """
 
-GENBA_URL = 'https://hirahira-room.net/pvsys/genba/about/'
-FE_URL = 'https://hirahira-room.net/pvsys/fe/'
-WELFARE_URL = 'https://hirahira-room.net/pvsys/welfare/slides/'
+SITE = 'https://hirahira-room.net'
+GENBA_URL = SITE + '/pvsys/genba/about/'
+FE_URL = SITE + '/pvsys/fe/'
+WELFARE_URL = SITE + '/pvsys/welfare/slides/'
 
 
 def strip_scheme(url):
@@ -27,11 +28,16 @@ def strip_scheme(url):
     return url.removeprefix('https://')
 
 
+def site_path(url):
+    """リンク先に使う、サイト内のパス。"""
+    return url.removeprefix(SITE)
+
+
 # 1枚目と6枚目の下の段に並べる札
 CONCEPTS = [
-    {'label': '構想 1', 'name': '主力事業の縦の成長', 'url': GENBA_URL, 'link': strip_scheme(GENBA_URL)},
-    {'label': '構想 2', 'name': '基本情報 取得者80％計画', 'url': FE_URL, 'link': strip_scheme(FE_URL)},
-    {'label': '構想 3', 'name': 'AIを使った社会貢献', 'url': WELFARE_URL, 'link': strip_scheme(WELFARE_URL)},
+    {'label': '構想 1', 'name': '主力事業の縦の成長', 'url': GENBA_URL, 'link': strip_scheme(GENBA_URL), 'path': site_path(GENBA_URL)},
+    {'label': '構想 2', 'name': '基本情報 取得者80％計画', 'url': FE_URL, 'link': strip_scheme(FE_URL), 'path': site_path(FE_URL)},
+    {'label': '構想 3', 'name': 'AIを使った社会貢献', 'url': WELFARE_URL, 'link': strip_scheme(WELFARE_URL), 'path': site_path(WELFARE_URL)},
 ]
 
 SLIDES = [
@@ -102,3 +108,5 @@ FOOTER = 'このプレゼンは入り口です。詳しくは各構想のペー�
 for number, item in enumerate(SLIDES, 1):
     item['footer'] = FOOTER if 2 <= number <= 5 else ''
     item['reading'] = NOTES[number - 1]
+    if 'url' in item:
+        item['path'] = site_path(item['url'])

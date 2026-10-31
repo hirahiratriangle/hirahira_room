@@ -25,7 +25,12 @@ class IndexTests(TestCase):
 
     def test_links_to_each_concept(self):
         res = self.client.get(reverse('proposals:index'))
-        self.assertContains(res, f'href="https://hirahira-room.net{reverse("genba:about")}"')
-        self.assertContains(res, f'href="https://hirahira-room.net{reverse("fe:index")}"')
-        self.assertContains(res, f'href="https://hirahira-room.net{reverse("welfare_activity:slides")}"')
+        self.assertContains(res, f'href="{reverse("genba:about")}"')
+        self.assertContains(res, f'href="{reverse("fe:index")}"')
+        self.assertContains(res, f'href="{reverse("welfare_activity:slides")}"')
         self.assertNotContains(res, 'funitclub.org')
+
+    def test_concept_links_open_in_new_tab(self):
+        # 札が1枚目と6枚目に3つずつ、構想のスライドの帯が3つ
+        res = self.client.get(reverse('proposals:index'))
+        self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=9)
