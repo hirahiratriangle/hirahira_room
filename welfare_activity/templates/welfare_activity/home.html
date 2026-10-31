@@ -1,0 +1,114 @@
+{% extends 'welfare_activity/base.html' %}
+{% block title %}{{ wg.name }} | 活動ページ{% endblock %}
+{% block content %}
+<h1>{{ wg.name }}</h1>
+{% if wg.lead %}<p class="lead">{{ wg.lead }}</p>{% endif %}
+
+<div class="intro">{{ wg.intro|linebreaks }}</div>
+
+<div class="cards">
+    {% if wg.slides_title %}
+    <section class="card">
+        <h2>構想資料</h2>
+        <p><strong>{{ wg.slides_title }}</strong></p>
+        {% if wg.slides_summary %}<p>{{ wg.slides_summary }}</p>{% endif %}
+        <div class="toolbar">
+            <a class="btn primary" href="{% url 'welfare_activity:slides' %}" target="_blank" rel="noopener noreferrer" aria-label="スライドを見る（別タブで開きます）">スライドを見る</a>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="card">
+        <h2>チケット</h2>
+        <div class="stats">
+            <div><strong>{{ open_count }}</strong><span>未完了</span></div>
+            <div><strong>{{ closed_count }}</strong><span>完了</span></div>
+            <div><strong>{{ total_count }}</strong><span>全体</span></div>
+        </div>
+        {% if total_count %}
+        <span class="bar wide" title="完了 {{ closed_count }} / {{ total_count }}"><span style="width:{% widthratio closed_count total_count 100 %}%"></span></span>
+        {% endif %}
+        <div class="toolbar">
+            <a class="btn primary" href="{% url 'welfare_activity:issue_list' %}">チケット一覧</a>
+            <a class="btn" href="{{ board.new_issue_url }}" target="_blank" rel="noopener noreferrer" aria-label="GitHub で新しいチケット（別タブで開きます）">GitHub で新しいチケット</a>
+        </div>
+        <p class="note">チケットは WG のメンバーが GitHub で書いています。</p>
+    </section>
+</div>
+
+{% if board.has_project %}
+<h2>期日が近いチケット</h2>
+{% if due_soon %}
+<table class="list">
+    <thead>
+        <tr><th class="nowrap">期日</th><th>題名</th><th class="nowrap">プロジェクト</th><th class="nowrap">ステータス</th><th class="nowrap">進捗</th></tr>
+    </thead>
+    <tbody>
+    {% for issue in due_soon %}
+        <tr>
+            <td class="nowrap{% if issue.due_date < today %} overdue{% endif %}" data-label="期日">{{ issue.due_date|date:"Y-m-d" }}{% if issue.due_date < today %}（過ぎています）{% endif %}</td>
+            <td class="subject" data-label="題名"><a href="{{ issue.get_absolute_url }}">#{{ issue.number }} {{ issue.title }}</a></td>
+            <td class="nowrap" data-label="プロジェクト">{{ issue.group_name|default:"—" }}</td>
+            <td class="nowrap" data-label="ステータス"><span class="badge s-{{ issue.status_css }}">{{ issue.status }}</span></td>
+            <td class="nowrap" data-label="進捗">{% if issue.done_ratio is not None %}<span class="bar"><span style="width:{{ issue.done_ratio }}%"></span></span> {{ issue.done_ratio }}%{% else %}—{% endif %}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">{{ due_soon_days }} 日以内に期日が来る未完了のチケットはありません。</p>
+{% endif %}
+{% endif %}
+
+<h2>最近の動き</h2>
+{% if recent_issues %}
+<table class="list">
+    <thead>
+        <tr><th class="nowrap">更新日</th><th>題名</th>{% if board.has_project %}<th class="nowrap">プロジェクト</th>{% endif %}<th class="nowrap">ステータス</th></tr>
+    </thead>
+    <tbody>
+    {% for issue in recent_issues %}
+        <tr {% if not issue.is_open %}class="closed-row"{% endif %}>
+            <td class="nowrap" data-label="更新日">{{ issue.updated_at|date:"Y-m-d H:i" }}</td>
+            <td class="subject" data-label="題名"><a href="{{ issue.get_absolute_url }}">#{{ issue.number }} {{ issue.title }}</a></td>
+            {% if board.has_project %}<td class="nowrap" data-label="プロジェクト">{{ issue.group_name|default:"—" }}</td>{% endif %}
+            <td class="nowrap" data-label="ステータス"><span class="badge s-{{ issue.status_css }}">{{ issue.status }}</span></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+{% if board.has_data %}<p class="empty">チケットがまだありません。やることを 1 件、GitHub に書くところから始めましょう。</p>{% endif %}
+{% endif %}
+
+{% if projects %}
+<h2>プロジェクトの進み具合</h2>
+<table class="list">
+    <thead>
+        <tr><th>プロジェクト</th><th class="num">未完了</th><th class="num">全体</th><th class="nowrap">完了の割合</th></tr>
+    </thead>
+    <tbody>
+    {% for project in projects %}
+        <tr>
+            <td data-label="プロジェクト"><a href="{{ project.get_absolute_url }}">{{ project.name }}</a></td>
+            <td class="num" data-label="未完了">{{ project.open_count }}</td>
+            <td class="num" data-label="全体">{{ project.total_count }}</td>
+            <td class="nowrap" data-label="完了の割合">{% if project.total_count %}<span class="bar"><span style="width:{% widthratio project.closed_count project.total_count 100 %}%"></span></span> {% widthratio project.closed_count project.total_count 100 %}%{% else %}—{% endif %}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if wg.links %}
+<h2>関連リンク</h2>
+<ul class="plain">
+    {% for label, url in wg.links %}
+    <li><a href="{{ url }}">{{ label }}</a></li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<h2>参加するには</h2>
+<p>この WG に加わりたいときは、<a href="{{ wg.join_url }}">WG 一覧</a>の「WG に参加」から申し込んでください。</p>
+{% endblock %}

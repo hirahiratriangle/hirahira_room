@@ -1,0 +1,47 @@
+{% extends 'welfare_activity/base.html' %}
+{% block title %}{% if project %}{{ project.name }}{% else %}プロジェクト{% endif %} | {{ wg.name }}{% endblock %}
+{% block content %}
+{% if project %}
+<h1>{{ project.name }}</h1>
+
+<div class="toolbar">
+    <a class="btn primary" href="{% url 'welfare_activity:issue_list' %}?project={{ project.id }}">このプロジェクトのチケット</a>
+</div>
+
+{% if project.description %}
+<div class="box"><p class="desc">{{ project.description }}</p></div>
+{% endif %}
+
+<h2>概要</h2>
+<dl class="attrs">
+    <dt>未完了</dt><dd>{{ project.open_count }} 件</dd>
+    <dt>完了</dt><dd>{{ project.closed_count }} 件</dd>
+    {% for label, count in by_tracker %}
+        <dt>{{ label }}</dt><dd>{{ count }} 件</dd>
+    {% endfor %}
+</dl>
+
+<h2>最近のチケット</h2>
+{% if recent_issues %}
+<table class="list">
+    <thead>
+        <tr><th class="num">#</th><th>ステータス</th><th>題名</th><th>更新日</th></tr>
+    </thead>
+    <tbody>
+    {% for issue in recent_issues %}
+        <tr {% if not issue.is_open %}class="closed-row"{% endif %}>
+            <td class="num" data-label="#"><a href="{{ issue.get_absolute_url }}">{{ issue.number }}</a></td>
+            <td class="nowrap" data-label="ステータス"><span class="badge s-{{ issue.status_css }}">{{ issue.status }}</span></td>
+            <td class="subject" data-label="題名"><a href="{{ issue.get_absolute_url }}">{{ issue.title }}</a></td>
+            <td class="nowrap" data-label="更新日">{{ issue.updated_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">チケットがまだありません。</p>
+{% endif %}
+{% else %}
+<h1>プロジェクト</h1>
+{% endif %}
+{% endblock %}

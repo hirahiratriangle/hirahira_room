@@ -1,0 +1,42 @@
+{% extends 'welfare_activity/base.html' %}
+{% block title %}{% if issue %}#{{ issue.number }} {{ issue.title }}{% else %}チケット{% endif %} | {{ wg.name }}{% endblock %}
+{% block content %}
+{% if issue %}
+<h1>{{ issue.tracker_label }} #{{ issue.number }}</h1>
+
+<div class="toolbar">
+    <a class="btn primary" href="{{ issue.url }}" target="_blank" rel="noopener noreferrer" aria-label="GitHub で開く（別タブで開きます）">GitHub で開く</a>
+    <a class="btn" href="{% url 'welfare_activity:issue_list' %}">一覧へ</a>
+</div>
+
+<div class="box">
+    <p style="font-size:1rem;font-weight:bold;margin-bottom:.6rem">{{ issue.title }}</p>
+    <dl class="attrs">
+        {% if board.has_project %}
+        <dt>プロジェクト</dt><dd>{% if issue.group_id %}<a href="{% url 'welfare_activity:project_detail' issue.group_id %}">{{ issue.group_name }}</a>{% else %}—{% endif %}</dd>
+        {% endif %}
+        <dt>ステータス</dt><dd><span class="badge s-{{ issue.status_css }}">{{ issue.status }}</span></dd>
+        {% if board.has_project %}
+        <dt>優先度</dt><dd class="p-{{ issue.priority_css }}">{{ issue.priority|default:"—" }}</dd>
+        <dt>開始日</dt><dd>{{ issue.start_date|date:"Y-m-d"|default:"—" }}</dd>
+        <dt>期日</dt><dd>{{ issue.due_date|date:"Y-m-d"|default:"—" }}</dd>
+        <dt>進捗率</dt><dd>{% if issue.done_ratio is not None %}<span class="bar"><span style="width:{{ issue.done_ratio }}%"></span></span> {{ issue.done_ratio }}%{% else %}—{% endif %}</dd>
+        {% endif %}
+        <dt>登録日</dt><dd>{{ issue.created_at|date:"Y-m-d H:i" }}</dd>
+        <dt>更新日</dt><dd>{{ issue.updated_at|date:"Y-m-d H:i" }}</dd>
+        <dt>コメント</dt><dd>{{ issue.comment_count }} 件{% if issue.comment_count %}（GitHub で読めます）{% endif %}</dd>
+    </dl>
+</div>
+
+<h2>説明</h2>
+{% if issue.body %}
+    <div class="markdown">{{ issue.body|safe }}</div>
+    {% if issue.body_had_images %}<p class="note">画像は GitHub で見られます（WG のメンバー向け）。</p>{% endif %}
+{% else %}
+    <p class="empty">説明はありません。</p>
+{% endif %}
+{% else %}
+<h1>チケット</h1>
+<p><a class="btn" href="{% url 'welfare_activity:issue_list' %}">一覧へ</a></p>
+{% endif %}
+{% endblock %}

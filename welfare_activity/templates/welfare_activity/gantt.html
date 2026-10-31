@@ -1,0 +1,42 @@
+{% extends 'welfare_activity/base.html' %}
+{% block title %}ガントチャート | {{ wg.name }}{% endblock %}
+{% block content %}
+<h1>ガントチャート</h1>
+
+{% if board.project_url %}
+<div class="toolbar">
+    <a class="btn" href="{{ board.project_url }}" target="_blank" rel="noopener noreferrer" aria-label="GitHub のボード（別タブで開きます）">GitHub のボード</a>
+</div>
+{% endif %}
+<p class="note">開始日〜期日のあるチケットを並べています。日付は GitHub のボードで入れます（このページは読むだけ）。</p>
+
+{% if rows %}
+<div class="gantt-scroll">
+<div class="gantt" style="min-width:calc(16rem + {{ min_width }}px)">
+    <div class="g-row g-head">
+        <div class="g-label">チケット</div>
+        <div class="g-track">
+            {% for m in months %}<span class="g-month" style="left:{{ m.left }}%">{{ m.label }}</span>{% endfor %}
+            {% for w in weeks %}<span class="g-week" style="left:{{ w.left }}%">{{ w.label }}</span>{% endfor %}
+        </div>
+    </div>
+    {% for row in rows %}
+    <div class="g-row{% if row.state == 'done' %} closed-row{% endif %}">
+        <div class="g-label subject"><a href="{{ row.issue.get_absolute_url }}">#{{ row.issue.number }} {{ row.issue.title }}</a></div>
+        <div class="g-track">
+            {% for w in weeks %}<span class="g-grid" style="left:{{ w.left }}%"></span>{% endfor %}
+            <span class="g-today" style="left:{{ today_left }}%" title="今日"></span>
+            <span class="g-bar g-{{ row.state }}" style="left:{{ row.left }}%;width:{{ row.width }}%"
+                  title="{{ row.issue.bar_start|date:'Y-m-d' }} 〜 {{ row.issue.bar_end|date:'Y-m-d' }}（{{ row.issue.status }}）">
+                {% if row.issue.done_ratio is not None and row.state != 'done' %}<span class="g-progress" style="width:{{ row.issue.done_ratio }}%"></span>{% endif %}
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+</div>
+<p class="note"><span class="g-key g-open"></span> 未完了 <span class="g-key g-late"></span> 期日を過ぎた未完了 <span class="g-key g-done"></span> 完了　赤い線は今日（{{ today|date:"n月j日" }}）。濃い部分は進捗率。</p>
+{% elif board.has_data %}
+<p class="empty">開始日か期日の入ったチケットはまだありません。</p>
+{% endif %}
+{% endblock %}

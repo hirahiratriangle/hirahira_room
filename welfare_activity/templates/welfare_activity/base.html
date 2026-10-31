@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ wg.name }} | 活動ページ{% endblock %}</title>
+    <style>
+        :root {
+            --header: #2C4056;
+            --header-2: #3E5B76;
+            --link: #16609B;
+            --line: #D7D7D7;
+            --line-soft: #E4E4E4;
+            --bg: #FFFFFF;
+            --panel: #F6F6F6;
+            --panel-2: #FAFAFA;
+            --ink: #303030;
+            --muted: #707070;
+            --new: #D9534F;
+            --progress: #2E7CB8;
+            --resolved: #3C9A5F;
+            --feedback: #B5761A;
+            --closed: #777777;
+            --urgent: #C9302C;
+            --high: #D9822B;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Lucida Grande", Verdana, Meiryo, sans-serif;
+            font-size: 13px; line-height: 1.6;
+            color: var(--ink); background: var(--bg);
+        }
+        a { color: var(--link); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        header.top { background: var(--header); color: #fff; padding: .45rem .9rem; }
+        header.top .title { font-size: .95rem; font-weight: bold; color: #fff; }
+        header.top .code { font-size: .75rem; opacity: .75; margin-right: .5rem; }
+        nav.main {
+            background: var(--header-2); padding: .25rem .9rem;
+            display: flex; flex-wrap: wrap; gap: .1rem;
+        }
+        nav.main a {
+            color: #fff; font-size: .8rem; padding: .25rem .6rem; border-radius: 2px;
+        }
+        nav.main a:hover { background: rgba(255,255,255,.18); text-decoration: none; }
+        nav.main a.is-current { background: rgba(255,255,255,.25); font-weight: bold; }
+
+        main { padding: 1rem .9rem 3rem; max-width: 76rem; }
+        h1 { font-size: 1.25rem; margin: 0 0 .8rem; font-weight: bold; }
+        h2 { font-size: 1rem; margin: 1.4rem 0 .5rem; border-bottom: 1px solid var(--line); padding-bottom: .2rem; }
+        p { margin: 0 0 .7rem; }
+
+        .toolbar { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .8rem; }
+        .btn {
+            display: inline-block; font-size: .8rem; padding: .3rem .7rem;
+            border: 1px solid var(--line); border-radius: 3px;
+            background: linear-gradient(#FFFFFF, #EFEFEF);
+            color: var(--ink); cursor: pointer;
+        }
+        .btn:hover { background: linear-gradient(#FFFFFF, #E4E4E4); text-decoration: none; }
+        .btn.primary { border-color: #2C6A99; background: linear-gradient(#4A8CC0, #2E6FA3); color: #fff; }
+        .btn.danger { border-color: #A94442; background: linear-gradient(#D9534F, #C33); color: #fff; }
+
+        .filters {
+            background: var(--panel); border: 1px solid var(--line);
+            border-radius: 3px; padding: .7rem .8rem; margin-bottom: .9rem;
+        }
+        .filters .fields { display: flex; flex-wrap: wrap; gap: .7rem 1rem; align-items: flex-end; }
+        .filters label { display: block; font-size: .72rem; color: var(--muted); margin-bottom: .1rem; }
+        .filters select, .filters input[type=text] {
+            font-size: .8rem; padding: .22rem .3rem;
+            border: 1px solid var(--line); border-radius: 2px; background: #fff;
+        }
+
+        table.list { width: 100%; border-collapse: collapse; font-size: .8rem; }
+        table.list th, table.list td {
+            border: 1px solid var(--line-soft); padding: .35rem .5rem; text-align: left;
+            vertical-align: top;
+        }
+        table.list th {
+            background: var(--panel); font-weight: bold; white-space: nowrap;
+        }
+        table.list th a { color: var(--ink); }
+        table.list tbody tr:nth-child(even) { background: var(--panel-2); }
+        table.list tbody tr:hover { background: #EFF5FB; }
+        td.num, th.num { text-align: right; white-space: nowrap; }
+        td.nowrap, th.nowrap { white-space: nowrap; }
+
+        .badge {
+            display: inline-block; font-size: .7rem; font-weight: bold;
+            border-radius: 2px; padding: .05rem .35rem; color: #fff;
+        }
+        .s-new { background: var(--new); }
+        .s-in_progress { background: var(--progress); }
+        .s-resolved { background: var(--resolved); }
+        .s-feedback { background: var(--feedback); }
+        .s-closed, .s-rejected, .s-other { background: var(--closed); }
+        .p-urgent { color: var(--urgent); font-weight: bold; }
+        .p-high { color: var(--high); font-weight: bold; }
+        .p-low { color: var(--muted); }
+        .closed-row td.subject a { text-decoration: line-through; color: var(--muted); }
+
+        .bar { display: inline-block; vertical-align: middle; background: #E4E4E4; border-radius: 2px; height: .55rem; width: 6rem; overflow: hidden; }
+        .bar span { display: block; height: 100%; background: var(--progress); }
+
+        dl.attrs { display: grid; grid-template-columns: auto 1fr; gap: .25rem .9rem; margin: 0 0 1rem; }
+        dl.attrs dt { color: var(--muted); font-size: .78rem; }
+        dl.attrs dd { margin: 0; font-size: .82rem; }
+
+        .box {
+            border: 1px solid var(--line); border-radius: 3px;
+            padding: .8rem .9rem; background: var(--panel-2); margin-bottom: 1rem;
+        }
+        /* チケットの本文（GitHub の Markdown を描いたもの。body.py で削ってある） */
+        .markdown { font-size: .85rem; line-height: 1.75; max-width: 52rem; overflow-wrap: anywhere; }
+        .markdown > :first-child { margin-top: 0; }
+        .markdown h1, .markdown h2, .markdown h3, .markdown h4 { font-size: .95rem; margin: 1rem 0 .4rem; border: 0; padding: 0; }
+        .markdown ul, .markdown ol { padding-left: 1.4rem; margin: 0 0 .7rem; }
+        .markdown pre { background: var(--panel); border: 1px solid var(--line-soft); padding: .6rem; overflow-x: auto; }
+        .markdown code { background: var(--panel); padding: 0 .2rem; font-size: .8rem; }
+        .markdown pre code { background: none; padding: 0; }
+        .markdown blockquote { margin: 0 0 .7rem; padding-left: .8rem; border-left: 3px solid var(--line); color: var(--muted); }
+        .markdown table { border-collapse: collapse; margin: 0 0 .7rem; }
+        .markdown th, .markdown td { border: 1px solid var(--line-soft); padding: .25rem .5rem; }
+        .desc { white-space: pre-wrap; font-size: .85rem; }
+
+        .notice {
+            border: 1px solid #E0C36A; background: #FFF8E1; border-radius: 3px;
+            padding: .5rem .8rem; margin-bottom: 1rem; font-size: .82rem;
+        }
+        .note { color: var(--muted); font-size: .75rem; }
+
+        .pager { margin-top: .9rem; font-size: .8rem; color: var(--muted); }
+        .pager a { margin: 0 .2rem; }
+        .empty { color: var(--muted); font-style: italic; padding: 1rem 0; }
+
+        /* ---- 活動ページのトップ ---- */
+        .lead { font-size: .95rem; color: var(--muted); margin: -.4rem 0 1rem; }
+        .intro { font-size: .9rem; line-height: 1.85; max-width: 48rem; }
+        .intro p { margin: 0 0 .8rem; }
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .9rem; margin: 1rem 0; }
+        .card { border: 1px solid var(--line); border-radius: 3px; padding: .9rem 1rem; background: var(--panel-2); }
+        .card h2 { margin-top: 0; border: 0; padding: 0; }
+        .card .toolbar { margin: .7rem 0 0; }
+        .stats { display: flex; gap: 1.2rem; margin: 0 0 .5rem; }
+        .stats strong { display: block; font-size: 1.4rem; line-height: 1.2; }
+        .stats span { font-size: .75rem; color: var(--muted); }
+        .bar.wide { display: block; width: 100%; max-width: 16rem; }
+        .overdue { color: var(--urgent); font-weight: bold; }
+        ul.plain { margin: 0; padding-left: 1.1rem; }
+        ul.plain li { margin-bottom: .3rem; }
+
+        /* ---- ガントチャート ---- */
+        .gantt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; }
+        .gantt { font-size: .8rem; }
+        .g-row { display: flex; border-bottom: 1px solid var(--line-soft); min-height: 2rem; }
+        .g-row:last-child { border-bottom: 0; }
+        .g-head { background: var(--panel); font-weight: bold; min-height: 2.6rem; }
+        .g-label {
+            flex: 0 0 16rem; padding: .4rem .5rem; border-right: 1px solid var(--line-soft);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            position: sticky; left: 0; background: var(--bg); z-index: 2;
+        }
+        .g-head .g-label { background: var(--panel); }
+        .g-track { flex: 1; position: relative; }
+        .g-month { position: absolute; top: .2rem; padding-left: .25rem; white-space: nowrap; border-left: 1px solid var(--line); }
+        .g-week { position: absolute; bottom: .15rem; padding-left: .2rem; font-size: .65rem; color: var(--muted); font-weight: normal; white-space: nowrap; }
+        .g-grid { position: absolute; top: 0; bottom: 0; border-left: 1px dotted var(--line-soft); }
+        .g-today { position: absolute; top: 0; bottom: 0; border-left: 2px solid var(--urgent); z-index: 1; }
+        .g-bar { position: absolute; top: .55rem; height: .9rem; min-width: 4px; border-radius: 2px; overflow: hidden; }
+        .g-open { background: #8EB8DC; }
+        .g-late { background: #E59A97; }
+        .g-done { background: #C8C8C8; }
+        .g-progress { position: absolute; left: 0; top: 0; bottom: 0; background: var(--progress); }
+        .g-key { display: inline-block; width: .9rem; height: .6rem; border-radius: 2px; vertical-align: middle; margin-left: .5rem; }
+        .closed-row .g-label a { text-decoration: line-through; color: var(--muted); }
+        .wbs-item { display: inline-block; }
+        .wbs-mark { color: var(--muted); margin-right: .3rem; }
+
+        @media (max-width: 40rem) {
+            table.list thead { display: none; }
+            table.list, table.list tbody, table.list tr, table.list td { display: block; width: 100%; }
+            table.list tr { border: 1px solid var(--line-soft); margin-bottom: .5rem; }
+            table.list td { border: 0; border-bottom: 1px solid var(--line-soft); }
+            table.list td:last-child { border-bottom: 0; }
+            table.list td::before {
+                content: attr(data-label) " ";
+                color: var(--muted); font-size: .7rem; display: inline-block; min-width: 5.5rem;
+            }
+            td.num, th.num { text-align: left; }
+            .g-label { flex-basis: 9rem; }
+        }
+    </style>
+</head>
+<body>
+<header class="top"><a class="title" href="{% url 'welfare_activity:home' %}"><span class="code">{{ wg.code }}</span>{{ wg.name }}</a></header>
+<nav class="main">
+    <a href="{% url 'welfare_activity:home' %}" {% if section == 'home' %}class="is-current"{% endif %}>活動ページ</a>
+    {% if wg.slides_title %}<a href="{% url 'welfare_activity:slides' %}" target="_blank" rel="noopener noreferrer" aria-label="構想資料（別タブで開きます）">構想資料</a>{% endif %}
+    <a href="{% url 'welfare_activity:issue_list' %}" {% if section == 'issues' %}class="is-current"{% endif %}>チケット</a>
+    {% if board.has_project %}<a href="{% url 'welfare_activity:project_list' %}" {% if section == 'projects' %}class="is-current"{% endif %}>プロジェクト</a>{% endif %}
+    {% if board %}<a href="{% url 'welfare_activity:wbs' %}" {% if section == 'wbs' %}class="is-current"{% endif %}>WBS</a>{% endif %}
+    {% if board.has_project %}<a href="{% url 'welfare_activity:gantt' %}" {% if section == 'gantt' %}class="is-current"{% endif %}>ガントチャート</a>{% endif %}
+</nav>
+<main>
+    {% if board.state == 'stale' %}
+    <p class="notice">GitHub から読み直せなかったので、{% if board.fetched_at %}{{ board.fetched_at|date:"n月j日 H:i" }} 時点の{% else %}前に読んだ{% endif %}チケットを出しています。</p>
+    {% elif board.state == 'error' %}
+    <p class="notice">いま GitHub からチケットを読めません。しばらくしてから開き直してください。</p>
+    {% elif board.state == 'offline' %}
+    <p class="notice">GitHub に繋がっていないので、チケットは出ていません。</p>
+    {% endif %}
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

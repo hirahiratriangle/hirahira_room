@@ -1,0 +1,39 @@
+{% extends 'welfare_activity/base.html' %}
+{% block title %}プロジェクト | {{ wg.name }}{% endblock %}
+{% block content %}
+<h1>プロジェクト</h1>
+
+{% if board.project_url %}
+<div class="toolbar">
+    <a class="btn" href="{{ board.project_url }}" target="_blank" rel="noopener noreferrer" aria-label="GitHub のボード（別タブで開きます）">GitHub のボード</a>
+</div>
+<p class="note">プロジェクトは、GitHub のボードの項目「プロジェクト」の選択肢です。</p>
+{% endif %}
+
+{% if projects %}
+<table class="list">
+    <thead>
+        <tr>
+            <th>プロジェクト</th>
+            <th class="num">未完了</th>
+            <th class="num">全件</th>
+            <th>説明</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for project in projects %}
+        <tr>
+            <td data-label="プロジェクト"><a href="{{ project.get_absolute_url }}">{{ project.name }}</a></td>
+            <td class="num" data-label="未完了">{{ project.open_count }}</td>
+            <td class="num" data-label="全件">{{ project.total_count }}</td>
+            <td data-label="説明">{{ project.description|truncatechars:60|default:"—" }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% elif board.has_project %}
+<p class="empty">プロジェクトがまだありません。</p>
+{% elif board.has_data %}
+<p class="empty">この WG はプロジェクトを使っていません。</p>
+{% endif %}
+{% endblock %}

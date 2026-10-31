@@ -105,6 +105,13 @@ az webapp config appsettings set --name hirahira-room --resource-group hirahira 
 # 4. Actions タブの「基本情報の問題メール送信」→ Run workflow で疎通確認
 # ※ 手元で送るとき: python manage.py send_fe_mails --settings=config.settings_dev
 
+# 福祉従事者の活動ページのチケット（/welfare/。funITclub/wg-welfare の Issue と org の Project 3 番を読む）
+# 無くても紹介と構想資料は開ける（チケットの欄に「GitHub に繋がっていません」と出る）
+# 1. GitHub で fine-grained token を作る（Resource owner = funITclub）
+#    Repository access = wg-welfare だけ、権限 = Issues: Read と Organization の Projects: Read だけ
+# 2. Azure のアプリ設定に入れる
+az webapp config appsettings set --name hirahira-room --resource-group hirahira --settings GITHUB_TOKEN="＜発行した値＞"
+
 # 基本情報の X 投稿（7:00・12:00・19:00 に1問、Azure Logic Apps の hirahira-fe-x-post から起動）
 # 投稿は URL 入り1件 $0.20（月 約 $18.6）。キーを入れて FE_X_DRY_RUN=False にするまでは投稿しない。
 # 1. X の開発者コンソール（https://console.x.com）でアプリを作り、読み書きの権限で

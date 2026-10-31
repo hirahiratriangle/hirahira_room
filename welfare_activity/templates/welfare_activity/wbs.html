@@ -1,0 +1,44 @@
+{% extends 'welfare_activity/base.html' %}
+{% block title %}WBS | {{ wg.name }}{% endblock %}
+{% block content %}
+<h1>WBS</h1>
+
+{% if board.project_url %}
+<div class="toolbar">
+    <a class="btn" href="{{ board.project_url }}" target="_blank" rel="noopener noreferrer" aria-label="GitHub のボード（別タブで開きます）">GitHub のボード</a>
+</div>
+{% endif %}
+<p class="note">チケットを親子（GitHub の sub-issue）の階層で並べています。親には、子のチケットがいくつ終わったかを出します。</p>
+
+{% if rows %}
+<table class="list">
+    <thead>
+        <tr>
+            <th>題名</th>
+            <th class="nowrap">トラッカー</th>
+            <th class="nowrap">ステータス</th>
+            <th class="nowrap">子の完了</th>
+            {% if board.has_project %}<th class="nowrap">開始日</th><th class="nowrap">期日</th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for issue, depth in rows %}
+        <tr {% if not issue.is_open %}class="closed-row"{% endif %}>
+            <td class="subject" data-label="題名">
+                <span class="wbs-item" style="padding-left:calc({{ depth }} * 1.4rem)">{% if depth %}<span class="wbs-mark" aria-hidden="true">└</span>{% endif %}<a href="{{ issue.get_absolute_url }}">#{{ issue.number }} {{ issue.title }}</a></span>
+            </td>
+            <td class="nowrap" data-label="トラッカー">{{ issue.tracker_label }}</td>
+            <td class="nowrap" data-label="ステータス"><span class="badge s-{{ issue.status_css }}">{{ issue.status }}</span></td>
+            <td class="nowrap" data-label="子の完了">{% if issue.child_total %}<span class="bar"><span style="width:{% widthratio issue.child_closed issue.child_total 100 %}%"></span></span> {{ issue.child_closed }} / {{ issue.child_total }}{% else %}—{% endif %}</td>
+            {% if board.has_project %}
+            <td class="nowrap" data-label="開始日">{{ issue.start_date|date:"Y-m-d"|default:"—" }}</td>
+            <td class="nowrap" data-label="期日">{{ issue.due_date|date:"Y-m-d"|default:"—" }}</td>
+            {% endif %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% elif board.has_data %}
+<p class="empty">チケットがまだありません。</p>
+{% endif %}
+{% endblock %}

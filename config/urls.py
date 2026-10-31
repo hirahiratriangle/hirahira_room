@@ -42,6 +42,8 @@ urlpatterns = [
     path('genba/', include('genba.urls', namespace='genba')),
     # 社内活動の3つの構想（「社内活動 3つの構想.pptx」を順に読むページ）
     path('proposals/', include('proposals.urls', namespace='proposals')),
+    # 福祉従事者の活動ページ（fun IT club WG-03。ログインなしで公開）
+    path('welfare/', include('welfare_activity.urls', namespace='welfare_activity')),
 ]
 
 # メディアファイルの配信設定

@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ wg.slides_title }} | fun IT club</title>
+    <style>
+        /*
+         * 配色・字送りは元の pptx（福祉従事者支援プラットフォーム構想.pptx）から抽出した値。
+         * テーマは Office 既定のままで、色は各スライドの図形・表に直接指定されている。
+         */
+        :root {
+            --paper: #FFFFFF;
+            --navy: #15313A;         /* 見出し・本文・暗いスライドの背景 */
+            --teal: #1B7F79;         /* 主アクセント・構想の核心の背景 */
+            --mint: #7CC4B8;         /* 暗いスライドの小見出し */
+            --amber: #E9A23B;        /* 強調（実践・主体性・介入） */
+            --amber-ink: #B5761A;    /* 注意を促す見出し */
+            --gray-card: #EEF1F2;    /* 従来・比較元のカード */
+            --teal-tint: #E4F1EF;    /* 本構想のカード */
+            --cream: #FCF1DE;        /* 注意・但し書きのカード */
+            --muted: #5B6B70;        /* 補助の文字・脚注 */
+            --ring: #C9D6D8;         /* LOOP の円 */
+            --stone: #B8C4C7;        /* 「事実」のチップ */
+            --deep: #24454E;         /* 暗いスライドのカード */
+            --deep-head: #A9BCC0;
+            --deep-text: #D5E0E2;
+            --rule: #D6E0E2;
+            --font: Meiryo, "Hiragino Kaku Gothic ProN", "Hiragino Sans", system-ui, sans-serif;
+            --gap: 0.75rem;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            background: var(--paper);
+            color: var(--navy);
+            font-family: var(--font);
+            font-size: 16px;
+            line-height: 1.7;
+            -webkit-text-size-adjust: 100%;
+            transition: background-color .2s;
+        }
+
+        /* ---- 台（1画面1スライド） ---- */
+        .deck { min-height: 100%; display: flex; flex-direction: column; }
+        .stage {
+            flex: 1 1 auto;
+            width: 100%; max-width: 72rem; margin: 0 auto;
+            padding: 1.5rem 1rem 1rem;
+        }
+        /* JS が効くまでは全スライドを縦に並べる（no-script でも読める） */
+        .js .slide { display: none; }
+        .js .slide.is-current { display: block; }
+        .slide { animation: fade .18s ease-out; }
+        @keyframes fade { from { opacity: 0; transform: translateY(.4rem); } to { opacity: 1; transform: none; } }
+        @media (prefers-reduced-motion: reduce) { .slide { animation: none; } body { transition: none; } }
+
+        .kicker { font-size: .8rem; font-weight: 700; letter-spacing: .08em; color: var(--teal); margin: 0 0 .35rem; }
+        .slide h2 { font-size: 1.45rem; font-weight: 700; line-height: 1.45; margin: 0 0 1.1rem; color: var(--navy); }
+        .slide h2 .br { display: block; }
+        .sub { font-size: 1.05rem; font-weight: 700; color: var(--teal); margin: 0 0 .6rem; line-height: 1.5; }
+        .sub.amber { color: var(--amber-ink); }
+        .sub.plain { color: var(--navy); }
+        p { margin: 0 0 .7rem; }
+        .foot { margin: 1rem 0 0; font-size: .78rem; color: var(--muted); line-height: 1.6; }
+        .lead-line { font-weight: 700; font-size: .95rem; margin: 1rem 0 0; line-height: 1.6; }
+
+        .grid { display: grid; gap: var(--gap); }
+
+        /* ---- カード ---- */
+        .card { background: var(--gray-card); border-radius: .55rem; padding: .95rem 1.05rem; }
+        .card.teal { background: var(--teal-tint); }
+        .card.warm { background: var(--cream); }
+        .card.keyed { background: var(--teal-tint); border: 2px solid var(--cream); }
+        .card.navy { background: var(--navy); color: #fff; }
+        .card.white { background: #fff; color: var(--navy); }
+        .card-head { font-weight: 700; font-size: 1rem; margin: 0 0 .4rem; line-height: 1.5; }
+        .card-head.big { font-size: 1.15rem; }
+        .card-head.muted { color: var(--muted); }
+        .card-head.teal { color: var(--teal); }
+        .card-head.amber { color: var(--amber-ink); }
+        .card-head.amber-bright { color: var(--amber); }
+        .card-sub { font-size: .85rem; margin: 0 0 .6rem; }
+        .card-sub.muted { color: var(--muted); }
+        .card-sub.teal { color: var(--teal); }
+        .card-body { font-size: .88rem; line-height: 1.75; margin: 0; }
+        .card-body + .card-body { margin-top: .3rem; }
+        .card-label { font-size: .8rem; font-weight: 700; color: var(--teal); margin: .7rem 0 .1rem; }
+        .card-label.amber { color: var(--amber-ink); }
+        .card ul { margin: 0; padding-left: 1.1rem; font-size: .88rem; line-height: 1.8; }
+        .card li { margin-bottom: .25rem; }
+        .card li:last-child { margin-bottom: 0; }
+        .card li.strong { font-weight: 700; }
+
+        /* ---- 丸チップ付きの行 ---- */
+        .row {
+            display: flex; align-items: center; gap: .75rem;
+            background: var(--teal-tint); border-radius: .55rem;
+            padding: .55rem .7rem; margin-bottom: .45rem;
+        }
+        .row.warm { background: var(--cream); }
+        .row.bare { background: none; padding: 0; margin-bottom: .8rem; align-items: flex-start; }
+        .chip {
+            flex: 0 0 auto; display: grid; place-items: center;
+            width: 2.9rem; height: 2.9rem; border-radius: 50%;
+            background: var(--teal); color: #fff;
+            font-size: .72rem; font-weight: 700; line-height: 1.2; text-align: center;
+        }
+        .chip.amber { background: var(--amber); }
+        .chip.navy { background: var(--navy); }
+        .chip.num { font-size: 1.1rem; }
+        .row-text { font-size: .9rem; }
+        .row-text strong { display: block; }
+        .row-text small { display: block; font-size: .82rem; margin-top: .15rem; }
+
+        /* ---- 帯 ---- */
+        .bar { background: var(--navy); color: #fff; border-radius: .55rem; padding: .8rem 1rem; margin-top: 1rem; font-weight: 700; font-size: .95rem; line-height: 1.6; }
+        .bar.keyed { background: var(--teal-tint); color: var(--navy); border: 2px solid var(--cream); display: flex; gap: .8rem; align-items: center; }
+        .bar p { margin: 0; }
+
+        /* ---- 矢印でつなぐ ---- */
+        .arrow { color: var(--muted); font-weight: 700; font-size: 1.4rem; text-align: center; line-height: 1; }
+        .arrow-dot {
+            display: grid; place-items: center; justify-self: center; align-self: center;
+            width: 2.6rem; height: 2.6rem; border-radius: 50%;
+            background: var(--amber); color: #fff; font-weight: 700; font-size: 1.1rem;
+            transform: rotate(90deg);
+        }
+        .chain { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin: 0 0 1rem; padding: 0; list-style: none; }
+        .chain li { display: flex; align-items: center; gap: .35rem; }
+        .chain li + li::before { content: "›"; color: var(--muted); font-size: 1.3rem; line-height: 1; }
+        .pill {
+            display: inline-block; border-radius: .4rem; padding: .35rem .8rem;
+            background: var(--teal); color: #fff; font-weight: 700; font-size: .95rem;
+        }
+        .pill.stone { background: var(--stone); }
+        .pill.navy { background: var(--navy); }
+        .pill.amber { background: var(--amber); }
+
+        .stack { display: grid; gap: .2rem; }
+        .stack .pill { display: block; text-align: center; padding: .45rem .8rem; }
+        .stack .down { color: var(--muted); text-align: center; font-size: .8rem; line-height: 1; }
+        .loop-back { font-size: .85rem; font-weight: 700; color: var(--teal); text-align: center; margin: .5rem 0 0; }
+
+        /* 介入のボタン列 */
+        .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; margin: 0; padding: 0; list-style: none; }
+        .actions li { background: var(--amber); color: #fff; font-weight: 700; text-align: center; border-radius: .45rem; padding: .6rem .4rem; }
+
+        /* データと知見の対比 */
+        .contrast { display: grid; gap: .5rem; }
+        .contrast .card { display: grid; gap: .3rem; }
+        .contrast .label { font-weight: 700; font-size: .95rem; }
+
+        /* ---- 円環（LOOP・成長の循環） ---- */
+        .ring {
+            position: relative; width: min(100%, 24rem); aspect-ratio: 1;
+            margin: .5rem auto; padding: 0; list-style: none;
+        }
+        .ring::before {
+            content: ""; position: absolute; inset: 12%;
+            border: 2px solid var(--ring); border-radius: 50%; background: #fff;
+        }
+        .ring li {
+            position: absolute; left: var(--x); top: var(--y);
+            transform: translate(-50%, -50%);
+            display: grid; place-items: center; text-align: center;
+            background: var(--teal); color: #fff; font-weight: 700; line-height: 1.25;
+        }
+        .ring li.amber { background: var(--amber); }
+        .ring.nodes li { width: 22%; aspect-ratio: 1; border-radius: 50%; font-size: clamp(.6rem, 2.6vw, .78rem); padding: .2rem; }
+        .ring-center {
+            position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+            font-weight: 700; color: var(--teal); font-size: clamp(.85rem, 3.6vw, 1.05rem); line-height: 1.45;
+            pointer-events: none;
+        }
+        .ring-center span { display: block; font-size: 1.5em; color: var(--ring); }
+
+        /* ---- 表 ---- */
+        .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 1rem; }
+        table { border-collapse: separate; border-spacing: 2px; width: 100%; min-width: 34rem; font-size: .88rem; }
+        th, td { padding: .55rem .7rem; text-align: left; vertical-align: middle; line-height: 1.55; }
+        thead th { background: var(--navy); color: #fff; font-weight: 700; }
+        thead th.accent { background: var(--teal); }
+        tbody th { background: var(--gray-card); font-weight: 700; }
+        tbody td { background: #fff; border-bottom: 1px solid var(--rule); }
+        tbody td.was { color: var(--muted); }
+        tbody td.ours { background: var(--teal-tint); }
+        tbody tr.focus th { background: var(--teal); color: #fff; }
+        tbody tr.focus td { background: var(--teal-tint); font-weight: 700; }
+
+        /* ---- 層（アーキテクチャ） ---- */
+        .layer { border-radius: .55rem; padding: .65rem 1rem; color: #fff; background: var(--teal); }
+        .layer.amber { background: var(--amber); }
+        .layer.navy { background: var(--navy); }
+        .layer .name { font-weight: 700; font-size: 1rem; margin: 0; }
+        .layer .desc { font-size: .82rem; margin: .1rem 0 0; }
+
+        /* ---- 暗い背景のスライド（表紙・核心・まとめ） ---- */
+        .slide.tone-navy, .slide.tone-teal { color: #fff; border-radius: .8rem; padding: 2rem 1.3rem; position: relative; overflow: hidden; }
+        .slide.tone-navy { background: var(--navy); }
+        .slide.tone-teal { background: var(--teal); }
+        .slide.tone-navy h1, .slide.tone-navy h2, .slide.tone-teal h2 { color: #fff; }
+        .slide.tone-navy .kicker { color: var(--mint); }
+        .slide.tone-teal .kicker { color: #fff; }
+        body.tone-navy { background: var(--navy); }
+        body.tone-teal { background: var(--teal); }
+        /* JS で背景ごと塗るときは、スライド自体の枠は消す */
+        .js .slide.tone-navy, .js .slide.tone-teal { background: none; border-radius: 0; padding-left: 0; padding-right: 0; }
+
+        /* 表紙・まとめの同心円（元スライドの右側の飾り） */
+        .orbit {
+            position: absolute; right: -3rem; width: 10rem; height: 10rem; border-radius: 50%;
+            border: 2px solid var(--teal); pointer-events: none; opacity: .9;
+            display: none;  /* 狭い画面ではタイトルに重なるので出さない */
+        }
+        .orbit::after {
+            content: ""; position: absolute; inset: 25%; border-radius: 50%; border: 2px solid var(--amber);
+        }
+        .cover .orbit { top: 1rem; }
+        .closing .orbit { bottom: 1rem; }
+        .cover, .closing { padding-top: 3rem !important; padding-bottom: 3rem !important; }
+        .cover h1 { font-size: 2rem; font-weight: 700; line-height: 1.3; margin: .4rem 0 1rem; position: relative; }
+        .cover h1 .br { display: block; }
+        .cover .lead { color: var(--amber); font-size: 1.1rem; margin: 0 0 2.5rem; position: relative; }
+        .cover .byline { font-size: .85rem; margin: 0; position: relative; }
+
+        .statement h2 { font-size: 1.35rem; line-height: 1.6; margin-bottom: 1.6rem; }
+
+        .closing h2 { font-size: 1.8rem; line-height: 1.45; position: relative; }
+        .closing .flow-line { color: var(--amber); font-size: 1rem; margin: 0 0 .5rem; position: relative; }
+        .closing .after { font-size: .95rem; margin: 0; position: relative; }
+
+        .card.deep { background: var(--deep); color: #fff; }
+        .card.deep .card-head { color: var(--deep-head); font-size: .85rem; }
+        .card.deep .card-body { color: var(--deep-text); font-size: 1rem; }
+        .card.teal-solid { background: var(--teal); color: #fff; }
+        .card.teal-solid .card-head { font-size: .85rem; }
+        .card.teal-solid .card-body { font-weight: 700; font-size: 1.02rem; }
+        .tasks { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: 1rem 0; padding: 0; list-style: none; counter-reset: task; }
+        .tasks li {
+            background: var(--deep); border-radius: .45rem; padding: .55rem .7rem;
+            font-size: .82rem; line-height: 1.5; display: flex; gap: .5rem; align-items: center;
+        }
+        .tasks li::before {
+            counter-increment: task; content: counter(task);
+            color: var(--amber); font-weight: 700; font-size: 1.05rem; flex: 0 0 auto;
+        }
+        .pride { color: var(--amber); font-weight: 700; font-size: .98rem; line-height: 1.7; margin: 0 0 1rem; }
+        .ask { font-size: .95rem; margin: 0; }
+
+        /* ---- 発表者ノート ---- */
+        .note { margin-top: 1.3rem; padding: .8rem 1rem; background: var(--cream); border-radius: .55rem; color: var(--navy); position: relative; }
+        .note-label {
+            display: block;
+            font-size: .68rem; font-weight: 700; letter-spacing: .1em;
+            color: var(--amber-ink); margin-bottom: .25rem;
+        }
+        .note p { font-size: .84rem; margin: 0; line-height: 1.75; }
+
+        /* ---- 送り ---- */
+        .controls {
+            position: sticky; bottom: 0;
+            background: rgba(255,255,255,.94);
+            border-top: 1px solid var(--rule);
+            padding: .55rem 1rem calc(.55rem + env(safe-area-inset-bottom));
+            display: none;
+        }
+        .js .controls { display: block; }
+        body.tone-navy .controls, body.tone-teal .controls { background: rgba(21,49,58,.9); border-top-color: rgba(255,255,255,.15); }
+        .controls-inner { max-width: 72rem; margin: 0 auto; display: flex; align-items: center; gap: .7rem; }
+        .nav-btn {
+            font-family: var(--font); font-size: .85rem; font-weight: 700;
+            color: var(--teal); background: var(--teal-tint);
+            border: 0; border-radius: .4rem; padding: .5rem .9rem;
+            cursor: pointer; min-height: 2.5rem;
+        }
+        .nav-btn:hover { background: #D3E8E5; }
+        .nav-btn:disabled { opacity: .35; cursor: default; }
+        .nav-back { font-size: .8rem; font-weight: 700; color: var(--muted); text-decoration: none; white-space: nowrap; }
+        .nav-back:hover { text-decoration: underline; }
+        .counter { font-size: .8rem; font-weight: 700; color: var(--muted); margin: 0 auto; letter-spacing: .06em; }
+        body.tone-navy .nav-back, body.tone-teal .nav-back { color: var(--deep-text); }
+        body.tone-navy .counter, body.tone-teal .counter { color: var(--deep-text); }
+        .dots { display: none; gap: .3rem; }
+        .dot { width: .45rem; height: .45rem; border-radius: 50%; background: var(--ring); border: 0; padding: 0; cursor: pointer; }
+        .dot.is-current { background: var(--amber); }
+
+        /* no-script のときはスライドを区切り線で並べる */
+        .slide + .slide { border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 2rem; }
+        .js .slide + .slide { border-top: 0; margin-top: 0; padding-top: 0; }
+
+        /* ---- 画面が広いとき：元スライドの段組みに戻す ---- */
+        @media (min-width: 48rem) {
+            body { font-size: 17px; }
+            .stage { padding: 2.5rem 2rem 1.5rem; }
+            .slide h2 { font-size: 1.9rem; margin-bottom: 1.4rem; }
+            .kicker { font-size: .85rem; margin-bottom: .5rem; }
+            .dots { display: flex; }
+
+            .two { grid-template-columns: 1fr 1fr; }
+            .two.wide-right { grid-template-columns: 2fr 3fr; }
+            .two.wide-left { grid-template-columns: 5fr 3fr; }
+            .two.narrow-left { grid-template-columns: 1fr 2fr; }
+            .three { grid-template-columns: repeat(3, 1fr); }
+            .vs { grid-template-columns: 1fr auto 1fr; align-items: stretch; }
+            .arrow-dot { transform: none; }
+            .steps3 { grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; }
+            .steps3 .arrow { align-self: center; }
+            .actions { grid-template-columns: repeat(5, 1fr); }
+            .contrast .card { grid-template-columns: 9rem 1fr; align-items: center; }
+            .tasks { grid-template-columns: repeat(4, 1fr); }
+
+            .cover h1 { font-size: 2.8rem; }
+            .cover .lead { font-size: 1.3rem; }
+            .orbit { display: block; right: 2rem; width: 16rem; height: 16rem; }
+            .cover .orbit { top: 3rem; }
+            .closing .orbit { bottom: 2rem; }
+            .statement h2 { font-size: 1.85rem; }
+            .closing h2 { font-size: 2.6rem; }
+        }
+        @media (min-width: 64rem) {
+            .slide h2 { font-size: 2.1rem; }
+            .cover h1 { font-size: 3.2rem; }
+            .closing h2 { font-size: 3rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="deck">
+<main class="stage" id="stage">
+
+    <section class="slide tone-navy cover" id="s1" data-tone="navy" aria-label="スライド 1">
+        <span class="orbit" aria-hidden="true"></span>
+        <p class="kicker">構想共有・ディスカッション資料</p>
+        <h1><span class="br">福祉従事者向け</span><span class="br">Assessment &amp; Planning</span><span class="br">Platform</span></h1>
+        <p class="lead">仕事と知見が循環する基盤をつくる</p>
+        <p class="byline">平野 正輝　｜　2026年9月27日　v2</p>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>本日は結論を出す場ではなく、構想を共有し、論点について意見をいただく場として進めます。</p>
+        </div>
+    </section>
+
+    <section class="slide" id="s2" aria-label="スライド 2">
+        <p class="kicker">出発点は従事者</p>
+        <h2>福祉従事者にとって何が変わるか</h2>
+        <div class="grid two">
+            <div class="card">
+                <p class="card-head big">サビ管（サービス管理責任者）とは</p>
+                <p class="card-body">障害福祉サービスの事業所で、個別支援計画の作成に責任を持つ専門職</p>
+                <p class="card-label">制度上の位置づけ</p>
+                <p class="card-body">法令（指定基準）で事業所への配置が義務</p>
+                <p class="card-body">任用資格：実務経験＋研修修了で就くポスト（国家試験はない）</p>
+                <p class="card-label">主な仕事</p>
+                <p class="card-body">アセスメント／個別支援計画の作成／モニタリングと見直し／スタッフへの助言</p>
+                <p class="card-label amber">抱えがちな負担</p>
+                <p class="card-body">書類作成に追われる／判断を一人で抱える／経験が個人の中に留まる</p>
+            </div>
+            <div>
+                <p class="sub">この構想で従事者が得るもの</p>
+                <div class="row"><span class="chip">時間</span><span class="row-text">書類に追われる時間が減り、利用者と向き合う時間が増える</span></div>
+                <div class="row"><span class="chip">裏付け</span><span class="row-text">一人で抱えていた判断に、ほかの実践から得た知見という裏付けができる</span></div>
+                <div class="row"><span class="chip">継承</span><span class="row-text">自分の経験が知見として残り、次の支援や他の従事者の役に立つ</span></div>
+                <div class="row warm"><span class="chip amber">主体性</span><span class="row-text">判断・承認するのは従事者自身。LLMは仕事を担い、従事者が監督する</span></div>
+                <p class="sub" style="margin:1rem 0 .2rem">当プラットフォームは福祉従事者の伴奏者を目指す。</p>
+                <p class="card-body">主旋律を奏でるのは、いつも従事者自身である。</p>
+            </div>
+        </div>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>まず前提として、サビ管は障害福祉サービスの事業所で個別支援計画の作成に責任を持つ専門職です。指定基準で事業所への配置が義務付けられており、国家試験ではなく実務経験と研修修了によって就く任用資格です。つまり制度上、計画の責任はサビ管というポストにあります。この構想の出発点は、従事者自身が得る価値にあります。書類に追われる時間を利用者と向き合う時間へ。一人の判断に知見の裏付けを。自分の経験を次に残す。そして判断の主体は従事者のままです。当プラットフォームは福祉従事者の伴奏者を目指します。主旋律を奏でるのは、いつも従事者自身です。</p>
+        </div>
+    </section>
+
+    <section class="slide" id="s3" aria-label="スライド 3">
+        <p class="kicker">同じ構造の専門職</p>
+        <h2>計画をつくる「ポスト」は福祉の各分野にある</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">職（ポスト）</th><th scope="col">分野</th><th scope="col">つくる計画</th><th scope="col">就くための要件</th></tr>
+                </thead>
+                <tbody>
+                    <tr class="focus"><th scope="row">サービス管理責任者（サビ管）</th><td>障害福祉サービス</td><td>個別支援計画</td><td>任用資格（実務経験＋研修）</td></tr>
+                    <tr><th scope="row">児童発達支援管理責任者（児発管）</th><td>障害児支援</td><td>個別支援計画（児童）</td><td>任用資格（実務経験＋研修）</td></tr>
+                    <tr><th scope="row">相談支援専門員</th><td>障害福祉の相談支援</td><td>サービス等利用計画</td><td>任用資格（実務経験＋研修）</td></tr>
+                    <tr><th scope="row">介護支援専門員（ケアマネ）</th><td>介護保険</td><td>ケアプラン</td><td>実務経験＋試験＋研修（公的資格）</td></tr>
+                    <tr><th scope="row">サービス提供責任者</th><td>訪問介護・居宅介護</td><td>訪問介護計画など</td><td>介護福祉士等の資格が要件</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="bar keyed">
+            <span class="chip">共通</span>
+            <div>
+                <p>どのポストも、法令にもとづき「アセスメント → 計画 → モニタリング」のLOOPを担う。</p>
+                <p>サビ管から始め、同じ構造で他の専門職へ広げられる。</p>
+            </div>
+        </div>
+        <p class="foot">※制度の詳細は最新の法令・通知で要確認</p>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>サビ管だけでなく、福祉の各分野に「計画をつくる責任を負うポスト」がある。ケアマネは介護保険の分野で、試験を経る公的資格という違いはあるが、アセスメントから計画、モニタリングという仕事の構造は共通している。最初のLOOPはサビ管で作り、同じ構造で横に展開できる。</p>
+        </div>
+    </section>
+
+    <section class="slide" id="s4" aria-label="スライド 4">
+        <p class="kicker">問題意識</p>
+        <h2>ITの目的を「効率化」から「創発」へ</h2>
+        <div class="grid vs">
+            <div class="card">
+                <p class="card-head big muted">これまでのIT</p>
+                <p class="card-sub muted">既存の仕事を効率化する</p>
+                <ul>
+                    <li>紙を電子化する</li>
+                    <li>手作業を自動化する</li>
+                    <li>情報を一元管理する</li>
+                    <li>業務を標準化する</li>
+                    <li>処理時間を短縮する</li>
+                </ul>
+            </div>
+            <span class="arrow-dot" aria-hidden="true">→</span>
+            <div class="card teal">
+                <p class="card-head big teal">LLM以後のIT</p>
+                <p class="card-sub teal">仕事そのものをLLMが担う</p>
+                <ul>
+                    <li>情報を整理する・状況を解釈する</li>
+                    <li>仮説を立てる・計画を組み立てる</li>
+                    <li>結果を評価し、次の行動を考える</li>
+                    <li class="strong">その仕事から新しい知見が生まれ、次の仕事へ戻る</li>
+                </ul>
+            </div>
+        </div>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>LLMは既存業務を速くするだけでなく、これまで人間が担ってきた判断・構成の仕事そのものを実行できる。その仕事から知見が生まれ、次に戻る環境を設計することに「創発」の可能性がある。</p>
+        </div>
+    </section>
+
+    <section class="slide tone-teal statement" id="s5" data-tone="teal" aria-label="スライド 5">
+        <p class="kicker">構想の核心</p>
+        <h2><span class="br">福祉従事者の仕事をLLMに担わせ、</span><span class="br">LOOPから生まれる知見を学習し続けることで、</span><span class="br">従事者の勘を支える伴奏者となるプラットフォームをつくる。</span></h2>
+        <div class="grid three">
+            <div class="card white">
+                <p class="card-head teal">対象</p>
+                <p class="card-body">サービス管理責任者（サビ管）の<br>アセスメント・計画の仕事</p>
+            </div>
+            <div class="card white">
+                <p class="card-head teal">つくるもの</p>
+                <p class="card-body">Assessment &amp; Planning<br>Support Kit</p>
+            </div>
+            <div class="card white">
+                <p class="card-head amber-bright">つくらないもの</p>
+                <p class="card-body">「AIを使った福祉システム」</p>
+                <p class="card-body">「サビ管の業務効率化アプリ」</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="slide" id="s6" aria-label="スライド 6">
+        <p class="kicker">Assessment &amp; Planning Support Kit</p>
+        <h2>LOOP：仕事を「回り続ける構造」として捉える</h2>
+        <div class="grid two">
+            <div style="position:relative">
+                <ol class="ring nodes" aria-label="LLMが担うLOOP">
+                    <li style="--x:50%;--y:12%">情報収集</li>
+                    <li style="--x:76.9%;--y:23.1%">アセス<br>メント</li>
+                    <li style="--x:88%;--y:50%">仮説形成</li>
+                    <li style="--x:76.9%;--y:76.9%">プラン<br>ニング</li>
+                    <li class="amber" style="--x:50%;--y:88%">実践</li>
+                    <li style="--x:23.1%;--y:76.9%">結果の<br>確認</li>
+                    <li style="--x:12%;--y:50%">再評価</li>
+                    <li style="--x:23.1%;--y:23.1%">次の<br>アセス<br>メント</li>
+                </ol>
+                <p class="ring-center" aria-hidden="true">LLMが<br>担うLOOP</p>
+            </div>
+            <div>
+                <p class="sub">ポイント</p>
+                <p class="lead-line" style="margin-top:0">LLMをLOOPの「一部」に置くのではない。</p>
+                <p class="card-body">LOOPそのものを、LLMが担える仕事として設計する。</p>
+                <p class="lead-line">LOOPを回した結果から得られた知見を、次のLOOPに戻す。</p>
+                <p class="card-body">従事者は必要なところで確認・修正・判断する。</p>
+                <div class="card warm" style="margin-top:1.2rem">
+                    <p class="card-body">「実践」だけは現場の従事者が行う。それ以外の工程をLLMが担い、従事者が監督する。</p>
+                </div>
+            </div>
+        </div>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>単なる文書作成支援ではなく、アセスメントから評価・再評価までの仕事全体をLOOPとして扱う。</p>
+        </div>
+    </section>
+
+    <section class="slide" id="s7" aria-label="スライド 7">
+        <p class="kicker">役割の再設計</p>
+        <h2>Human-on-the-Loop：従事者はLOOP全体を監督する</h2>
+        <div class="grid two">
+            <div class="card">
+                <p class="card-head big muted">Human-in-the-Loop</p>
+                <p class="card-body">人間が仕事を行い、<br>AIがその一部を支援する</p>
+            </div>
+            <div class="card teal">
+                <p class="card-head big teal">Human-on-the-Loop（本構想）</p>
+                <p class="card-body">LLMが仕事を行い、<br>従事者がLOOP全体を監督する</p>
+            </div>
+        </div>
+        <p class="sub plain" style="margin-top:1.4rem">従事者が介入するのは、必要なときだけ</p>
+        <ul class="actions">
+            <li>修正する</li>
+            <li>判断する</li>
+            <li>差し戻す</li>
+            <li>例外処理する</li>
+            <li>承認する</li>
+        </ul>
+        <p class="foot" style="font-size:.88rem">課題：「従事者による確認」を単なる承認作業（ハンコ）にしないこと</p>
+    </section>
+
+    <section class="slide" id="s8" aria-label="スライド 8">
+        <p class="kicker">知見とは</p>
+        <h2>蓄積するのは「データ」ではなく「知見」</h2>
+        <ol class="chain" aria-label="知見の要素">
+            <li><span class="pill stone">事実</span></li>
+            <li><span class="pill">解釈</span></li>
+            <li><span class="pill">仮説</span></li>
+            <li><span class="pill">実践</span></li>
+            <li><span class="pill">結果</span></li>
+            <li><span class="pill navy">条件</span></li>
+            <li><span class="pill navy">例外</span></li>
+        </ol>
+        <div class="contrast">
+            <div class="card">
+                <span class="label" style="color:var(--muted)">データ</span>
+                <p class="card-body">Aさんは○月○日にこういう状態だった。</p>
+            </div>
+            <div class="card teal">
+                <span class="label" style="color:var(--teal)">知見</span>
+                <p class="card-body">このような環境変化と本人の訴えが同時に生じた場合、生活リズムだけでなく対人関係上の負荷も確認する必要がある。</p>
+            </div>
+            <div class="card keyed">
+                <span class="label">条件・例外を<br>持つ知見</span>
+                <p class="card-body">この仮説で環境調整を行ったところ一定期間後に改善した。ただし、家族との接触が増えたケースでは同じ方法が機能しなかった。</p>
+            </div>
+        </div>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>個人を特定できる情報と、抽象化された知見を明確に分離する。「個人データの蓄積」と「知見の蓄積」を同じものとして扱わない。</p>
+        </div>
+    </section>
+
+    <section class="slide" id="s9" aria-label="スライド 9">
+        <p class="kicker">プラットフォームの中核</p>
+        <h2>知見バンク＝知見を学習したモデル</h2>
+        <div class="grid two wide-right">
+            <div>
+                <div class="stack">
+                    <span class="pill navy">知見バンク（モデル）</span>
+                    <span class="down" aria-hidden="true">↓</span>
+                    <span class="pill">推論</span>
+                    <span class="down" aria-hidden="true">↓</span>
+                    <span class="pill">アセスメント・計画</span>
+                    <span class="down" aria-hidden="true">↓</span>
+                    <span class="pill">実践</span>
+                    <span class="down" aria-hidden="true">↓</span>
+                    <span class="pill">評価</span>
+                    <span class="down" aria-hidden="true">↓</span>
+                    <span class="pill">新しい知見</span>
+                    <span class="down" aria-hidden="true">↓</span>
+                    <span class="pill navy">知見コーパス → 学習</span>
+                </div>
+                <p class="loop-back">↻ 知見バンクへ戻り、モデルが育つ</p>
+            </div>
+            <div>
+                <p class="sub">知見が従事者の勘を支えるまで</p>
+                <div class="card keyed" style="margin-bottom:.6rem">
+                    <div class="row bare">
+                        <span class="chip navy">学習</span>
+                        <span class="row-text"><strong>知見コーパスからモデルが継続学習</strong><small>判断の型・着眼点・類推が重みに溶け込み、経験を積んだ従事者の勘に近い推論ができる。これが知見バンク</small></span>
+                    </div>
+                </div>
+                <div class="card teal">
+                    <div class="row bare">
+                        <span class="chip">参照</span>
+                        <span class="row-text"><strong>具体的な条件・例外は知見コーパスで補う</strong><small>学習では取りこぼしやすい細部を参照で補完する。出典を示せて、訂正もできる</small></span>
+                    </div>
+                </div>
+                <div class="bar">
+                    <p>正解を出すのではなく、従事者の勘を支える。誤った知見はコーパスで訂正し、次の学習に反映する</p>
+                </div>
+            </div>
+        </div>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>知見バンクはデータベースではなく、知見を学習したモデルそのもの。匿名化・構造化した知見を知見コーパスに集め、モデルが継続的に学習することで、経験を積んだ従事者の勘に近い推論ができるようになる。福祉に正解はない。モデルは正解を出すのではなく、従事者の勘を支える。具体的な条件や例外は、コーパスの参照で補う。</p>
+        </div>
+    </section>
+
+    <section class="slide" id="s10" aria-label="スライド 10">
+        <p class="kicker">先行事例</p>
+        <h2>医療では実現している：NYUTron</h2>
+        <div class="grid two">
+            <div class="card teal">
+                <p class="card-head big teal">NYU Langone Health（米国）</p>
+                <div class="row bare"><span class="chip">学習</span><span class="row-text">自院の臨床ノート約725万件（約41億語）で学習した、約1億パラメータの言語モデル</span></div>
+                <div class="row bare"><span class="chip">精度</span><span class="row-text">再入院・院内死亡・在院日数などの予測で、従来の予測モデルを上回った</span></div>
+                <div class="row bare"><span class="chip">運用</span><span class="row-text">2022年、電子カルテと連携して院内で前向きに運用</span></div>
+                <p class="lead-line">小さなモデルでも、自前の記録から学べば効く</p>
+            </div>
+            <div>
+                <p class="sub amber">ただし福祉は医療と違う</p>
+                <div class="card warm" style="margin-bottom:.6rem">
+                    <p class="card-head">正解はない。勘を支える</p>
+                    <p class="card-body">医療は「再入院したか」という正解を予測する。福祉に正解はない。モデルは答えを出すのではなく、従事者の勘を支え、気づきをもたらす</p>
+                </div>
+                <div class="card warm">
+                    <p class="card-head">記録の標準化と量</p>
+                    <p class="card-body">福祉の記録は書式も粒度も事業所ごとに異なり、初期の知見コーパスは医療より桁違いに小さい。医療のFHIRのように、知見を構造化する共通の形が必要</p>
+                </div>
+            </div>
+        </div>
+        <p class="foot">出典：Jiang et al., "Health system-scale language models are all-purpose prediction engines", Nature (2023)</p>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>現場の記録をモデルに学習させるという考え方は、医療ではすでに実現している。NYU Langone HealthのNYUTronは、自院の臨床ノート約725万件（約41億語）で学習した約1億パラメータのBERTモデルで、再入院などの予測で従来モデルを上回り、2022年には電子カルテと連携した前向き運用も行った。小さなモデルでも自前の記録で効くという点は追い風になる。一方で学習量は大きく、福祉の初期の知見コーパスはこれより桁違いに小さい。また福祉は医療と違い正解がない。福祉のモデルは正解を予測するのではなく、従事者の勘を支える。そのためにも記録の標準化が鍵になる。</p>
+        </div>
+    </section>
+
+    <section class="slide" id="s11" aria-label="スライド 11">
+        <p class="kicker">エンジニアリング</p>
+        <h2>アーキテクチャの考え方</h2>
+        <div class="grid two wide-left">
+            <div class="grid" style="gap:.4rem">
+                <div class="layer amber">
+                    <p class="name">HOTL インターフェース</p>
+                    <p class="desc">介入点（修正・差し戻し・承認）の設計</p>
+                </div>
+                <div class="layer">
+                    <p class="name">LOOP エンジン</p>
+                    <p class="desc">アセスメント〜再評価のワークフローと推論構造</p>
+                </div>
+                <div class="layer navy">
+                    <p class="name">知見バンク（オンプレ：重みを自分たちで育てる）</p>
+                    <p class="desc">クラウドLLMは参照できても育てられない。知見コーパスから継続学習する</p>
+                </div>
+                <div class="layer">
+                    <p class="name">知見コーパス</p>
+                    <p class="desc">匿名化・構造化した知見。出典・適用条件・信頼度・更新履歴・反例</p>
+                </div>
+            </div>
+            <div class="card teal">
+                <p class="card-head big teal">データ境界の管理</p>
+                <ul>
+                    <li>実名入りの情報は事業所側（従事者の手元）にとどめ、匿名化してから渡す。オンプレでも実名は扱わない</li>
+                    <li>匿名化・抽象化した知見だけを蓄積し、学習に使う</li>
+                    <li>学習データは知見コーパスから。出典をたどれる形で</li>
+                    <li>アクセス制御・利用目的の管理を設計段階から</li>
+                    <li>知見化・学習に使うことは、事業所・利用者との契約・同意を別に設計する</li>
+                </ul>
+            </div>
+        </div>
+        <p class="lead-line">知見を学習し続けるモデル（知見バンク）と、仕事の構造（LOOP・HOTL）── この2つが競争力</p>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>知見をモデル自体に学習させるため、重みを自由に扱える自社運用のLLMをオンプレで持つ。ただし実名など個人を特定できる情報はオンプレでも扱わず、匿名化・抽象化した知見だけを学習に使う。知見コーパスで出典や訂正を管理し、知見バンク＝モデルはそこから育てる。</p>
+        </div>
+    </section>
+
+    <section class="slide" id="s12" aria-label="スライド 12">
+        <p class="kicker">比較</p>
+        <h2>従来の業務システムとの違い</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col"></th><th scope="col">従来の業務システム</th><th scope="col" class="accent">本構想のプラットフォーム</th></tr>
+                </thead>
+                <tbody>
+                    <tr><th scope="row">目的</th><td class="was">既存業務の効率化</td><td class="ours">仕事と知見の循環による創発</td></tr>
+                    <tr><th scope="row">仕事の担い手</th><td class="was">人間（システムは道具）</td><td class="ours">LLM（従事者はLOOPを監督）</td></tr>
+                    <tr><th scope="row">人間の関わり</th><td class="was">すべての処理を人が行う</td><td class="ours">必要なときだけ介入（HOTL）</td></tr>
+                    <tr><th scope="row">蓄積されるもの</th><td class="was">記録・データ</td><td class="ours">条件と例外を含む知見と、それを学習したモデル</td></tr>
+                    <tr><th scope="row">導入形態</th><td class="was">事業者がシステム導入</td><td class="ours">個人がほぼ無料で使い始める</td></tr>
+                    <tr><th scope="row">費用</th><td class="was">初期費用＋月額費用</td><td class="ours">ほぼ無料（広告で支える）</td></tr>
+                    <tr><th scope="row">完成形</th><td class="was">完成品として納品</td><td class="ours">使われるほど成長する基盤</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="slide tone-navy closing" id="s13" data-tone="navy" aria-label="スライド 13">
+        <span class="orbit" aria-hidden="true"></span>
+        <p class="kicker">最大の設計思想</p>
+        <h2><span class="br">完成品ではなく、</span><span class="br">成長する仕事の基盤をつくる。</span></h2>
+        <p class="flow-line">仕事 → LOOP → 実践 → 知見 → 学習 → 知見バンク（モデル） → 次の仕事</p>
+        <p class="after">使われるほどLOOPが増え、知見が増え、モデルが育つ。</p>
+    </section>
+
+    <section class="slide tone-navy" id="s14" data-tone="navy" aria-label="スライド 14">
+        <p class="kicker">ITエンジニアの矜持</p>
+        <h2>ITエンジニアの仕事の意義が変わる</h2>
+        <div class="grid vs">
+            <div class="card deep">
+                <p class="card-head">これまで</p>
+                <p class="card-body">既存の仕事をシステム化する</p>
+            </div>
+            <span class="arrow-dot" aria-hidden="true">→</span>
+            <div class="card teal-solid">
+                <p class="card-head">これから</p>
+                <p class="card-body">LLMが仕事を行うための構造そのものを設計する</p>
+            </div>
+        </div>
+        <ol class="tasks">
+            <li>仕事をLOOPとして構造化する</li>
+            <li>LLMに仕事を担わせる</li>
+            <li>推論の構造を設計する</li>
+            <li>HOTLの介入点を設計する</li>
+            <li>実践結果を評価可能にする</li>
+            <li>LOOPから知見を抽出する</li>
+            <li>知見を次のLOOPへ戻す</li>
+            <li>LOOPそのものを改善する</li>
+        </ol>
+        <p class="pride">つくるのは完成した業務システムではなく、仕事と知見が循環し続ける環境そのもの。<br>ここに「業務効率化」とは異なるエンジニアリングの面白さがある。</p>
+        <p class="ask">ご意見をお聞かせください</p>
+        <div class="note">
+            <span class="note-label">補足</span>
+            <p>最後に、この構想がITエンジニアにとって何を意味するか。従来は既存業務のシステム化だったが、ここではLLMが仕事を行うための構造そのものを設計する。仕事と知見が循環し続ける環境を設計することが、これからのエンジニアリングの面白さになる。</p>
+        </div>
+    </section>
+
+</main>
+
+<div class="controls">
+    <div class="controls-inner">
+        <a class="nav-back" id="close-tab" href="{% url 'welfare_activity:home' %}" aria-label="このタブを閉じる">× 閉じる</a>
+        <button class="nav-btn" id="prev" type="button">‹ 前</button>
+        <span class="counter" id="counter">01 / 14</span>
+        <span class="dots" id="dots"></span>
+        <button class="nav-btn" id="next" type="button">次 ›</button>
+    </div>
+</div>
+</div>
+
+<script>
+(function () {
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+    if (!slides.length) { return; }
+    document.documentElement.classList.add('js');
+
+    var prev = document.getElementById('prev');
+    var next = document.getElementById('next');
+    var counter = document.getElementById('counter');
+    var dots = document.getElementById('dots');
+    var current = 0;
+
+    slides.forEach(function (slide, i) {
+        var dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = 'dot';
+        dot.setAttribute('aria-label', (i + 1) + ' 枚目へ');
+        dot.addEventListener('click', function () { show(i); });
+        dots.appendChild(dot);
+    });
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+    function show(i, skipHash) {
+        current = Math.max(0, Math.min(slides.length - 1, i));
+        slides.forEach(function (slide, n) {
+            slide.classList.toggle('is-current', n === current);
+        });
+        Array.prototype.forEach.call(dots.children, function (dot, n) {
+            dot.classList.toggle('is-current', n === current);
+        });
+        // 表紙・核心・まとめは元スライドと同じく、画面ごと濃い色で塗る
+        var tone = slides[current].getAttribute('data-tone');
+        document.body.className = tone ? 'tone-' + tone : '';
+        counter.textContent = pad(current + 1) + ' / ' + pad(slides.length);
+        prev.disabled = current === 0;
+        next.disabled = current === slides.length - 1;
+        if (!skipHash) { history.replaceState(null, '', '#' + slides[current].id); }
+        window.scrollTo(0, 0);
+    }
+
+    function fromHash() {
+        var hash = window.location.hash;
+        var found = 0;
+        slides.forEach(function (s, i) { if ('#' + s.id === hash) { found = i; } });
+        show(found, true);
+    }
+
+    prev.addEventListener('click', function () { show(current - 1); });
+    next.addEventListener('click', function () { show(current + 1); });
+    window.addEventListener('hashchange', fromHash);
+
+    document.addEventListener('keydown', function (e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') { return; }
+        if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { show(current + 1); e.preventDefault(); }
+        else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(current - 1); e.preventDefault(); }
+        else if (e.key === 'Home') { show(0); e.preventDefault(); }
+        else if (e.key === 'End') { show(slides.length - 1); e.preventDefault(); }
+    });
+
+    var touchX = null, touchY = null;
+    document.addEventListener('touchstart', function (e) {
+        touchX = e.changedTouches[0].clientX;
+        touchY = e.changedTouches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', function (e) {
+        if (touchX === null) { return; }
+        var dx = e.changedTouches[0].clientX - touchX;
+        var dy = e.changedTouches[0].clientY - touchY;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            show(current + (dx < 0 ? 1 : -1));
+        }
+        touchX = touchY = null;
+    }, { passive: true });
+
+    // 活動ページから別タブで開かれるので、閉じれば活動ページに戻る。直接開かれたときなどは
+    // 閉じる操作をブラウザに拒まれる。拒まれても何も起きないので、少し待って活動ページへ移る。
+    document.getElementById('close-tab').addEventListener('click', function (e) {
+        var back = this.href;
+        e.preventDefault();
+        window.close();
+        setTimeout(function () { window.location.href = back; }, 300);
+    });
+
+    fromHash();
+}());
+</script>
+</body>
+</html>

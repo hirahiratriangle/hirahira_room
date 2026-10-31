@@ -1,0 +1,74 @@
+{% extends 'welfare_activity/base.html' %}
+{% block title %}チケット | {{ wg.name }}{% endblock %}
+{% block content %}
+<h1>チケット</h1>
+
+<div class="toolbar">
+    <a class="btn primary" href="{{ board.new_issue_url }}" target="_blank" rel="noopener noreferrer" aria-label="GitHub で新しいチケット（別タブで開きます）">GitHub で新しいチケット</a>
+    {% if board.project_url %}<a class="btn" href="{{ board.project_url }}" target="_blank" rel="noopener noreferrer" aria-label="GitHub のボード（別タブで開きます）">GitHub のボード</a>{% endif %}
+</div>
+<p class="note">チケットは WG のメンバーが GitHub で書きます（このページは読むだけ）。題名と本文は一般公開されます。</p>
+
+<form class="filters" method="get">
+    <div class="fields">
+        {% for field in filter_form %}
+            <div>
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+            </div>
+        {% endfor %}
+        <div><button class="btn" type="submit">適用</button></div>
+        <div><a class="btn" href="{% url 'welfare_activity:issue_list' %}">解除</a></div>
+    </div>
+</form>
+
+{% if issues %}
+<table class="list">
+    <thead>
+        <tr>
+            <th class="num"><a href="?{{ query_string }}&amp;sort={% if sort == 'id' %}-{% endif %}id">#</a></th>
+            <th class="nowrap"><a href="?{{ query_string }}&amp;sort={% if sort == 'tracker' %}-{% endif %}tracker">トラッカー</a></th>
+            <th class="nowrap"><a href="?{{ query_string }}&amp;sort={% if sort == 'status' %}-{% endif %}status">ステータス</a></th>
+            {% if board.has_project %}<th class="nowrap"><a href="?{{ query_string }}&amp;sort={% if sort == 'priority' %}-{% endif %}priority">優先度</a></th>{% endif %}
+            <th><a href="?{{ query_string }}&amp;sort={% if sort == 'subject' %}-{% endif %}subject">題名</a></th>
+            {% if board.has_project %}
+            <th class="nowrap">プロジェクト</th>
+            <th class="nowrap"><a href="?{{ query_string }}&amp;sort={% if sort == 'due_date' %}-{% endif %}due_date">期日</a></th>
+            <th class="nowrap">進捗</th>
+            {% endif %}
+            <th class="nowrap"><a href="?{{ query_string }}&amp;sort={% if sort == 'updated_at' %}-{% endif %}updated_at">更新日</a></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for issue in issues %}
+        <tr {% if not issue.is_open %}class="closed-row"{% endif %}>
+            <td class="num" data-label="#"><a href="{{ issue.get_absolute_url }}">{{ issue.number }}</a></td>
+            <td class="nowrap" data-label="トラッカー">{{ issue.tracker_label }}</td>
+            <td class="nowrap" data-label="ステータス"><span class="badge s-{{ issue.status_css }}">{{ issue.status }}</span></td>
+            {% if board.has_project %}<td class="nowrap p-{{ issue.priority_css }}" data-label="優先度">{{ issue.priority|default:"—" }}</td>{% endif %}
+            <td class="subject" data-label="題名"><a href="{{ issue.get_absolute_url }}">{{ issue.title }}</a></td>
+            {% if board.has_project %}
+            <td class="nowrap" data-label="プロジェクト">{% if issue.group_id %}<a href="{% url 'welfare_activity:project_detail' issue.group_id %}">{{ issue.group_name }}</a>{% else %}—{% endif %}</td>
+            <td class="nowrap" data-label="期日">{{ issue.due_date|date:"Y-m-d"|default:"—" }}</td>
+            <td class="nowrap" data-label="進捗">{% if issue.done_ratio is not None %}<span class="bar"><span style="width:{{ issue.done_ratio }}%"></span></span> {{ issue.done_ratio }}%{% else %}—{% endif %}</td>
+            {% endif %}
+            <td class="nowrap" data-label="更新日">{{ issue.updated_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% if is_paginated %}
+<p class="pager">
+    {% if page_obj.has_previous %}<a href="?{{ query_string }}&amp;sort={{ sort }}&amp;page={{ page_obj.previous_page_number }}">前へ</a>{% endif %}
+    {{ page_obj.number }} / {{ paginator.num_pages }} ページ（全 {{ paginator.count }} 件）
+    {% if page_obj.has_next %}<a href="?{{ query_string }}&amp;sort={{ sort }}&amp;page={{ page_obj.next_page_number }}">次へ</a>{% endif %}
+</p>
+{% else %}
+<p class="pager">全 {{ issues|length }} 件</p>
+{% endif %}
+
+{% elif board.has_data %}
+<p class="empty">条件に合うチケットはありません。</p>
+{% endif %}
+{% endblock %}
