@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}PVSYS | HirahiraRoom{% endblock %}
+
+{% block header %}
+<header style="background-color: #2c5aa0;">
+    <div class="container px-5 py-4">
+        <div class="text-center text-white">
+            <h1 class="h2 fw-bold mb-2">PVSYS</h1>
+            <p class="mb-0">{{ vision }}</p>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block contents %}
+<div class="container px-5 py-5">
+    <div class="list-group">
+        <!-- genba -->
+        <div class="list-group-item list-group-item-action">
+            <h5 class="mb-2">
+                <i class="fas fa-hard-hat me-2" style="color: #2c5aa0;"></i>
+                genba
+            </h5>
+            <p class="mb-2 text-muted">人の成長と会社の成長をつなぐプラットフォーム（プロトタイプ）</p>
+            <div class="mt-2">
+                <a href="{% url 'genba:about' %}" class="btn btn-sm btn-outline-primary me-2">案内</a>
+                <a href="{% url 'genba:concept' %}" class="btn btn-sm btn-outline-primary me-2">構想プレゼン</a>
+                <a href="{% url 'genba:demo' %}" class="btn btn-sm btn-outline-primary">デモ</a>
+            </div>
+        </div>
+
+        <!-- 社内活動 3つの構想 -->
+        <div class="list-group-item list-group-item-action">
+            <h5 class="mb-2">
+                <i class="fas fa-lightbulb me-2" style="color: #2c5aa0;"></i>
+                社内活動 3つの構想
+            </h5>
+            <p class="mb-2 text-muted">人と会社と社会をつなぐ、3つの構想</p>
+            <div class="mt-2">
+                <a href="{% url 'proposals:index' %}" class="btn btn-sm btn-outline-primary">開く</a>
+            </div>
+        </div>
+
+        <!-- 基本情報技術者試験 対策 -->
+        <div class="list-group-item list-group-item-action">
+            <h5 class="mb-2">
+                <i class="fas fa-graduation-cap me-2" style="color: #2c5aa0;"></i>
+                基本情報技術者試験 対策
+            </h5>
+            <p class="mb-2 text-muted">シラバス準拠の1問1答。分野ごとの正答率を集計し，苦手分野を重点的に出題</p>
+            <div class="mt-2">
+                <a href="{% url 'fe:index' %}" class="btn btn-sm btn-outline-primary me-2">ダッシュボード</a>
+                <a href="{% url 'fe:stats' %}" class="btn btn-sm btn-outline-primary">分野別正答率</a>
+            </div>
+        </div>
+
+        <!-- 福祉従事者の活動ページ -->
+        <div class="list-group-item list-group-item-action">
+            <h5 class="mb-2">
+                <i class="fas fa-hand-holding-heart me-2" style="color: #2c5aa0;"></i>
+                福祉従事者の活動ページ
+            </h5>
+            <p class="mb-2 text-muted">福祉従事者の勘を支える伴奏者となるプラットフォームの構想と活動の様子</p>
+            <div class="mt-2">
+                <a href="{% url 'welfare_activity:home' %}" class="btn btn-sm btn-outline-primary me-2">活動ページ</a>
+                <a href="{% url 'welfare_activity:slides' %}" class="btn btn-sm btn-outline-primary">構想資料</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

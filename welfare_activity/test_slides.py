@@ -10,7 +10,7 @@ class SlidesViewTests(TestCase):
         self.html = self.response.content.decode()
 
     def test_slides_page_is_under_the_activity_page(self):
-        self.assertEqual(reverse('welfare_activity:slides'), '/welfare/slides/')
+        self.assertEqual(reverse('welfare_activity:slides'), '/pvsys/welfare/slides/')
         self.assertEqual(self.response.status_code, 200)
         self.assertTemplateUsed(self.response, 'welfare_activity/slides.html')
 

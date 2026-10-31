@@ -1,8 +1,6 @@
 from django.test import TestCase
 from django.urls import reverse
 
-from accounts.models import CustomUser
-
 from . import concept_data
 
 
@@ -31,7 +29,3 @@ class IndexTests(TestCase):
         self.assertContains(res, f'href="https://hirahira-room.net{reverse("fe:index")}"')
         self.assertContains(res, f'href="https://hirahira-room.net{reverse("welfare_activity:slides")}"')
         self.assertNotContains(res, 'funitclub.org')
-
-    def test_home_links_here(self):
-        self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))
-        self.assertContains(self.client.get(reverse('home:home')), f'href="{reverse("proposals:index")}"')

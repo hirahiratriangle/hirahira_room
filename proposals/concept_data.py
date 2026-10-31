@@ -1,4 +1,4 @@
-"""3つの構想のページ（/proposals/）の内容。
+"""3つの構想のページ（/pvsys/proposals/）の内容。
 
 元は「社内活動 3つの構想.pptx」（2026年10月・全6枚）。文言・枚数・順番はプレゼンのまま写している。
 プレゼンを更新したら、ここも合わせて直す。
@@ -13,12 +13,13 @@
 - 'concept'：kicker・title・詳しくはこちらの帯（url）、左に目的のカード（purpose）、
   右に3つの項目（items）
 
-リンクはプレゼンと同じく本番の URL を絶対パスで持つ。
+リンクはプレゼンと同じく本番の URL を絶対パスで持つ。3つのページは /pvsys/ の下へ移したので、ここだけプレゼンと違う
+（プレゼンに残る古い URL は config/urls.py で転送する）。
 """
 
-GENBA_URL = 'https://hirahira-room.net/genba/about/'
-FE_URL = 'https://hirahira-room.net/fe/'
-WELFARE_URL = 'https://hirahira-room.net/welfare/slides/'
+GENBA_URL = 'https://hirahira-room.net/pvsys/genba/about/'
+FE_URL = 'https://hirahira-room.net/pvsys/fe/'
+WELFARE_URL = 'https://hirahira-room.net/pvsys/welfare/slides/'
 
 
 def strip_scheme(url):

@@ -8,7 +8,6 @@ from django.utils import timezone
 from django.utils.html import escape
 from django.views import View
 
-from accounts.models import CustomUser
 
 from . import body, content, github, tickets, views
 
@@ -580,20 +579,15 @@ class GitHubTokenTests(SimpleTestCase):
 
 
 class MountTests(ProjectBoardTestCase):
-    """hirahira_room の中で /welfare/ に付き、ログインなしで開ける（ミドルウェアを通して確かめる）。"""
+    """hirahira_room の中で /pvsys/welfare/ に付き、ログインなしで開ける（ミドルウェアを通して確かめる）。"""
 
     def test_every_page_opens_without_login(self):
         for name, args in (('home', ()), ('slides', ()), ('issue_list', ()), ('issue_detail', (1,)),
                            ('wbs', ()), ('gantt', ()), ('project_list', ())):
             with self.subTest(name):
                 url = reverse('welfare_activity:' + name, args=args)
-                self.assertTrue(url.startswith('/welfare/'))
+                self.assertTrue(url.startswith('/pvsys/welfare/'))
                 self.assertEqual(self.client.get(url).status_code, 200)
-
-    def test_home_links_here(self):
-        self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))
-        self.assertContains(
-            self.client.get(reverse('home:home')), 'href="{}"'.format(reverse('welfare_activity:home')))
 
 
 class WbsTests(BoardTestCase):
