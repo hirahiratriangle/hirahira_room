@@ -1285,9 +1285,9 @@ class CompanyKpiView(GenbaMixin, generic.TemplateView):
 
 
 class RoleKpiView(GenbaMixin, generic.TemplateView):
-    """経営の数字（マネジメント・リーダー・メンバー）。
+    """職掌とKPI（マネジメント・リーダー・メンバー）。
 
-    メンバーには、会社の KPI を絞って見せる（kpi.for_role）。
+    メンバーには自分の4職掌を現場ごとに出し、全社の数字は参考として下に置く（spec 011）。どれも本人の分だけで、他の人には見せない。
     マネジメントには自分の4職掌を主役に出し、会社の KPI は参考として下に置く（spec 009）。
     リーダーには担当する現場ごとに4職掌を出し、全社の数字は参考として下に置く（spec 010）。
 
@@ -1325,8 +1325,12 @@ class RoleKpiView(GenbaMixin, generic.TemplateView):
             context.update(heading='リーダーの職掌とKPI（案）', reference=reference, own_charts=own,
                            definitions=kpi.LEADER_DEFINITIONS, own_sites=[site_metrics(s) for s in sites])
         else:
-            functions, reference = kpi.for_role(self.audience), []
-            context['heading'] = '経営の数字'
+            user = self.request.user
+            sites = roles.member_sites(user).filter(is_archived=False)
+            context['panels'] = [{'site': s, 'functions': kpi.member_functions(s, user)} for s in sites]
+            own = [f for panel in context['panels'] for f in panel['functions']]
+            functions, reference = [], kpi.for_role('member')
+            context.update(heading='メンバーの職掌（案）', reference=reference, own_charts=own)
         visible = functions + reference + context.get('own_charts', [])
         context.update(functions=functions, charts=[f['chart'] for f in visible if f['chart']])
         if self.audience != 'management':

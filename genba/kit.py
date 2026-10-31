@@ -185,7 +185,7 @@ DEMO_ORGANIZATION = '架空の SI 会社です。チームが2つあり、それ
 # key：セッションに持つ値 ／ username：その立場の人 ／ place・point：説明ページの文言 ／ home：入ったときに開く画面
 DEMO_PERSONAS = [
     {'key': 'member', 'icon': 'fa-user', 'label': 'メンバー', 'username': 'demo_kimura', 'place': '保険金請求 基本設計',
-     'point': '入場から6日目。読めない資料があり、危険信号が出ている', 'home': 'genba:member_home'},
+     'point': '入場から6日目。読めない資料があり、危険信号が出ている。自分の職掌の状況も見られる', 'home': 'genba:member_home'},
     {'key': 'leader', 'icon': 'fa-user-friends', 'label': 'リーダー', 'username': 'demo_kobayashi',
      'place': '受発注システム刷新', 'point': 'メンバーの詰まりと、成長の確認待ちが届いている', 'home': 'genba:leader_home'},
     {'key': 'management', 'icon': 'fa-chart-bar', 'label': 'マネジメント', 'username': 'demo_kacho', 'place': 'すべての現場',

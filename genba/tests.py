@@ -1292,6 +1292,77 @@ class LeaderKpiTests(GenbaTestBase):
         self.assertContains(self.client.get(reverse('genba:role_kpi')), 'リーダーの職掌とKPI')
 
 
+class MemberFunctionTests(GenbaTestBase):
+    """メンバーの職掌（spec 011）"""
+
+    def setUp(self):
+        super().setUp()
+        self.other = CustomUser.objects.create_user('other', 'x@example.com', 'pass12345')
+        Membership.objects.create(site=self.site, user=self.other, joined_on=self.today)
+
+    def tile(self, name, user=None):
+        return next(t for f in kpi.member_functions(self.site, user or self.member) for t in f['tiles'] if t.name == name)
+
+    def test_page_shows_own_panel_first(self):
+        self.client.force_login(self.member)
+        res = self.client.get(reverse('genba:role_kpi'))
+        self.assertEqual([f['name'] for f in res.context['panels'][0]['functions']],
+                         ['現場の理解', '担当の遂行', '状況の共有', '自分の成長'])
+        body = res.content.decode()
+        self.assertLess(body.index('入場時チェックリスト'), body.index('会社のKPI（参考）'))
+
+    def test_no_unmet_label_or_target(self):
+        self.client.force_login(self.member)
+        res = self.client.get(reverse('genba:role_kpi'))
+        panel = res.context['panels'][0]['functions']
+        for function in panel:
+            for tile in function['tiles']:
+                self.assertEqual(tile.target, '')
+                self.assertIsNot(tile.met, False)
+
+    def test_only_own_records(self):
+        Question.objects.create(site=self.site, author=self.other, kind=Question.KIND_TASK, title='t',
+                                due_on=self.today - timedelta(days=3))
+        self.assertEqual(self.tile('予定日を過ぎた作業').value, '0件')
+        self.assertEqual(self.tile('予定日を過ぎた作業', self.other).value, '1件')
+
+    def test_not_shown_to_others(self):
+        self.client.force_login(self.leader)
+        res = self.client.get(reverse('genba:role_kpi'))
+        self.assertNotContains(res, '今出ている危険信号')
+        self.assertNotIn('member-weekly', res.content.decode())
+
+    def test_on_time_rate(self):
+        for done in (self.today, self.today + timedelta(days=2)):
+            Question.objects.create(site=self.site, author=self.member, kind=Question.KIND_TASK, title='t', due_on=self.today,
+                                    done_on=done, is_open=False)
+        self.assertEqual(self.tile('予定どおり終えた作業').value, '50%')
+
+    def test_monthly_work_state(self):
+        self.assertEqual(self.tile('今月の人月').value, 'まだ')
+        grade = Grade.objects.create(name='G1', standard_price=1, standard_cost=1)
+        MonthlyWork.objects.create(membership=self.site.memberships.get(user=self.member), month=self.today, grade=grade)
+        self.assertEqual(self.tile('今月の人月').value, '入れた')
+
+    def test_goal_stage_uses_latest(self):
+        self.assertEqual(self.tile('目標の段階').value, '目標がまだ')
+        Goal.objects.create(site=self.site, author=self.member, skill_item='デザイン', current_level=2, target_text='t',
+                            submitted_at=timezone.now(), next_text='次')
+        self.assertEqual(self.tile('目標の段階').value, '確認待ち')
+        self.assertEqual(self.tile('次の目標').value, 'ある')
+
+    def test_archived_site_has_no_panel(self):
+        self.site.is_archived = True
+        self.site.save()
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(reverse('genba:role_kpi')).context['panels'], [])
+
+    def test_seeded_page_renders(self):
+        call_command('seed_genba', stdout=StringIO())
+        self.client.post(reverse('genba:demo_switch', args=['member']))
+        self.assertContains(self.client.get(reverse('genba:role_kpi')), 'メンバーの職掌')
+
+
 class AboutTests(TestCase):
     def test_about_opens_without_login_and_links_to_app(self):
         res = self.client.get(reverse('genba:about'))

@@ -16,7 +16,7 @@ spec：[spec.md](spec.md)
 | URL | 画面 |
 |---|---|
 | `/genba/sites/<id>/work/` | 階級と人月。本人が自分の人月を入れ、チームが全員の行を読む |
-| `/genba/kpi/` | 経営の数字（メンバー・リーダー・マネジメント）。会社は `/genba/company/kpi/` へ移す |
+| `/genba/kpi/` | 職掌とKPI（メンバー・リーダー・マネジメント）。会社は `/genba/company/kpi/` へ移す |
 | `/genba/management/` | 現場ごとの標準売上と標準粗利 |
 | `/genba/company/kpi/` | 経営の結果（全社・業界ごと）を先頭に足す |
 

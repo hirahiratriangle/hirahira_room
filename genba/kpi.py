@@ -38,11 +38,11 @@ from datetime import date, timedelta
 
 from django.utils import timezone
 
-from . import growth, money
+from . import growth, kit, money, signals
 from .metrics import THRESHOLDS, WEEKLY_RATE_MIN, site_metrics
 from .models import (
-    KNOWLEDGE_CANDIDATE, VISIBILITY_COMPANY, Document, Goal, InterviewQuestion, KitProposal, Membership, Question, Site, Term,
-    week_start,
+    KNOWLEDGE_CANDIDATE, VISIBILITY_COMPANY, Document, Goal, InterviewQuestion, KitProposal, Membership, MonthlyWork, Question, Site, Term,
+    month_start, week_start,
 )
 
 # 期間：3か月ごとに6つ。今月を含む区切りを最後にして、さかのぼる。
@@ -135,12 +135,17 @@ class Period:
 
 @dataclass
 class Tile:
-    """KPI の1マス。met は目標に届いたか（数えられないときは None で、達成とも未達とも出さない）"""
+    """KPI の1マス。met は目標に届いたか（数えられないときは None で、達成とも未達とも出さない）。
+
+    status はメンバーの画面だけで使う言葉（済み・これから など）。あると達成・未達の代わりに出す。
+    メンバーの数字は本人が確かめるためのもので、採点に見えないよう未達の表示を使わない。
+    """
     name: str
     value: str
     detail: str
     target: str
     met: bool | None
+    status: str = ''
 
 
 def periods(today=None):
@@ -562,6 +567,111 @@ def leader_functions(site, user, today=None):
     }
 
     functions = [unblocking, developing, team, knowledge]
+    for function in functions:
+        function['rows'] = table_rows(function['chart'])
+    return functions
+
+
+def state(done, label='済み', waiting='これから'):
+    """メンバーの画面の状態。Tile の (met, status) を返す。まだのときも未達にはしない"""
+    return (True, label) if done else (None, waiting)
+
+
+def member_functions(site, user, today=None):
+    """メンバーの4職掌。その人自身の状況を、その人にだけ返す。
+
+    メンバーは担当の成果物をやり遂げ、そのために状況を早く見せる。ここの数字は評価のためではなく、本人が確かめるためのもの。
+    個人は運営指標ではなく成長で見るので（憲章 II・V）、リーダー・マネジメント・会社の画面には渡さない。
+
+    記録の量は数えない。用語や週報の件数を増やすほど良く見える数字は、書かされる道具になるため。
+    「やったか」「どの段階か」だけを見て、目標の数値も置かない。
+
+    上の立場へのつながり：現場の理解と状況の共有はリーダーの「詰まりの解消」「チームの運営」に、
+    人月は標準売上の出発点に、自分の成長はリーダーの確認・マネジメントの承認・会社のスキル台帳につながる。
+    """
+    today = today or timezone.localdate()
+    membership = site.memberships.get(user=user)
+    this_week = week_start(today)
+    weeks = [this_week - timedelta(weeks=n) for n in range(LEADER_WEEKS - 1, -1, -1)]
+
+    issues = list(site.questions.filter(author=user).exclude(stage='').prefetch_related('items'))
+    stages = []
+    for key, label in kit.STAGE_LABELS.items():
+        items = [i for q in issues if q.stage == key for i in q.items.all()]
+        stages.append((label, sum(1 for i in items if i.is_done), sum(1 for i in items if not i.is_done)))
+    done, left = sum(s[1] for s in stages), sum(s[2] for s in stages)
+    summary = site.summaries.filter(author=user).first()
+    submitted = bool(summary and summary.submitted_at)
+    met, status = state(bool(done + left) and not left)
+    summary_met, summary_status = state(submitted)
+    understanding = {
+        'name': '現場の理解', 'duty': '全体像と担当機能をつかみ、理解を形にする',
+        'tiles': [
+            Tile('入場時チェックリスト', show_percent(percent(done, done + left)), f'{done}項目 ／ {done + left}項目', '', met, status),
+            Tile('1週目のまとめ', '出した' if submitted else 'まだ',
+                 'リーダーの返しあり' if summary and summary.feedback_at else '', '', summary_met, summary_status),
+        ],
+        'chart_title': '段階ごとのチェック項目',
+        'chart': chart(f'member-check-{site.pk}', [s[0] for s in stages],
+                       [('済み', [s[1] for s in stages]), ('これから', [s[2] for s in stages])], CATEGORICAL, horizontal=True),
+    }
+
+    tasks = list(site.questions.filter(author=user, kind=Question.KIND_TASK, due_on__isnull=False))
+    finished = [q for q in tasks if not q.is_open and q.done_on]
+    on_time = sum(1 for q in finished if q.done_on <= q.due_on)
+    overdue = sum(1 for q in tasks if q.is_open and q.due_on < today)
+    late_met, late_status = state(not overdue, 'なし', '確かめる')
+    delivery = {
+        'name': '担当の遂行', 'duty': '自分の作業を予定どおりやり遂げ、遅れは早く伝える',
+        'tiles': [
+            Tile('予定どおり終えた作業', show_percent(percent(on_time, len(finished))), f'{on_time}件 ／ 終えた {len(finished)}件', '', None),
+            Tile('予定日を過ぎた作業', f'{overdue}件', '遅れの原因と見込みを書く', '', late_met, late_status),
+        ],
+        'chart_title': '自分の作業',
+        'chart': chart(f'member-task-{site.pk}', ['予定どおり', '遅れて完了', '進行中', '予定日を過ぎた'],
+                       [('件数', [on_time, len(finished) - on_time, len(tasks) - len(finished) - overdue, overdue])],
+                       ORDINAL_3[1:], horizontal=True),
+    }
+
+    weekly_done = not signals.missing_last_weekly(membership)
+    worked = MonthlyWork.objects.filter(membership=membership, month=month_start(today)).exists()
+    detected = signals.detected_count(signals.signals_for(user, site))
+    weekly_met, weekly_status = state(weekly_done)
+    work_met, work_status = state(worked)
+    sign_met, sign_status = state(not detected, 'なし', '確かめる')
+    submitted_weeks = set(site.documents.filter(kind=Document.KIND_WEEKLY, author=user, week_of__in=weeks)
+                          .values_list('week_of', flat=True))
+    sharing = {
+        'name': '状況の共有', 'duty': '読めないことや懸念を早く上げ、週報と人月を出す',
+        'tiles': [
+            Tile('先週の週報', '出した' if weekly_done else 'まだ', '', '', weekly_met, weekly_status),
+            Tile('今月の人月', '入れた' if worked else 'まだ', '', '', work_met, work_status),
+            Tile('今出ている危険信号', f'{detected}個', '', '', sign_met, sign_status),
+        ],
+        'chart_title': '週報を出した週',
+        'chart': chart(f'member-weekly-{site.pk}', [f'{w.month}/{w.day}' for w in weeks],
+                       [('週報', [1 if w in submitted_weeks else 0 for w in weeks])], ORDINAL_3[1:]),
+    }
+
+    goals = list(site.goals.filter(author=user))
+    latest = goals[-1] if goals else None
+    approved = bool(latest and latest.stage == Goal.STAGE_APPROVED)
+    goal_met, goal_status = state(approved, '承認済み')
+    planned = any(g.next_text for g in goals)
+    next_met, next_status = state(planned)
+    labels = list(Goal.STAGE_LABELS.items())
+    growing = {
+        'name': '自分の成長', 'duty': '目標を立て、行動と証拠で成長を説明する',
+        'tiles': [
+            Tile('目標の段階', latest.stage_label if latest else '目標がまだ', latest.skill_item if latest else '', '', goal_met, goal_status),
+            Tile('次の目標', 'ある' if planned else 'まだ', '', '', next_met, next_status),
+        ],
+        'chart_title': '目標の段階',
+        'chart': chart(f'member-stage-{site.pk}', [label for _, label in labels],
+                       [('件数', [sum(1 for g in goals if g.stage == key) for key, _ in labels])], ORDINAL_3[1:], horizontal=True),
+    }
+
+    functions = [understanding, delivery, sharing, growing]
     for function in functions:
         function['rows'] = table_rows(function['chart'])
     return functions
