@@ -20,7 +20,9 @@
 # 入れ、/static/revision.txt が今回のコミットを返すまで確かめる。返さなければ再起動する。
 # WhiteNoise は起動したときの静的ファイルを配るので、この印は「いま動いているコンテナの版」になる。
 #
-# マイグレーションは別に要る（deploy.txt の「マイグレーション」）。
+# マイグレーションは別に要る（deploy.txt の「マイグレーション」）。本番の DB は手元から届かないので、ここでは実行しない。
+# 忘れないよう、いま動いている版から今回のコミットまでに増えたマイグレーションを調べ、送る前と終わりに知らせる。
+# 版を調べられないときも、確かめるよう知らせる。
 
 set -eu
 cd "$(dirname "$0")"
@@ -30,6 +32,29 @@ if [ -n "$(git status --porcelain)" ]; then
     git status --short >&2
     exit 1
 fi
+
+# いま動いている版（/static/revision.txt）
+running_rev() { curl -s -m 30 "https://hirahira-room.net/static/revision.txt?t=$(date +%s)" | tr -d '[:space:]'; }
+
+# 増えるマイグレーションを調べる。git の知らない版が返ったら（印のない古い版など）調べられない
+OLD_REV="$(running_rev || true)"
+if git cat-file -e "${OLD_REV}^{commit}" 2>/dev/null; then
+    MIGRATIONS="$(git diff --name-only --diff-filter=A "$OLD_REV" HEAD -- '*/migrations/0*.py')"
+    MIGRATION_KNOWN=1
+else
+    MIGRATIONS=""
+    MIGRATION_KNOWN=""
+fi
+
+migration_notice() {
+    if [ -z "$MIGRATION_KNOWN" ]; then
+        echo "【要確認】動いている版を調べられないので、マイグレーションが要るか分かりません。showmigrations で確かめてください（deploy.txt の「マイグレーション」）。"
+    elif [ -n "$MIGRATIONS" ]; then
+        echo "【要マイグレーション】本番で migrate を実行してください（deploy.txt の「マイグレーション」）。済むまで新しい欄を読む画面がエラーになります。"
+        echo "$MIGRATIONS" | sed 's/^/  /'
+    fi
+}
+migration_notice
 
 ZIP="$(mktemp -d)/hirahira_room.zip"
 trap 'rm -rf "$(dirname "$ZIP")"' EXIT   # az を裏で動かすところで、止める処理も足して張り直す
@@ -108,7 +133,6 @@ done
 
 # 今回のコミットで動いているか。/static/revision.txt が今回の版を返すまで待つ（最大10分）。
 # 3分たっても古いままなら、コンテナが入れ替わっていないとみて一度だけ再起動する
-running_rev() { curl -s -m 30 "https://hirahira-room.net/static/revision.txt?t=$(date +%s)" | tr -d '[:space:]'; }
 i=0
 RESTARTED=""
 until [ "$(running_rev)" = "$REV" ]; do
@@ -139,3 +163,4 @@ until [ "$(curl -s -o /dev/null -m 30 -w '%{http_code}' "$URL")" = "200" ]; do
     sleep 15
 done
 echo "デプロイしました。サイトは応答しています。"
+migration_notice
