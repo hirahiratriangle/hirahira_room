@@ -1657,13 +1657,13 @@ class VisionTests(GenbaTestBase):
 
     def test_vision_on_every_role_page(self):
         self.client.force_login(self.member)
-        self.assertContains(self.client.get(reverse('genba:role_kpi')), '会社の成長は、人から始まる。')
+        self.assertContains(self.client.get(reverse('genba:role_kpi')), '現場の時間を、実りあるものにする。')
         self.client.force_login(self.leader)
         self.assertContains(self.client.get(reverse('genba:role_kpi')), '人の心を豊かにする')
         self.client.force_login(self.manager)
         self.assertContains(self.client.get(reverse('genba:role_kpi')), '社会全体を豊かにする')
         self.client.force_login(self.company)
-        self.assertContains(self.client.get(reverse('genba:company_kpi')), '会社の成長は、人から始まる。')
+        self.assertContains(self.client.get(reverse('genba:company_kpi')), '現場の時間を、実りあるものにする。')
 
     def test_company_sets_focus_and_it_reaches_goal_form(self):
         url = reverse('genba:focus_update')
@@ -1731,15 +1731,21 @@ class VisionTests(GenbaTestBase):
 class AboutTests(TestCase):
     def test_about_opens_without_login_and_links_to_app(self):
         res = self.client.get(reverse('genba:about'))
-        self.assertContains(res, '会社の成長は、人から始まる。')
+        self.assertContains(res, '現場の時間を、実りあるものにする。')
         self.assertContains(res, f'href="{reverse("genba:demo")}"')
         self.assertContains(res, 'デモ（genba）')
         self.assertContains(res, f'href="{reverse("genba:concept")}"')
 
-    def test_about_says_position_after_message(self):
+    def test_about_shows_bases_before_issues(self):
         html = self.client.get(reverse('genba:about')).content.decode()
-        self.assertLess(html.index(kit.ABOUT_MESSAGE), html.index(kit.ABOUT_POSITION))
-        self.assertLess(html.index(kit.ABOUT_POSITION), html.index('課題：'))
+        self.assertLess(html.index(kit.ABOUT_POSITION), html.index('GitHub'))
+        self.assertLess(html.index('ITSS'), html.index('課題：'))
+
+    def test_about_pairs_each_issue_with_its_answer(self):
+        html = self.client.get(reverse('genba:about')).content.decode()
+        self.assertEqual(html.count('genba では'), len(kit.ABOUT_ISSUES))
+        for name, _text, answer in kit.ABOUT_ISSUES:
+            self.assertLess(html.index(name), html.index(answer))
 
     def test_no_site_header(self):
         for name in ('about', 'concept', 'demo', 'portal'):
@@ -1829,13 +1835,13 @@ class PersonaTests(TestCase):
 class ConceptTests(TestCase):
     def test_all_slides_open_without_login(self):
         res = self.client.get(reverse('genba:concept'))
-        self.assertEqual(res.context['total'], 23)
+        self.assertEqual(res.context['total'], 21)
         for text in ('genbaは、GitHubを土台として実現する', '現場の経験が、個人の中に閉じている', '立場ごとの成長のharmony',
-                     '始める前に、6つを決める', '多様な人こそ会社の礎。\n行けるところまで、皆で行こう。', 'Pull Request のレビュー'):
+                     '始める前に、6つを決める', 'Pull Request のレビュー'):
             self.assertContains(res, text)
-        self.assertContains(res, 'id="slide-23"')
+        self.assertContains(res, 'id="slide-21"')
         self.assertContains(res, 'id="deck-next"')
         self.assertContains(res, '#2F6B5E')
         self.assertContains(res, 'genba 構想 · 立場ごとの機能')
-        self.assertContains(res, 'id="slide-22" class="slide slide-dark"')
+        self.assertContains(res, 'id="slide-21" class="slide slide-dark"')
         self.assertContains(res, f'href="{reverse("genba:about")}"')

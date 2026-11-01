@@ -65,16 +65,16 @@ class AboutView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(title=kit.ABOUT_TITLE, lead=kit.ABOUT_LEAD, message=kit.ABOUT_MESSAGE, position=kit.ABOUT_POSITION,
-                       issues=kit.ABOUT_ISSUES, about_roles=kit.ABOUT_ROLES)
+        context.update(title=kit.ABOUT_TITLE, lead=kit.ABOUT_LEAD, position=kit.ABOUT_POSITION, bases=kit.ABOUT_BASES,
+                       issues=kit.ABOUT_ISSUES)
         return context
 
 
 class ConceptView(generic.TemplateView):
-    """構想プレゼンのページ。「genba 構想.pptx」の全スライドを順に読めるようにする。
+    """構想プレゼンのページ。「genba 構想.pptx」をもとにしたスライドを順に読めるようにする。
 
-    内容は concept_data.SLIDES に持つ（文言はプレゼンのまま）。案内ページと同じく、genba の立場は使わない。
-    スライド番号はプレゼンと同じになるよう、並び順から振る。
+    内容は concept_data.SLIDES に持つ（ここを正として直している）。案内ページと同じく、genba の立場は使わない。
+    スライド番号は並び順から振る。
     """
     template_name = 'genba/concept.html'
 
@@ -945,7 +945,7 @@ class GoalCreateView(SiteMixin, generic.TemplateView):
 # ---------------------------------------------------------------------------
 
 def can_read_reach(user, goal):
-    """成長を読める人（構想書スライド9「目標と成長」の行）。
+    """成長を読める人（「目標と成長」の行）。
 
     - 現場チーム（同じ現場のメンバー・リーダー）：段階によらず全文を読める
     - マネジメント：確認が済んだものと承認したもの。ひとり現場は確認待ちのときから
@@ -1062,7 +1062,7 @@ class GoalReachView(GenbaMixin, generic.UpdateView):
 
 
 class GoalApprovalView(GenbaMixin, generic.UpdateView):
-    """成長の承認（マネジメント）。レベルと評価A〜Eを確定し、次の目標を示す（構想書スライド22）。
+    """成長の承認（マネジメント）。レベルと評価A〜Eを確定し、次の目標を示す。
 
     ひとり現場（確認できるリーダーがいない）では、確認も兼ねる。そのときは元請・顧客の声を残せる。
     自分の成長は承認できない。承認したものは、ここからは変えられない。
@@ -1175,7 +1175,7 @@ class LeaderHomeView(GenbaMixin, generic.TemplateView):
 # ---------------------------------------------------------------------------
 
 class ManagementView(GenbaMixin, generic.TemplateView):
-    """マネジメント：現場単位の運営指標と、成長の承認待ち（構想書スライド4・18）"""
+    """マネジメント：現場単位の運営指標と、成長の承認待ち"""
     template_name = 'genba/management.html'
     role_name = 'management'
 
@@ -1197,7 +1197,7 @@ class ManagementView(GenbaMixin, generic.TemplateView):
         context['money_total'] = rollup['total']
         # 階級の見直し：成長を階級につなぐ候補と、会社の決定を待っている提案
         context['grade_candidates'] = grades.candidates(self.request.user)
-        # 次の目標に合う現場へのアサイン（構想書スライド6・7の成長のループ）
+        # 次の目標に合う現場へのアサイン（成長のループ）
         context['assignment_candidates'] = kpi.assignment_candidates(self.request.user)
         context['active_sites'] = Site.objects.filter(is_archived=False)
         context['grade_waiting'] = (GradeReview.objects.filter(status=GradeReview.STATUS_OPEN)
@@ -1224,7 +1224,7 @@ class ManagementView(GenbaMixin, generic.TemplateView):
 # ---------------------------------------------------------------------------
 
 class CompanyView(GenbaMixin, generic.TemplateView):
-    """会社：一般化して公開された記録（ナレッジ資産）と、個人のスキル台帳（構想書スライド19・20）。
+    """会社：一般化して公開された記録（ナレッジ資産）と、個人のスキル台帳。
 
     台帳は承認した成長だけで作る。現場名ではなく業界を出し、記録の原文は出さない（証拠は名前だけ）。
     """

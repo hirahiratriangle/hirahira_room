@@ -103,7 +103,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.conc
     .slide table.bold-first td:first-child { font-weight: 700; }
 
     /* 表紙・結び・濃い背景のスライド */
-    .slide-cover, .slide-end, .slide-dark { background: var(--deck-dark); }
+    .slide-cover, .slide-dark { background: var(--deck-dark); }
     /* 表紙と結びは元と同じく左に緑の帯。表紙の題は元の比率（幅の約 6%）で1行に */
     .slide-cover { justify-content: flex-start; padding-top: 6%; border-left: .75em solid var(--deck-green-mid); }
     .slide-cover .cover-kicker { color: var(--deck-green-light); font-weight: 700; letter-spacing: .15em; font-size: .95em; }
@@ -112,8 +112,6 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.conc
     .slide-cover .cover-word { font-size: 1.45em; letter-spacing: .03em; }
     .slide-cover .cover-text { color: var(--deck-dark-sub); font-size: 1.05em; margin-bottom: 0; }
     .slide-cover .cover-meta { position: absolute; left: 6.6%; right: 6.6%; bottom: 12%; display: flex; justify-content: space-between; color: var(--deck-dark-sub); font-size: .9em; }
-    .slide-end { justify-content: center; border-left: .75em solid var(--deck-green-mid); }
-    .slide-end .end-title { color: var(--deck-dark-text); font-size: 3em; font-weight: 700; line-height: 1.45; margin: 0; white-space: pre-line; }
     .slide-dark .slide-kicker { color: var(--deck-green-light); }
     .slide-dark .slide-title { color: var(--deck-dark-text); }
     /* 22枚目：カードではなく、上に罫線を引いた項目。番号は本文の頭に並べる */
@@ -121,7 +119,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.conc
     .slide-dark .slide-card p { color: var(--deck-dark-text); font-size: 1em; }
     .slide-dark .slide-label { color: var(--deck-green-light); font-size: 1em; font-weight: 400; margin-bottom: 0; line-height: 1.5; }
     .slide-dark .slide-note { background: var(--deck-green-light); border-left: 0; border-radius: .25em; color: var(--deck-dark); font-weight: 700; }
-    .slide-cover .slide-foot, .slide-end .slide-foot, .slide-dark .slide-foot { color: var(--deck-dark-muted); }
+    .slide-cover .slide-foot, .slide-dark .slide-foot { color: var(--deck-dark-muted); }
 
     /* 章の扉 */
     .slide-part { background: var(--deck-green); justify-content: center; }
@@ -150,7 +148,6 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.conc
         .slide-cover .cover-lead { font-size: 1.1em; }
         .slide-cover .cover-word { font-size: 1.2em; }
         .slide-cover .cover-title, .slide-part .part-title { font-size: 1.8em; }
-        .slide-end .end-title { font-size: 1.5em; }
         .slide-cover { padding-top: 1.5em; }
         .slide-cover .cover-title { white-space: normal; }
     }
@@ -170,7 +167,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.conc
     </nav>
 
     {% for s in slides %}
-    <section id="slide-{{ forloop.counter }}" class="slide{% if s.kind == 'cover' %} slide-cover{% elif s.kind == 'part' %} slide-part{% elif s.kind == 'end' %} slide-end{% elif s.dark %} slide-dark{% endif %}" data-size="{{ s.size|unlocalize }}">
+    <section id="slide-{{ forloop.counter }}" class="slide{% if s.kind == 'cover' %} slide-cover{% elif s.kind == 'part' %} slide-part{% elif s.dark %} slide-dark{% endif %}" data-size="{{ s.size|unlocalize }}">
         {% if s.kind == 'cover' %}
             <div class="cover-kicker">{{ s.kicker }}</div>
             <div class="cover-title">{{ s.title }}</div>
@@ -182,8 +179,6 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.conc
             <div class="part-title">{{ s.title }}</div>
             <p class="part-text">{{ s.text }}</p>
             {% if s.lines %}<ul class="part-roles">{% for line in s.lines %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
-        {% elif s.kind == 'end' %}
-            <p class="end-title">{{ s.title }}</p>
         {% else %}
             <div class="slide-kicker">{{ s.kicker }}</div>
             <h2 class="slide-title">{{ s.title }}</h2>
@@ -225,7 +220,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.conc
             {% endfor %}
             </div>
         {% endif %}
-        {% if s.kind == 'slide' or s.kind == 'end' %}<div class="slide-foot"><span>{{ s.footer }}</span><span>{{ forloop.counter }}</span></div>{% endif %}
+        {% if s.kind == 'slide' %}<div class="slide-foot"><span>{{ s.footer }}</span><span>{{ forloop.counter }}</span></div>{% endif %}
     </section>
     {% endfor %}
 
