@@ -107,7 +107,7 @@ az webapp config appsettings set --name hirahira-room --resource-group hirahira 
 # 4. Actions タブの「基本情報の問題メール送信」→ Run workflow で疎通確認
 # ※ 手元で送るとき: python manage.py send_fe_mails --settings=config.settings_dev
 
-# 福祉従事者の活動ページのチケット（/pvsys/welfare/。funITclub/wg-welfare の Issue と org の Project 3 番を読む）
+# 福祉従事者の活動ページのチケット（/welfare/。funITclub/wg-welfare の Issue と org の Project 3 番を読む）
 # 無くても紹介と構想資料は開ける（チケットの欄に「GitHub に繋がっていません」と出る）
 # 1. GitHub で fine-grained token を作る（Resource owner = funITclub）
 #    Repository access = wg-welfare だけ、権限 = Issues: Read と Organization の Projects: Read だけ

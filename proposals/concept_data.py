@@ -1,4 +1,4 @@
-"""3つの構想のページ（/pvsys/proposals/）の内容。
+"""3つの構想のページ（/proposals/）の内容。
 
 元は「社内活動 3つの構想.pptx」（2026年10月・全6枚）に、「商流を上げる」を足した全7枚。
 プレゼンを更新したら、ここも合わせて直す。
@@ -21,14 +21,13 @@
 試算は事業計画として採点されるので、金額も広告も出さない。
 「はじめ方」の社の取り組みという書き方は、公開前に経営の了承が要る。依頼者の一人称は「わたし」。
 
-リンクの文字はプレゼンと同じく本番の URL で見せる。3つのページは /pvsys/ の下へ移したので、ここだけプレゼンと違う
-（プレゼンに残る古い URL は config/urls.py で転送する）。構想2だけは、対策アプリの前に構想ページ（/pvsys/fe/about/）を置いた。リンク先はサイト内のパス（path）にして、開発環境でも切れないようにする。
+リンクの文字はプレゼンと同じく本番の URL で見せる。構想2だけは、対策アプリの前に構想ページ（/fe/about/）を置いた。リンク先はサイト内のパス（path）にして、開発環境でも切れないようにする。
 """
 
 SITE = 'https://hirahira-room.net'
-GENBA_URL = SITE + '/pvsys/genba/about/'
-FE_URL = SITE + '/pvsys/fe/about/'
-WELFARE_URL = SITE + '/pvsys/welfare/slides/'
+GENBA_URL = SITE + '/genba/about/'
+FE_URL = SITE + '/fe/about/'
+WELFARE_URL = SITE + '/welfare/slides/'
 
 
 def site_path(url):

@@ -575,14 +575,14 @@ class GitHubTokenTests(SimpleTestCase):
 
 
 class MountTests(ProjectBoardTestCase):
-    """hirahira_room の中で /pvsys/welfare/ に付き、ログインなしで開ける（ミドルウェアを通して確かめる）。"""
+    """hirahira_room の中で /welfare/ に付き、ログインなしで開ける（ミドルウェアを通して確かめる）。"""
 
     def test_every_page_opens_without_login(self):
         for name, args in (('home', ()), ('slides', ()), ('issue_list', ()), ('issue_detail', (1,)),
                            ('wbs', ()), ('gantt', ()), ('project_list', ())):
             with self.subTest(name):
                 url = reverse('welfare_activity:' + name, args=args)
-                self.assertTrue(url.startswith('/pvsys/welfare/'))
+                self.assertTrue(url.startswith('/welfare/'))
                 self.assertEqual(self.client.get(url).status_code, 200)
 
 

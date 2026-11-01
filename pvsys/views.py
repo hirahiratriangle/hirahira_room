@@ -6,7 +6,7 @@ from proposals import concept_data
 class IndexView(generic.TemplateView):
     """会社（PVSYS）に関わるページをまとめた入り口。genba、3つの構想、基本情報、福祉従事者の活動ページへ案内する。
 
-    4つのページの URL はこの下（/pvsys/genba/ など）にある。移す前の URL からは config/urls.py で転送する。
+    入り口は /works/。公開ページには社名を出さないので、見出しもタブ名も「取り組み」とする。
     見出しのビジョンは文言を言い換えないよう、3つの構想の2枚目から取る。
     """
     template_name = 'pvsys/index.html'

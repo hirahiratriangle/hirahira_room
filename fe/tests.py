@@ -1184,8 +1184,8 @@ class LearnerIdTests(TestCase):
         enter(self.client, make_learner('boss'))
         self.assertNotContains(self.client.get(reverse('fe:stats')), reverse('fe:manage_list'))
         login_staff(self.client)
-        self.assertEqual(reverse('fe:manage_list'), '/pvsys/fe/console/questions/')
-        self.assertEqual(reverse('fe:manage_upload'), '/pvsys/fe/console/upload/')
+        self.assertEqual(reverse('fe:manage_list'), '/fe/console/questions/')
+        self.assertEqual(reverse('fe:manage_upload'), '/fe/console/upload/')
         self.assertRedirects(self.client.get('/fe/console/'), reverse('fe:manage_list'))
 
     def test_learning_pages_do_not_reveal_the_console(self):
@@ -3240,7 +3240,7 @@ class XPostTests(TestCase):
         self.assertIn('…\n（出典：令和7年度 基本情報技術者試験 科目A 問30）', post.text)
         self.assertIn('▶問題の続き・選択肢と解答はこちら', post.text)
         # 切るのは問題文だけで、URL とタグは残す。ページには問題文の全文を写す
-        self.assertIn('https://example.jp/pvsys/fe/x/{}/'.format(post.code), post.text)
+        self.assertIn('https://example.jp/fe/x/{}/'.format(post.code), post.text)
         self.assertTrue(post.text.endswith('#基本情報技術者 #FE #IPA'))
         self.assertEqual(post.stem, '長い問題文' * 80)
         # 収まる範囲で、できるだけ長く残す
@@ -3272,7 +3272,7 @@ class XPostTests(TestCase):
         from . import x_post
         post = self._post()
         self.assertLessEqual(x_post.weight(post.text), x_post.LIMIT)
-        self.assertIn('https://example.jp/pvsys/fe/x/{}/'.format(post.code), post.text)
+        self.assertIn('https://example.jp/fe/x/{}/'.format(post.code), post.text)
         self.assertIn('#基本情報技術者 #FE #IPA', post.text)
         self.assertIn('▶選択肢と解答はこちら', post.text)
         # 選択肢と正解は投稿に入れない
@@ -3407,7 +3407,7 @@ class XPostTests(TestCase):
     def test_unknown_code_shows_the_same_notice(self):
         response = self.client.get(reverse('fe:x_answer', args=['nothing1']))
         self.assertContains(response, 'この問題の公開は終わりました', status_code=404)
-        self.assertContains(response, 'https://example.jp/pvsys/fe/', status_code=404)
+        self.assertContains(response, 'https://example.jp/fe/', status_code=404)
 
     def test_unposted_post_is_not_shown(self):
         from . import x_post
@@ -3440,7 +3440,7 @@ class XPostTests(TestCase):
         self.assertContains(response, 'あなたの答え')
         self.assertContains(response, 'SSID はネットワークの名前。')
         self.assertContains(response, '学習モード')
-        self.assertContains(response, '<a href="https://example.jp/pvsys/fe/" class="x-cta">')
+        self.assertContains(response, '<a href="https://example.jp/fe/" class="x-cta">')
         self.assertContains(response, 'オリジナル問題')
 
     def test_official_question_shows_citation(self):

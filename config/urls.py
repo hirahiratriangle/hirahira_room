@@ -4,7 +4,6 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.contrib.auth.decorators import login_not_required
 from django.http import Http404
-from django.views.generic import RedirectView
 
 
 @login_not_required  # ログイン画面へ回さず、誰が開いても「ない」と返す
@@ -37,22 +36,17 @@ urlpatterns = [
 
     # 銀行業務検定 法務3級 対策アプリ
     path('bk_houmu3/', include('bk_houmu3.urls', namespace='bk_houmu3')),
-    # PVSYS（genba・3つの構想・基本情報・福祉従事者の活動ページをまとめた入り口。ログインなしで公開）
-    path('pvsys/', include('pvsys.urls', namespace='pvsys')),
-    # 基本情報技術者試験（FE）対策アプリ
-    path('pvsys/fe/', include('fe.urls', namespace='fe')),
-    # サイト直下の /fe/ でも同じアプリを開く。Logic Apps と GitHub Actions の定期実行もここを叩く。
-    # reverse の 'fe:' は /pvsys/fe/ を返す。テンプレートの {% url %} は開いている側の URL を保つ
-    path('fe/', include('fe.urls', namespace='fe_root')),
+    # 取り組み（genba・3つの構想・基本情報・福祉従事者の活動ページをまとめた入り口。ログインなしで公開）
+    # 公開ページの URL に社名を出さない。/pvsys/ からの転送も置かない
+    path('works/', include('pvsys.urls', namespace='pvsys')),
+    # 基本情報技術者試験（FE）対策アプリ。Logic Apps と GitHub Actions の定期実行もここを叩く
+    path('fe/', include('fe.urls', namespace='fe')),
     # genba（1現場1リポジトリの記録を4つの立場で使う）
-    path('pvsys/genba/', include('genba.urls', namespace='genba')),
+    path('genba/', include('genba.urls', namespace='genba')),
     # 社内活動の3つの構想（「社内活動 3つの構想.pptx」を順に読むページ）
-    path('pvsys/proposals/', include('proposals.urls', namespace='proposals')),
+    path('proposals/', include('proposals.urls', namespace='proposals')),
     # 福祉従事者の活動ページ（fun IT club WG-03。ログインなしで公開）
-    path('pvsys/welfare/', include('welfare_activity.urls', namespace='welfare_activity')),
-    # 移す前の URL はプレゼンの資料や共有済みのリンクに残っているので、新しい場所へ送る
-    re_path(r'^(?P<path>(?:genba|proposals|welfare)/.*)$', login_not_required(
-        RedirectView.as_view(url='/pvsys/%(path)s', permanent=True, query_string=True))),
+    path('welfare/', include('welfare_activity.urls', namespace='welfare_activity')),
 ]
 
 # メディアファイルの配信設定

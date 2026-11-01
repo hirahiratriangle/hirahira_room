@@ -22,33 +22,30 @@ class IndexTests(TestCase):
 
 
 class UrlTests(TestCase):
-    def test_pages_live_under_pvsys(self):
-        self.assertEqual(reverse('genba:about'), '/pvsys/genba/about/')
-        self.assertEqual(reverse('proposals:index'), '/pvsys/proposals/')
-        self.assertEqual(reverse('welfare_activity:home'), '/pvsys/welfare/')
-        self.assertEqual(reverse('fe:index'), '/pvsys/fe/')
+    def test_urls_do_not_show_the_company_name(self):
+        self.assertEqual(reverse('pvsys:index'), '/works/')
+        self.assertEqual(reverse('genba:about'), '/genba/about/')
+        self.assertEqual(reverse('proposals:index'), '/proposals/')
+        self.assertEqual(reverse('welfare_activity:home'), '/welfare/')
+        self.assertEqual(reverse('fe:index'), '/fe/')
 
-    def test_old_urls_redirect_without_login(self):
-        # プレゼンの資料に古い URL が載っている
-        for old, new in (('/genba/about/', '/pvsys/genba/about/'),
-                         ('/proposals/', '/pvsys/proposals/'),
-                         ('/welfare/slides/', '/pvsys/welfare/slides/')):
-            with self.subTest(old):
-                res = self.client.get(old)
-                self.assertRedirects(res, new, status_code=301)
+    def test_old_pvsys_urls_are_gone(self):
+        # 転送を置くと、社名の URL が生き続ける
+        for url in ('/pvsys/', '/pvsys/genba/about/', '/pvsys/proposals/', '/pvsys/fe/', '/pvsys/welfare/slides/'):
+            with self.subTest(url):
+                self.assertEqual(self.client.get(url).status_code, 404)
 
-    def test_redirect_keeps_query_string(self):
-        res = self.client.get('/genba/kit/?site=1')
-        self.assertRedirects(res, '/pvsys/genba/kit/?site=1', status_code=301, fetch_redirect_response=False)
+    def test_public_pages_do_not_show_the_company_name(self):
+        for name in ('pvsys:index', 'genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'fe:about',
+                     'fe:index', 'fe:stats', 'welfare_activity:home', 'welfare_activity:slides'):
+            with self.subTest(name):
+                self.assertNotContains(self.client.get(reverse(name)), 'pvsys', html=False)
 
-    def test_fe_opens_at_both_urls(self):
-        for url in ('/fe/', '/pvsys/fe/'):
+    def test_presentation_urls_open_without_login(self):
+        # プレゼンの資料に載っている URL
+        for url in ('/genba/about/', '/proposals/', '/welfare/slides/'):
             with self.subTest(url):
                 self.assertEqual(self.client.get(url).status_code, 200)
-
-    def test_fe_links_stay_on_the_url_being_opened(self):
-        self.assertContains(self.client.get('/fe/'), 'href="/fe/stats/"')
-        self.assertContains(self.client.get('/pvsys/fe/'), 'href="/pvsys/fe/stats/"')
 
     def test_scheduled_calls_are_not_redirected_at_root_url(self):
         # Logic Apps と GitHub Actions は転送をたどらないので、転送せずビューに届ける
@@ -59,7 +56,7 @@ class UrlTests(TestCase):
 
 class HomeTests(TestCase):
     def test_home_gathers_the_pages_here(self):
-        # genba・3つの構想・基本情報・福祉従事者は PVSYS にまとめたので、ホームには入り口だけを出す
+        # genba・3つの構想・基本情報・福祉従事者は「取り組み」にまとめたので、ホームには入り口だけを出す
         self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))
         res = self.client.get(reverse('home:home'))
         self.assertContains(res, f'href="{reverse("pvsys:index")}"')
