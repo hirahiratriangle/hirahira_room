@@ -49,6 +49,12 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     .title-under { position: absolute; left: 5.04em; right: 5.04em; top: 34.2em; height: 9.72em; }
     .title-meta { position: absolute; left: 5.04em; top: 48.8em; color: var(--deck-muted); font-size: 1em; margin: 0; }
     .slide-title.is-center { justify-content: center; padding-top: 0; padding-bottom: 3em; }
+    /* 表紙は濃い地に白の大きな題で、ページの入口として際立たせる */
+    .slide-title.is-cover { background: linear-gradient(120deg, var(--deck-ink) 0%, var(--deck-blue) 100%); border-left: .9em solid var(--deck-rule); }
+    .slide-title.is-cover .title-kicker { color: var(--deck-bar); letter-spacing: .08em; }
+    .slide-title.is-cover .title-lines { color: var(--deck-paper); font-size: 5.8em; height: auto; line-height: 1.5; margin-top: .2em; }
+    .slide-title.is-cover .title-meta { color: var(--deck-bar); font-size: 1.2em; left: 4.2em; top: 40.6em; }
+
     /* 結びは青地に白で、ほかのスライドから際立たせる */
     .slide-title.is-plain { background: var(--deck-blue); text-align: center; }
     .slide-title.is-plain .title-kicker { color: var(--deck-card); }
@@ -106,7 +112,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
         .routes { grid-template-rows: none; }
         .route { padding: 1.1em 0; }
         .title-kicker { font-size: 1.3em; }
-        .title-lines, .slide-title.is-plain .title-lines { font-size: 2.3em; line-height: 1.5; height: auto; margin: .3em 0 0; }
+        .title-lines, .slide-title.is-plain .title-lines, .slide-title.is-cover .title-lines { font-size: 2.3em; line-height: 1.5; height: auto; margin: .3em 0 0; }
         .title-sub { font-size: 1.35em; line-height: 1.6; margin-top: .6em; }
         .title-under, .concept-link, .concept-body { position: static; height: auto; }
         .title-under { margin-top: 2em; }
@@ -136,7 +142,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     <div class="deck-frame">
     {% for s in slides %}
     <div class="deck-page">
-    <section id="slide-{{ forloop.counter }}" class="slide slide-{{ s.kind }}{% if s.kind == 'title' and not s.words %} is-center{% endif %}{% if s.plain %} is-plain{% endif %}">
+    <section id="slide-{{ forloop.counter }}" class="slide slide-{{ s.kind }}{% if s.kind == 'title' and not s.words %} is-center{% endif %}{% if s.cover %} is-cover{% endif %}{% if s.plain %} is-plain{% endif %}">
         {% if s.kind == 'title' %}
             <div class="title-kicker">{{ s.kicker }}</div>
             <h1 class="title-lines">{% for line in s.lines %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</h1>
