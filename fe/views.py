@@ -266,8 +266,7 @@ class AboutView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(title=about_data.TITLE, lead=about_data.LEAD, message=about_data.MESSAGE, proofs=about_data.PROOFS,
-                       supports=about_data.SUPPORTS, steps=about_data.STEPS)
+        context.update(title=about_data.TITLE, lead=about_data.LEAD, message=about_data.MESSAGE, proofs=about_data.PROOFS)
         return context
 
 
