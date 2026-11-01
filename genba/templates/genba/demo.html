@@ -5,8 +5,7 @@
 {% block header %}
 <header style="background-color: #2c5aa0;">
     <div class="container px-5 py-4 text-center text-white">
-        <h1 class="h3 fw-bold mb-2">デモの説明</h1>
-        <p class="mb-0 small"><a href="{% url 'genba:about' %}" class="text-white">案内へ戻る</a></p>
+        <h1 class="h3 fw-bold mb-0">デモの説明</h1>
     </div>
 </header>
 {% endblock %}
@@ -22,12 +21,13 @@
         <h2 class="h5 mb-3" style="color: #2c5aa0;">立場を選ぶ</h2>
         <div class="row g-3">
             {% for p in personas %}
-            <div class="col-md-6"><div class="card h-100"><div class="card-body d-flex flex-column">
+            {% comment %}最初に見てほしいのはメンバーの立場。今どの立場で見ているかに関わらず、ここを強調する{% endcomment %}
+            <div class="col-md-6 d-flex"><div class="card w-100"{% if p.key == main_persona %} style="border: 2px solid #2c5aa0;"{% endif %}><div class="card-body d-flex flex-column">
                 <h3 class="h6 fw-bold"><i class="fas {{ p.icon }} me-2" style="color: #2c5aa0;"></i>{{ p.label }}<span class="fw-normal text-muted ms-2">{{ p.username }} ・ {{ p.place }}</span></h3>
                 <p class="small">{{ p.point }}</p>
                 <form method="post" action="{% url 'genba:demo_switch' p.key %}" class="mt-auto">
                     {% csrf_token %}
-                    <button class="btn btn-sm {% if p.key == current_persona %}btn-primary{% else %}btn-outline-primary{% endif %}">この立場で見る</button>
+                    <button class="btn btn-sm {% if p.key == main_persona %}btn-primary{% else %}btn-outline-primary{% endif %}">この立場で見る</button>
                 </form>
             </div></div></div>
             {% endfor %}

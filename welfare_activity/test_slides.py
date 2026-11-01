@@ -15,14 +15,14 @@ class SlidesViewTests(TestCase):
         self.assertTemplateUsed(self.response, 'welfare_activity/slides.html')
 
     def test_title_and_lead_are_shown(self):
-        self.assertContains(self.response, '福祉従事者支援プラットフォーム構想 | fun IT club')
+        self.assertContains(self.response, '福祉従事者支援プラットフォーム構想 | HirahiraRoom')
         self.assertContains(self.response, 'Assessment &amp; Planning')
         self.assertContains(self.response, '仕事と知見が循環する基盤をつくる')
 
     def test_every_slide_has_a_section(self):
-        """スライド 1 枚＝1 セクション。表紙を含めて 22 枚ぶん（元の pptx の 20 枚に、全文の資料から 2 枚を足した）。"""
-        self.assertEqual(self.html.count('<section class="slide'), 22)
-        for number in range(1, 23):
+        """スライド 1 枚＝1 セクション。表紙を含めて 14 枚ぶん（元の pptx の 20 枚に、全文の資料から 2 枚を足した）。"""
+        self.assertEqual(self.html.count('<section class="slide'), 14)
+        for number in range(1, 15):
             self.assertContains(self.response, 'id="s{}"'.format(number))
 
     def test_each_slide_heading_is_shown(self):
@@ -32,50 +32,37 @@ class SlidesViewTests(TestCase):
             'ITの目的を「効率化」から「創発」へ',
             '従事者の勘を支える伴奏者となるプラットフォームをつくる。',
             'LOOP：仕事を「回り続ける構造」として捉える',
-            'Human-on-the-Loop：従事者はLOOP全体を監督する',
             '蓄積するのは「データ」ではなく「知見」',
             '知見バンク＝知見を学習したモデル',
-            '医療では実現している：NYUTron',
-            '従事者がほぼ無料で使い、モデルが育つ',
-            '参考：Indeedの成長モデル',
-            'Indeedモデルから何を借りるか',
+            '医療では始まっている：NYUTron',
             'アーキテクチャの考え方',
-            'PoCは0円で始められる',
-            'サビ管1万人で、年 約1,350万円',
-            '規模ごとの設備費',
-            '費用は広告で賄う',
-            '従来の業務システムとの違い',
+            '手持ちの機材で、一人から始められる',
             '成長する仕事の基盤をつくる。',
-            '次に詰めるべき10の論点',
+            '次に詰めるべき9の論点',
             'ITエンジニアの仕事の意義が変わる',
         ]
         for heading in headings:
             self.assertContains(self.response, heading)
 
     def test_each_slide_keeps_its_kicker(self):
-        for kicker in ['構想共有・ディスカッション資料', '出発点は従事者', '同じ構造の専門職',
+        for kicker in ['構想資料', '出発点は従事者', '同じ構造の専門職',
                        '問題意識', '構想の核心', 'Assessment &amp; Planning Support Kit',
-                       '役割の再設計', '知見とは', 'プラットフォームの中核', '先行事例',
-                       '普及と事業のモデル', '事例', '本構想への応用', 'エンジニアリング',
-                       'インフラ', 'インフラ（事業が軌道に乗ったとき）', 'インフラ（小さく始めて育てる）',
-                       '収益モデル', '比較', '最大の設計思想', '論点', 'ITエンジニアの矜持']:
+                       '知見とは', 'プラットフォームの中核', '先行事例',
+                       'エンジニアリング', 'インフラ', '最大の設計思想', '論点', 'ITエンジニアの矜持']:
             self.assertContains(self.response, '<p class="kicker">{}</p>'.format(kicker))
 
-    def test_monetization_keeps_its_cautions(self):
-        """収益の話には、広告に使わないものと、未検証・人件費別の但し書きを必ず添える。"""
-        for text in ['知見そのものは売らない', '個人情報・支援内容・アセスメント結果はターゲティングに使わない',
-                     '広告単価・掲載数は未検証', '人件費を含めると、必要な水準はこれより上がる',
-                     '広告だけで設備費と人件費を賄えるか']:
-            self.assertContains(self.response, text)
+    def test_has_no_monetization(self):
+        """構想3は小さな事業体の社会貢献なので、収益と費用の試算は載せない。"""
+        for text in ['広告', '収益', '万円', 'Indeed']:
+            self.assertNotContains(self.response, text)
 
     def test_speaker_notes_are_shown_as_supplements(self):
         """発表者ノートがあるスライドは、補足として本文の下に出す。"""
-        self.assertEqual(self.html.count('class="note-label"'), 17)
-        self.assertContains(self.response, '構想を共有し、論点について意見をいただく場として進めます。')
+        self.assertEqual(self.html.count('class="note-label"'), 11)
         self.assertContains(self.response, '主旋律を奏でるのは、いつも従事者自身です。')
 
     def test_tables_scroll_sideways_on_narrow_screens(self):
-        self.assertEqual(self.html.count('<div class="table-wrap">'), 4)
+        self.assertEqual(self.html.count('<div class="table-wrap">'), 1)
 
     def test_is_mobile_friendly(self):
         self.assertContains(self.response, 'name="viewport"')
@@ -86,9 +73,9 @@ class SlidesViewTests(TestCase):
                        '#B5761A', '#EEF1F2', '#E4F1EF', '#FCF1DE', '#5B6B70']:
             self.assertContains(self.response, colour)
 
-    def test_has_a_close_button(self):
-        """「閉じる」はタブを閉じる。閉じられないときは活動ページへ移る。"""
-        self.assertContains(self.response, 'id="close-tab" href="{}"'.format(reverse('welfare_activity:home')))
+    def test_has_no_close_button(self):
+        """別タブで開く資料なので、戻る操作や閉じる操作は置かない。"""
+        self.assertNotContains(self.response, 'close-tab')
 
     def test_has_slide_navigation(self):
         """プレゼン風のページ送り。"""

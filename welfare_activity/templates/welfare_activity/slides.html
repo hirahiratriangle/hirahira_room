@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ wg.slides_title }} | fun IT club</title>
+    <title>{{ wg.slides_title }} | HirahiraRoom</title>
     <style>
         /*
          * 配色・字送りは元の pptx（福祉従事者支援プラットフォーム構想.pptx）から抽出した値。
@@ -144,8 +144,6 @@
         .loop-back { font-size: .85rem; font-weight: 700; color: var(--teal); text-align: center; margin: .5rem 0 0; }
 
         /* 介入のボタン列 */
-        .actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; margin: 0; padding: 0; list-style: none; }
-        .actions li { background: var(--amber); color: #fff; font-weight: 700; text-align: center; border-radius: .45rem; padding: .6rem .4rem; }
 
         /* データと知見の対比 */
         .contrast { display: grid; gap: .5rem; }
@@ -178,7 +176,7 @@
         /* 長い語を入れる円環は、丸ではなく角丸の札にする */
         .ring.labels li { width: 36%; aspect-ratio: auto; border-radius: .5rem; padding: .4rem .3rem; font-size: clamp(.62rem, 2.5vw, .8rem); }
 
-        /* ---- 大きな数字のカード（インフラ・収益） ---- */
+        /* ---- 大きな数字のカード（インフラ） ---- */
         .hero { display: flex; flex-direction: column; justify-content: center; text-align: center; }
         .hero .card-head { color: var(--mint); }
         .hero-num { color: var(--amber); font-size: 2.6rem; font-weight: 700; line-height: 1.25; margin: .2rem 0 .4rem; }
@@ -293,10 +291,7 @@
         }
         .nav-btn:hover { background: #D3E8E5; }
         .nav-btn:disabled { opacity: .35; cursor: default; }
-        .nav-back { font-size: .8rem; font-weight: 700; color: var(--muted); text-decoration: none; white-space: nowrap; }
-        .nav-back:hover { text-decoration: underline; }
         .counter { font-size: .8rem; font-weight: 700; color: var(--muted); margin: 0 auto; letter-spacing: .06em; }
-        body.tone-navy .nav-back, body.tone-teal .nav-back { color: var(--deep-text); }
         body.tone-navy .counter, body.tone-teal .counter { color: var(--deep-text); }
         .dots { display: none; gap: .3rem; }
         .dot { width: .45rem; height: .45rem; border-radius: 50%; background: var(--ring); border: 0; padding: 0; cursor: pointer; }
@@ -305,6 +300,9 @@
         /* no-script のときはスライドを区切り線で並べる */
         .slide + .slide { border-top: 1px solid var(--rule); margin-top: 2rem; padding-top: 2rem; }
         .js .slide + .slide { border-top: 0; margin-top: 0; padding-top: 0; }
+        /* 内容が画面より短いスライドは、下に余白が寄らないよう上下の中央に置く。長いスライドは上から流れる */
+        .js .stage { display: flex; flex-direction: column; }
+        .js .slide.is-current { width: 100%; margin-top: auto; margin-bottom: auto; }
 
         /* ---- 画面が広いとき：元スライドの段組みに戻す ---- */
         @media (min-width: 48rem) {
@@ -324,7 +322,6 @@
             .arrow-dot { transform: none; }
             .steps3 { grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; }
             .steps3 .arrow { align-self: center; }
-            .actions { grid-template-columns: repeat(5, 1fr); }
             .contrast .card { grid-template-columns: 9rem 1fr; align-items: center; }
             .tasks { grid-template-columns: repeat(4, 1fr); }
 
@@ -349,14 +346,11 @@
 
     <section class="slide tone-navy cover" id="s1" data-tone="navy" aria-label="スライド 1">
         <span class="orbit" aria-hidden="true"></span>
-        <p class="kicker">構想共有・ディスカッション資料</p>
-        <h1><span class="br">福祉従事者向け</span><span class="br">Assessment &amp; Planning</span><span class="br">Platform</span></h1>
+        <p class="kicker">構想資料</p>
+        <h1><span class="br">福祉従事者の勘を支える</span><span class="br">伴奏者をつくる</span></h1>
         <p class="lead">仕事と知見が循環する基盤をつくる</p>
-        <p class="byline">平野 正輝　｜　2026年9月27日　v2</p>
-        <div class="note">
-            <span class="note-label">補足</span>
-            <p>本日は結論を出す場ではなく、構想を共有し、論点について意見をいただく場として進めます。</p>
-        </div>
+        <p class="byline">Assessment &amp; Planning Platform</p>
+        <p class="byline">平野 正輝　｜　2026年11月</p>
     </section>
 
     <section class="slide" id="s2" aria-label="スライド 2">
@@ -372,21 +366,21 @@
                 <p class="card-label">主な仕事</p>
                 <p class="card-body">アセスメント／個別支援計画の作成／モニタリングと見直し／スタッフへの助言</p>
                 <p class="card-label amber">抱えがちな負担</p>
-                <p class="card-body">書類作成に追われる／判断を一人で抱える／経験が個人の中に留まる</p>
+                <p class="card-body">判断を一人で抱える／経験が個人の中に留まる</p>
             </div>
             <div>
                 <p class="sub">この構想で従事者が得るもの</p>
-                <div class="row"><span class="chip">時間</span><span class="row-text">書類に追われる時間が減り、利用者と向き合う時間が増える</span></div>
+                <div class="row"><span class="chip">見立て</span><span class="row-text">利用者への見立てが深まり、支援の質が上がる</span></div>
                 <div class="row"><span class="chip">裏付け</span><span class="row-text">一人で抱えていた判断に、ほかの実践から得た知見という裏付けができる</span></div>
                 <div class="row"><span class="chip">継承</span><span class="row-text">自分の経験が知見として残り、次の支援や他の従事者の役に立つ</span></div>
-                <div class="row warm"><span class="chip amber">主体性</span><span class="row-text">判断・承認するのは従事者自身。LLMは仕事を担い、従事者が監督する</span></div>
+                <div class="row warm"><span class="chip amber">主体性</span><span class="row-text">判断・承認するのは従事者自身。AIは情報の整理と案の作成を担う</span></div>
                 <p class="sub" style="margin:1rem 0 .2rem">当プラットフォームは福祉従事者の伴奏者を目指す。</p>
                 <p class="card-body">主旋律を奏でるのは、いつも従事者自身である。</p>
             </div>
         </div>
         <div class="note">
             <span class="note-label">補足</span>
-            <p>まず前提として、サビ管は障害福祉サービスの事業所で個別支援計画の作成に責任を持つ専門職です。指定基準で事業所への配置が義務付けられており、国家試験ではなく実務経験と研修修了によって就く任用資格です。つまり制度上、計画の責任はサビ管というポストにあります。この構想の出発点は、従事者自身が得る価値にあります。書類に追われる時間を利用者と向き合う時間へ。一人の判断に知見の裏付けを。自分の経験を次に残す。そして判断の主体は従事者のままです。当プラットフォームは福祉従事者の伴奏者を目指します。主旋律を奏でるのは、いつも従事者自身です。</p>
+            <p>まず前提として、サビ管は障害福祉サービスの事業所で個別支援計画の作成に責任を持つ専門職です。指定基準で事業所への配置が義務付けられており、実務経験と研修修了によって就く任用資格です。つまり制度上、計画の責任はサビ管というポストにあります。この構想の出発点は、従事者自身が得る価値にあります。利用者への見立てを深める。一人の判断に知見の裏付けを。自分の経験を次に残す。そして判断の主体は従事者のままです。当プラットフォームは福祉従事者の伴奏者を目指します。主旋律を奏でるのは、いつも従事者自身です。</p>
         </div>
     </section>
 
@@ -439,24 +433,24 @@
             <span class="arrow-dot" aria-hidden="true">→</span>
             <div class="card teal">
                 <p class="card-head big teal">LLM以後のIT</p>
-                <p class="card-sub teal">仕事そのものをLLMが担う</p>
+                <p class="card-sub teal">情報の整理と案の作成をLLMが担う</p>
                 <ul>
                     <li>情報を整理する・状況を解釈する</li>
-                    <li>仮説を立てる・計画を組み立てる</li>
-                    <li>結果を評価し、次の行動を考える</li>
+                    <li>仮説の案を立てる・計画の案を組み立てる</li>
+                    <li>結果を整理し、次の行動の案を示す</li>
                     <li class="strong">その仕事から新しい知見が生まれ、次の仕事へ戻る</li>
                 </ul>
             </div>
         </div>
         <div class="note">
             <span class="note-label">補足</span>
-            <p>LLMは既存業務を速くするだけでなく、これまで人間が担ってきた判断・構成の仕事そのものを実行できる。その仕事から知見が生まれ、次に戻る環境を設計することに「創発」の可能性がある。</p>
+            <p>LLM（大規模言語モデル）は、文章を読み書きするAIです。この資料ではLLMと書きます。既存業務を速くするだけでなく、情報の整理や案の作成を担える。その仕事から知見が生まれ、次に戻る環境を設計することに「創発」の可能性がある。</p>
         </div>
     </section>
 
     <section class="slide tone-teal statement" id="s5" data-tone="teal" aria-label="スライド 5">
         <p class="kicker">構想の核心</p>
-        <h2><span class="br">福祉従事者の仕事をLLMに担わせ、</span><span class="br">LOOPから生まれる知見を学習し続けることで、</span><span class="br">従事者の勘を支える伴奏者となるプラットフォームをつくる。</span></h2>
+        <h2><span class="br">情報の整理と案の作成をLLMが担い、</span><span class="br">LOOPから生まれる知見を学習し続けることで、</span><span class="br">従事者の勘を支える伴奏者となるプラットフォームをつくる。</span></h2>
         <div class="grid three">
             <div class="card white">
                 <p class="card-head teal">対象</p>
@@ -479,7 +473,7 @@
         <h2>LOOP：仕事を「回り続ける構造」として捉える</h2>
         <div class="grid two">
             <div style="position:relative">
-                <ol class="ring nodes" aria-label="LLMが担うLOOP">
+                <ol class="ring nodes" aria-label="従事者が判断するLOOP">
                     <li style="--x:50%;--y:12%">情報収集</li>
                     <li style="--x:76.9%;--y:23.1%">アセス<br>メント</li>
                     <li style="--x:88%;--y:50%">仮説形成</li>
@@ -489,50 +483,26 @@
                     <li style="--x:12%;--y:50%">再評価</li>
                     <li style="--x:23.1%;--y:23.1%">次の<br>アセス<br>メント</li>
                 </ol>
-                <p class="ring-center" aria-hidden="true">LLMが<br>担うLOOP</p>
+                <p class="ring-center" aria-hidden="true">従事者が<br>判断するLOOP</p>
             </div>
             <div>
                 <p class="sub">ポイント</p>
-                <p class="lead-line" style="margin-top:0">LLMをLOOPの「一部」に置くのではない。</p>
-                <p class="card-body">LOOPそのものを、LLMが担える仕事として設計する。</p>
+                <p class="lead-line" style="margin-top:0">LOOP全体にLLMが伴奏する。</p>
+                <p class="card-body">情報の整理と案の作成をLLMが担い、判断は従事者が行う。</p>
                 <p class="lead-line">LOOPを回した結果から得られた知見を、次のLOOPに戻す。</p>
                 <p class="card-body">従事者は必要なところで確認・修正・判断する。</p>
                 <div class="card warm" style="margin-top:1.2rem">
-                    <p class="card-body">「実践」だけは現場の従事者が行う。それ以外の工程をLLMが担い、従事者が監督する。</p>
+                    <p class="card-body">「実践」と判断は現場の従事者が行う。</p>
                 </div>
             </div>
         </div>
         <div class="note">
             <span class="note-label">補足</span>
-            <p>単なる文書作成支援ではなく、アセスメントから評価・再評価までの仕事全体をLOOPとして扱う。</p>
+            <p>アセスメントから評価・再評価までの仕事全体をLOOPとして扱う。</p>
         </div>
     </section>
 
     <section class="slide" id="s7" aria-label="スライド 7">
-        <p class="kicker">役割の再設計</p>
-        <h2>Human-on-the-Loop：従事者はLOOP全体を監督する</h2>
-        <div class="grid two">
-            <div class="card">
-                <p class="card-head big muted">Human-in-the-Loop</p>
-                <p class="card-body">人間が仕事を行い、<br>AIがその一部を支援する</p>
-            </div>
-            <div class="card teal">
-                <p class="card-head big teal">Human-on-the-Loop（本構想）</p>
-                <p class="card-body">LLMが仕事を行い、<br>従事者がLOOP全体を監督する</p>
-            </div>
-        </div>
-        <p class="sub plain" style="margin-top:1.4rem">従事者が介入するのは、必要なときだけ</p>
-        <ul class="actions">
-            <li>修正する</li>
-            <li>判断する</li>
-            <li>差し戻す</li>
-            <li>例外処理する</li>
-            <li>承認する</li>
-        </ul>
-        <p class="foot" style="font-size:.88rem">課題：「従事者による確認」を単なる承認作業（ハンコ）にしないこと</p>
-    </section>
-
-    <section class="slide" id="s8" aria-label="スライド 8">
         <p class="kicker">知見とは</p>
         <h2>蓄積するのは「データ」ではなく「知見」</h2>
         <ol class="chain" aria-label="知見の要素">
@@ -564,7 +534,7 @@
         </div>
     </section>
 
-    <section class="slide" id="s9" aria-label="スライド 9">
+    <section class="slide" id="s8" aria-label="スライド 8">
         <p class="kicker">プラットフォームの中核</p>
         <h2>知見バンク＝知見を学習したモデル</h2>
         <div class="grid two wide-right">
@@ -601,32 +571,32 @@
                     </div>
                 </div>
                 <div class="bar">
-                    <p>正解を出すのではなく、従事者の勘を支える。誤った知見はコーパスで訂正し、次の学習に反映する</p>
+                    <p>従事者の勘を支える。誤った知見はコーパスで訂正し、次の学習に反映する</p>
                 </div>
             </div>
         </div>
         <div class="note">
             <span class="note-label">補足</span>
-            <p>知見バンクはデータベースではなく、知見を学習したモデルそのもの。匿名化・構造化した知見を知見コーパスに集め、モデルが継続的に学習することで、経験を積んだ従事者の勘に近い推論ができるようになる。福祉に正解はない。モデルは正解を出すのではなく、従事者の勘を支える。具体的な条件や例外は、コーパスの参照で補う。</p>
+            <p>知見バンクは、知見を学習したモデルそのもの。匿名化・構造化した知見を知見コーパスに集め、モデルが継続的に学習することで、経験を積んだ従事者の勘に近い推論ができるようになる。福祉に正解はない。モデルは従事者の勘を支える。具体的な条件や例外は、コーパスの参照で補う。</p>
         </div>
     </section>
 
-    <section class="slide" id="s10" aria-label="スライド 10">
+    <section class="slide" id="s9" aria-label="スライド 9">
         <p class="kicker">先行事例</p>
-        <h2>医療では実現している：NYUTron</h2>
+        <h2>医療では始まっている：NYUTron</h2>
         <div class="grid two">
             <div class="card teal">
                 <p class="card-head big teal">NYU Langone Health（米国）</p>
                 <div class="row bare"><span class="chip">学習</span><span class="row-text">自院の臨床ノート約725万件（約41億語）で学習した、約1億パラメータの言語モデル</span></div>
                 <div class="row bare"><span class="chip">精度</span><span class="row-text">再入院・院内死亡・在院日数などの予測で、従来の予測モデルを上回った</span></div>
-                <div class="row bare"><span class="chip">運用</span><span class="row-text">2022年、電子カルテと連携して院内で前向きに運用</span></div>
+                <div class="row bare"><span class="chip">検証</span><span class="row-text">2022年、電子カルテと連携した前向き試験で性能を確認（介入なし）</span></div>
                 <p class="lead-line">小さなモデルでも、自前の記録から学べば効く</p>
             </div>
             <div>
                 <p class="sub amber">ただし福祉は医療と違う</p>
                 <div class="card warm" style="margin-bottom:.6rem">
                     <p class="card-head">正解はない。勘を支える</p>
-                    <p class="card-body">医療は「再入院したか」という正解を予測する。福祉に正解はない。モデルは答えを出すのではなく、従事者の勘を支え、気づきをもたらす</p>
+                    <p class="card-body">医療は「再入院したか」という正解を予測する。福祉に正解はない。モデルは従事者の勘を支え、気づきをもたらす</p>
                 </div>
                 <div class="card warm">
                     <p class="card-head">記録の標準化と量</p>
@@ -637,112 +607,17 @@
         <p class="foot">出典：Jiang et al., "Health system-scale language models are all-purpose prediction engines", Nature (2023)</p>
         <div class="note">
             <span class="note-label">補足</span>
-            <p>現場の記録をモデルに学習させるという考え方は、医療ではすでに実現している。NYU Langone HealthのNYUTronは、自院の臨床ノート約725万件（約41億語）で学習した約1億パラメータのBERTモデルで、再入院などの予測で従来モデルを上回り、2022年には電子カルテと連携した前向き運用も行った。小さなモデルでも自前の記録で効くという点は追い風になる。一方で学習量は大きく、福祉の初期の知見コーパスはこれより桁違いに小さい。また福祉は医療と違い正解がない。福祉のモデルは正解を予測するのではなく、従事者の勘を支える。そのためにも記録の標準化が鍵になる。</p>
+            <p>現場の記録をモデルに学習させるという考え方は、医療ではすでに始まっている。NYU Langone HealthのNYUTronは、自院の臨床ノート約725万件（約41億語）で学習した約1億パラメータのBERTモデルで、再入院などの予測で従来モデルを上回り、2022年には電子カルテと連携した前向き試験で性能を確かめた。介入のない試験なので、患者の転帰が良くなるかは別に確かめる必要がある。小さなモデルでも自前の記録で効くという点は追い風になる。一方で学習量は大きく、福祉の初期の知見コーパスはこれより桁違いに小さい。また福祉は医療と違い正解がない。福祉のモデルは従事者の勘を支える。そのためにも記録の標準化が鍵になる。</p>
         </div>
     </section>
 
-    <section class="slide" id="s11" aria-label="スライド 11">
-        <p class="kicker">普及と事業のモデル</p>
-        <h2>従事者がほぼ無料で使い、モデルが育つ</h2>
-        <div class="grid two">
-            <div style="position:relative">
-                <ol class="ring nodes labels" aria-label="普及の循環">
-                    <li class="amber" style="--x:50%;--y:12%">従事者が<br>ほぼ無料で利用</li>
-                    <li style="--x:80%;--y:31%">利用者基盤の<br>形成</li>
-                    <li style="--x:80%;--y:69%">LOOPの蓄積</li>
-                    <li style="--x:50%;--y:88%">知見の学習・<br>モデルが育つ</li>
-                    <li style="--x:20%;--y:69%">プラットフォーム<br>価値の増大</li>
-                    <li style="--x:20%;--y:31%">他の専門職へ<br>拡大</li>
-                </ol>
-                <p class="ring-center" aria-hidden="true"><span>↻</span></p>
-            </div>
-            <div>
-                <p class="sub">B2Bではなく個人から</p>
-                <p class="card-body">サビ管が自分の仕事のために使い始める。事業者の大規模導入やIT予算・調達を最初の条件にしない。ただし使う場面は事業所の業務の中。事業所の規程・利用者の同意との両立を設計の前提にする。</p>
-                <p class="sub" style="margin-top:1rem">収益：広告</p>
-                <p class="card-body">収益は広告で得る。広告主は求人を出したい事業所や、事業所の備品を扱う事業者など。個人情報・支援内容はターゲティングに使わない。</p>
-                <p class="sub amber" style="margin-top:1rem">商品化するのは知見ではない</p>
-                <p class="card-body">知見そのものは売らない。従事者に無料で使われ続けることが、広告の価値になる。</p>
-            </div>
-        </div>
-    </section>
-
-    <section class="slide" id="s12" aria-label="スライド 12">
-        <p class="kicker">事例</p>
-        <h2>参考：Indeedの成長モデル</h2>
-        <div class="grid steps3">
-            <div class="card">
-                <span class="chip num">1</span>
-                <p class="card-head" style="margin-top:.5rem">集約で初日から価値</p>
-                <p class="card-body">自前の求人を待たず、Web上の既存求人を横断的に集め、最初から「使える」検索サービスにした</p>
-            </div>
-            <span class="arrow" aria-hidden="true">›</span>
-            <div class="card">
-                <span class="chip num">2</span>
-                <p class="card-head" style="margin-top:.5rem">個人は完全無料</p>
-                <p class="card-body">求職者は無料で使える。利用者が集まること自体が、企業にとっての価値になる</p>
-            </div>
-            <span class="arrow" aria-hidden="true">›</span>
-            <div class="card">
-                <span class="chip num">3</span>
-                <p class="card-head" style="margin-top:.5rem">目的に沿った広告</p>
-                <p class="card-body">企業は有料のスポンサー求人（クリック課金）で露出を増やす。広告が求職者の探している情報そのもの</p>
-            </div>
-        </div>
-        <div class="bar">
-            <p>求職者が集まる → 企業が掲載・広告を出す → 求人が増える → さらに求職者が集まる</p>
-        </div>
-        <p class="foot">2004年 米国で創業、2012年 リクルートが買収</p>
-        <div class="note">
-            <span class="note-label">補足</span>
-            <p>Indeedは個人を完全無料にし、収益は企業側の成果連動型広告で得た。広告が利用者の目的と一致している点が、本構想の広告モデルを考えるうえでのヒントになる。</p>
-        </div>
-    </section>
-
-    <section class="slide" id="s13" aria-label="スライド 13">
-        <p class="kicker">本構想への応用</p>
-        <h2>Indeedモデルから何を借りるか</h2>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col"></th><th scope="col">Indeed</th><th scope="col" class="accent">本構想</th></tr>
-                </thead>
-                <tbody>
-                    <tr><th scope="row">立ち上がり</th><td class="was">既存の求人を横断収集</td><td class="ours">公開資料（ガイドライン・研修テキスト・事例集）を初期知見に</td></tr>
-                    <tr><th scope="row">無料の個人</th><td class="was">求職者は完全無料</td><td class="ours">サビ管が自分の仕事のために無料で使う</td></tr>
-                    <tr><th scope="row">広告</th><td class="was">求職者が探す求人そのもの</td><td class="ours">サビ管の役に立つ情報：福祉人材の求人・事業所で使う備品など</td></tr>
-                    <tr><th scope="row">お金を払う側</th><td class="was">人材を求める企業</td><td class="ours">広告主：求人を出す事業所、備品を扱う事業者など</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <p class="sub amber">ただし、そのままは当てはまらない</p>
-        <div class="grid three">
-            <div class="card warm">
-                <p class="card-head">価値の源泉</p>
-                <p class="card-body">マッチング（双方向市場）ではなく、知見の蓄積</p>
-            </div>
-            <div class="card warm">
-                <p class="card-head">情報の性質</p>
-                <p class="card-body">求人は公開情報、支援記録は要配慮個人情報</p>
-            </div>
-            <div class="card warm">
-                <p class="card-head">効き方の速さ</p>
-                <p class="card-body">知見は実践と評価を経てはじめて増える</p>
-            </div>
-        </div>
-        <div class="note">
-            <span class="note-label">補足</span>
-            <p>特に「立ち上がり」と「広告」はIndeedから借りられる。一方、価値の源泉・情報の性質・ネットワーク効果の速さは異なるため、そのまま当てはめない。</p>
-        </div>
-    </section>
-
-    <section class="slide" id="s14" aria-label="スライド 14">
+    <section class="slide" id="s10" aria-label="スライド 10">
         <p class="kicker">エンジニアリング</p>
         <h2>アーキテクチャの考え方</h2>
         <div class="grid two wide-left">
             <div class="grid" style="gap:.4rem">
                 <div class="layer amber">
-                    <p class="name">HOTL インターフェース</p>
+                    <p class="name">判断のインターフェース</p>
                     <p class="desc">介入点（修正・差し戻し・承認）の設計</p>
                 </div>
                 <div class="layer">
@@ -769,16 +644,16 @@
                 </ul>
             </div>
         </div>
-        <p class="lead-line">知見を学習し続けるモデル（知見バンク）と、仕事の構造（LOOP・HOTL）── この2つが競争力</p>
+        <p class="lead-line">知見を学習し続けるモデル（知見バンク）と、仕事の構造（LOOPと役割分担）── この2つが核になる</p>
         <div class="note">
             <span class="note-label">補足</span>
             <p>知見をモデル自体に学習させるため、重みを自由に扱える自社運用のLLMをオンプレで持つ。ただし実名など個人を特定できる情報はオンプレでも扱わず、匿名化・抽象化した知見だけを学習に使う。知見コーパスで出典や訂正を管理し、知見バンク＝モデルはそこから育てる。</p>
         </div>
     </section>
 
-    <section class="slide" id="s15" aria-label="スライド 15">
+    <section class="slide" id="s11" aria-label="スライド 11">
         <p class="kicker">インフラ</p>
-        <h2>PoCは0円で始められる</h2>
+        <h2>手持ちの機材で、一人から始められる</h2>
         <div class="grid two narrow-left">
             <div class="card navy hero">
                 <p class="card-head">追加の設備費</p>
@@ -786,116 +661,41 @@
                 <p class="card-body">サーバーもGPUも買わない</p>
             </div>
             <div>
-                <div class="row"><span class="chip">推論</span><span class="row-text"><strong>手持ちのPC・Macで動く</strong><small>量子化した80億パラメータのモデルを Ollama などで実行。GPUは要らない</small></span></div>
-                <div class="row"><span class="chip">蓄積</span><span class="row-text"><strong>ストレージは問題にならない</strong><small>50人規模なら、データは年1GB程度。手元のディスクで足りる</small></span></div>
-                <div class="row"><span class="chip">学習</span><span class="row-text"><strong>必要になってから時間借り</strong><small>知見が貯まったら、GPUを1回数千円〜数万円で借りる。重みは手元に残る</small></span></div>
+                <div class="row"><span class="chip">知見</span><span class="row-text"><strong>公開資料から始める</strong><small>ガイドライン・研修テキスト・事例集を初期知見にする</small></span></div>
+                <div class="row"><span class="chip">推論</span><span class="row-text"><strong>手持ちのPCで動く</strong><small>公開されたモデルを手元で動かす。GPUは要らない</small></span></div>
+                <div class="row"><span class="chip">蓄積</span><span class="row-text"><strong>データは手元に収まる</strong><small>小さな規模なら、手元のディスクで足りる</small></span></div>
+                <div class="row"><span class="chip">学習</span><span class="row-text"><strong>必要になったら借りる</strong><small>知見が貯まったら、GPUを必要なときだけ借りる。重みは手元に残る</small></span></div>
             </div>
         </div>
-        <p class="lead-line">使われてから育てる。利用者が増えたらGPUを段階的に足し、大きなモデルは手ごたえを確かめてから</p>
-        <p class="foot">前提：PoCはサビ管〜50人。量子化モデルはCPUだけでも毎秒5〜15トークン程度（Apple SiliconのMacなら毎秒数十）。1回のLOOPに数分かかるため、夜間にまとめて処理するなど運用で吸収する。人件費は含まない</p>
+        <p class="lead-line">使われてから育てる。大きなモデルは手ごたえを確かめてから</p>
         <div class="note">
             <span class="note-label">補足</span>
-            <p>インフラは0円で始められる。PoCでは、量子化した80億パラメータのモデルを手持ちのPCやMacで動かす。GPUは要らない。50人規模ならデータは年1GB程度で、ストレージも問題にならない。学習は知見が貯まってから、必要なときだけGPUを時間借りすればよく、1回数千円から数万円で済む。重みは自分たちの手元に残る。使われてから育てる。利用者が増えたらGPUサーバーを段階的に足し、大きなモデルへ移るのは従事者の勘を支えられている手ごたえを確かめてからにする。</p>
+            <p>手持ちのPCで動くので、機材を買わずに一人で始められる。学習は知見が貯まってから、必要なときだけGPUを借りる。重みは自分たちの手元に残る。使われてから育てる。</p>
         </div>
     </section>
 
-    <section class="slide" id="s16" aria-label="スライド 16">
-        <p class="kicker">インフラ（事業が軌道に乗ったとき）</p>
-        <h2>サビ管1万人で、年 約1,350万円</h2>
-        <div class="grid two narrow-left">
-            <div class="card navy hero">
-                <p class="card-head">設備費用（償却込み）</p>
-                <p class="hero-num">月 約110万円</p>
-                <p class="card-body">年 約1,350万円</p>
-            </div>
-            <div>
-                <div class="row"><span class="chip">初期</span><span class="row-text"><strong>初期投資 約3,000万円</strong><small>GPU 4枚のサーバー3台（推論）＋ストレージ。5年で償却する</small></span></div>
-                <div class="row"><span class="chip">5年</span><span class="row-text"><strong>5年間の総額 約6,750万円</strong><small>初期投資＋5年間の運用費（電力・保守・設置場所で年 約750万円）</small></span></div>
-                <div class="row"><span class="chip">全国</span><span class="row-text"><strong>全国規模（5万人）で年 約2,400万円</strong><small>利用者が5倍になっても、設備費は2倍弱で済む</small></span></div>
-            </div>
-        </div>
-        <p class="lead-line">運用・開発の人件費は別途。大きなモデルへ移るのは、手ごたえを確かめてから判断する</p>
-        <p class="foot">前提：サビ管1万人（担当利用者30人、LOOP年4回）、中規模モデル（80億パラメータ）＋差分学習、データは年 約200GB。GPU価格・為替で変動するため、実際の見積もりで確認する。大規模モデル（700億）へ移る場合は、全国規模（5万人）で年 約0.8〜1.2億円</p>
+    <section class="slide" id="s12" aria-label="スライド 12">
+        <p class="kicker">論点</p>
+        <h2>次に詰めるべき9の論点</h2>
+        <ol class="issues">
+            <li><span><strong>最初のLOOP</strong>アセスメント、ニーズ整理、仮説形成、計画立案、評価、再評価のどこから始めるか</span></li>
+            <li><span><strong>役割の境界</strong>どこまでLLMに任せ、どこから従事者が介入するか。制度上の作成責任（サビ管）とどう整合させるか。従事者の確認を単なる承認作業（ハンコ）にしないためにどうするか</span></li>
+            <li><span><strong>知見の抽出と構造化</strong>成功・失敗・条件付き成功・例外・修正のうち、何を「知見」と認定し、どう構造化するか</span></li>
+            <li><span><strong>知見コーパスの品質管理</strong>出典・適用条件・信頼度・更新履歴・反例をどう持たせ、誤った知見をどう訂正するか</span></li>
+            <li><span><strong>学習の設計</strong>何を・どの頻度で学習させるか。学習と参照をどう使い分けるか</span></li>
+            <li><span><strong>推論の質の確かめ方</strong>正解がない中で、気づきの有無や修正・差し戻しの変化から、モデルが育っていることをどう示すか</span></li>
+            <li><span><strong>記録の標準化</strong>福祉の記録と知見を構造化する共通の形。医療のFHIRに学べることは何か</span></li>
+            <li><span><strong>個人情報と知見の分離</strong>匿名化・抽象化の方法。事業所の規程・利用者の同意との両立</span></li>
+            <li><span><strong>プラットフォーム成立条件</strong>利用者が増えると既存利用者にどんな価値が増えるのか。サビ管から他の専門職へどう広げるか</span></li>
+        </ol>
+        <p class="lead-line">次の一歩：公開資料で、最初のLOOPを一人で試す</p>
         <div class="note">
             <span class="note-label">補足</span>
-            <p>事業が軌道に乗った時点として、サビ管1万人の規模を想定する。このときの設備は、GPU 4枚を載せたサーバー3台とストレージで、初期投資は約3,000万円。年間の費用は、5年償却の約600万円と電力・保守・設置場所の約750万円を合わせて約1,350万円、月にすると約110万円になる。5年間の総額は約6,750万円。全国規模の5万人になっても年約2,400万円で、利用者が5倍でも設備費は2倍弱で済む。ここには運用・開発の人件費は含まない。大きなモデルへ移る場合は費用が一段上がるが、それは手ごたえを確かめてから判断する。</p>
+            <p>結論が出ていないことを、ここに並べた。モデルが育っているかどうかは正解率では測れないので、従事者にとって新しい気づきがあったか、修正や差し戻しがどう変わったかという手ごたえで確かめる。</p>
         </div>
     </section>
 
-    <section class="slide" id="s17" aria-label="スライド 17">
-        <p class="kicker">インフラ（小さく始めて育てる）</p>
-        <h2>規模ごとの設備費</h2>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">段階（利用者数）</th><th scope="col">構成</th><th scope="col">初期投資</th><th scope="col">年間費用</th><th scope="col">5年間の総額</th></tr>
-                </thead>
-                <tbody>
-                    <tr><th scope="row">PoC（〜50人）</th><td>手持ちのPC、または32〜64GBのMac</td><td>0〜40万円</td><td>10万円</td><td>50万円</td></tr>
-                    <tr><th scope="row">初期（〜1,000人）</th><td>GPU 2枚のサーバー</td><td>500万円</td><td>250万円</td><td>1,250万円</td></tr>
-                    <tr><th scope="row">拡大（〜5,000人）</th><td>GPU 4枚のサーバー2台</td><td>2,000万円</td><td>900万円</td><td>4,500万円</td></tr>
-                    <tr class="focus"><th scope="row">成長（〜1万人）</th><td>GPU 4枚のサーバー3台</td><td>3,000万円</td><td>1,350万円</td><td>6,750万円</td></tr>
-                    <tr><th scope="row">全国（〜5万人）</th><td>GPU 4枚のサーバー5台＋ストレージ</td><td>5,300万円</td><td>2,400万円</td><td>1.2億円</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <p class="lead-line">利用者が5倍（1万人→5万人）になっても、年間費用は2倍弱（1,350万円→2,400万円）で済む。</p>
-        <p class="foot">前提：中規模モデル（80億パラメータ）＋差分学習を続けた場合の概算。設備費のみで、運用・開発の人件費は含まない。PoCの初期投資は、手持ちのPCなら0円（前のスライド）、Macを買うと数十万円。学習は必要なときだけGPUを時間借りする。GPU価格・為替は変動が大きいため、実際の見積もりで確認する</p>
-        <div class="note">
-            <span class="note-label">補足</span>
-            <p>H100を並べる構成は、全国規模で大規模モデルに移ってからの話である。中規模モデルと差分学習で始めれば、設備費用は1桁下がる。年間費用は5年の減価償却と電力・保守・設置場所を合わせたもの。大規模モデルへ移ると、全国規模で初期 約2〜3億円、5年間の総額 約4〜6億円になるので、移るかどうかは中規模モデルで従事者の勘を支えられているかの手ごたえを見てから判断する。</p>
-        </div>
-    </section>
-
-    <section class="slide" id="s18" aria-label="スライド 18">
-        <p class="kicker">収益モデル</p>
-        <h2>費用は広告で賄う</h2>
-        <div class="grid two narrow-left">
-            <div class="card navy hero">
-                <p class="card-head">必要な広告収益</p>
-                <p class="hero-num">月 約110万円</p>
-                <p class="card-body">年 約1,350万円（1万人時点）</p>
-            </div>
-            <div>
-                <div class="row"><span class="chip">誰が</span><span class="row-text"><strong>広告主が払う。従事者は無料</strong><small>求人を出したい事業所、事業所の備品を扱う事業者など</small></span></div>
-                <div class="row"><span class="chip">何を</span><span class="row-text"><strong>サビ管が探している情報そのもの</strong><small>福祉人材の求人、事業所で使う備品など。Indeedと同じ「目的に沿った広告」</small></span></div>
-                <div class="row warm"><span class="chip amber">守る</span><span class="row-text"><strong>支援内容は広告に使わない</strong><small>個人情報・支援内容・アセスメント結果はターゲティングに使わない</small></span></div>
-            </div>
-        </div>
-        <p class="lead-line">設備費だけなら、月 約110万円の広告収益で回る。人件費を含めると、必要な水準はこれより上がる</p>
-        <div class="bar keyed">
-            <span class="chip">位置</span>
-            <p>広告はプラットフォームの価値そのものではない。仕事と知見の循環を、従事者に低コストで開放するための経済的な仕組みである。</p>
-        </div>
-        <p class="foot">前提：p16と同じ規模（サビ管1万人、設備費 年 約1,350万円）。広告単価・掲載数は未検証</p>
-        <div class="note">
-            <span class="note-label">補足</span>
-            <p>収益は広告で得る。従事者は無料で使い、お金を払うのは広告主、たとえば求人を出したい事業所や、事業所の備品を扱う事業者である。広告に載せるのは、サビ管が探している情報そのもの。Indeedと同じく、広告が利用者の目的に沿っている。個人情報や支援内容は、広告のターゲティングに使わない。必要な水準は、1万人時点の設備費である月約110万円、年約1,350万円の広告収益。人件費を含めると、これより上がる。</p>
-        </div>
-    </section>
-
-    <section class="slide" id="s19" aria-label="スライド 19">
-        <p class="kicker">比較</p>
-        <h2>従来の業務システムとの違い</h2>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col"></th><th scope="col">従来の業務システム</th><th scope="col" class="accent">本構想のプラットフォーム</th></tr>
-                </thead>
-                <tbody>
-                    <tr><th scope="row">目的</th><td class="was">既存業務の効率化</td><td class="ours">仕事と知見の循環による創発</td></tr>
-                    <tr><th scope="row">仕事の担い手</th><td class="was">人間（システムは道具）</td><td class="ours">LLM（従事者はLOOPを監督）</td></tr>
-                    <tr><th scope="row">人間の関わり</th><td class="was">すべての処理を人が行う</td><td class="ours">必要なときだけ介入（HOTL）</td></tr>
-                    <tr><th scope="row">蓄積されるもの</th><td class="was">記録・データ</td><td class="ours">条件と例外を含む知見と、それを学習したモデル</td></tr>
-                    <tr><th scope="row">導入形態</th><td class="was">事業者がシステム導入</td><td class="ours">個人がほぼ無料で使い始める</td></tr>
-                    <tr><th scope="row">費用</th><td class="was">初期費用＋月額費用</td><td class="ours">ほぼ無料（広告で支える）</td></tr>
-                    <tr><th scope="row">完成形</th><td class="was">完成品として納品</td><td class="ours">使われるほど成長する基盤</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section class="slide tone-navy closing" id="s20" data-tone="navy" aria-label="スライド 20">
+    <section class="slide tone-navy closing" id="s13" data-tone="navy" aria-label="スライド 13">
         <span class="orbit" aria-hidden="true"></span>
         <p class="kicker">最大の設計思想</p>
         <h2><span class="br">完成品ではなく、</span><span class="br">成長する仕事の基盤をつくる。</span></h2>
@@ -903,28 +703,7 @@
         <p class="after">使われるほどLOOPが増え、知見が増え、モデルが育つ。</p>
     </section>
 
-    <section class="slide" id="s21" aria-label="スライド 21">
-        <p class="kicker">論点</p>
-        <h2>次に詰めるべき10の論点</h2>
-        <ol class="issues">
-            <li><span><strong>最初のLOOP</strong>アセスメント、ニーズ整理、仮説形成、計画立案、評価、再評価のどこから始めるか</span></li>
-            <li><span><strong>HOTLの境界</strong>どこまでLLMに任せ、どこから従事者が介入するか。制度上の作成責任（サビ管）とどう整合させるか</span></li>
-            <li><span><strong>知見の抽出と構造化</strong>成功・失敗・条件付き成功・例外・修正のうち、何を「知見」と認定し、どう構造化するか</span></li>
-            <li><span><strong>知見コーパスの品質管理</strong>出典・適用条件・信頼度・更新履歴・反例をどう持たせ、誤った知見をどう訂正するか</span></li>
-            <li><span><strong>学習の設計</strong>何を・どの頻度で学習させるか。学習と参照をどう使い分けるか</span></li>
-            <li><span><strong>推論の質の確かめ方</strong>正解がない中で、気づきの有無や修正・差し戻しの変化から、モデルが育っていることをどう示すか</span></li>
-            <li><span><strong>記録の標準化</strong>福祉の記録と知見を構造化する共通の形。医療のFHIRに学べることは何か</span></li>
-            <li><span><strong>個人情報と知見の分離</strong>匿名化・抽象化の方法。個人利用で始める場合の、事業所の規程・利用者の同意との両立</span></li>
-            <li><span><strong>プラットフォーム成立条件</strong>利用者が増えると既存利用者にどんな価値が増えるのか。サビ管から他の専門職へどう広げるか</span></li>
-            <li class="focus"><span><strong>収益モデル</strong>広告だけで設備費と人件費を賄えるか。広告単価・掲載数の見込み、広告主の集め方</span></li>
-        </ol>
-        <div class="note">
-            <span class="note-label">補足</span>
-            <p>結論が出ていないことを、ここに並べた。意見をいただきたいのは、この10の論点である。モデルが育っているかどうかは正解率では測れないので、従事者にとって新しい気づきがあったか、HOTLでの修正や差し戻しがどう変わったかという手ごたえで確かめる。</p>
-        </div>
-    </section>
-
-    <section class="slide tone-navy" id="s22" data-tone="navy" aria-label="スライド 22">
+    <section class="slide tone-navy" id="s14" data-tone="navy" aria-label="スライド 14">
         <p class="kicker">ITエンジニアの矜持</p>
         <h2>ITエンジニアの仕事の意義が変わる</h2>
         <div class="grid vs">
@@ -935,24 +714,23 @@
             <span class="arrow-dot" aria-hidden="true">→</span>
             <div class="card teal-solid">
                 <p class="card-head">これから</p>
-                <p class="card-body">LLMが仕事を行うための構造そのものを設計する</p>
+                <p class="card-body">LLMと従事者が一緒に働く構造そのものを設計する</p>
             </div>
         </div>
         <ol class="tasks">
             <li>仕事をLOOPとして構造化する</li>
-            <li>LLMに仕事を担わせる</li>
+            <li>LLMに整理と案の作成を担わせる</li>
             <li>推論の構造を設計する</li>
-            <li>HOTLの介入点を設計する</li>
+            <li>従事者の介入点を設計する</li>
             <li>実践結果を評価可能にする</li>
             <li>LOOPから知見を抽出する</li>
             <li>知見を次のLOOPへ戻す</li>
             <li>LOOPそのものを改善する</li>
         </ol>
-        <p class="pride">つくるのは完成した業務システムではなく、仕事と知見が循環し続ける環境そのもの。<br>ここに「業務効率化」とは異なるエンジニアリングの面白さがある。</p>
-        <p class="ask">ご意見をお聞かせください</p>
-        <div class="note">
+        <p class="pride">つくるのは、仕事と知見が循環し続ける環境そのもの。<br>ここに「業務効率化」とは異なるエンジニアリングの面白さがある。</p>
+                <div class="note">
             <span class="note-label">補足</span>
-            <p>最後に、この構想がITエンジニアにとって何を意味するか。従来は既存業務のシステム化だったが、ここではLLMが仕事を行うための構造そのものを設計する。仕事と知見が循環し続ける環境を設計することが、これからのエンジニアリングの面白さになる。</p>
+            <p>最後に、この構想がITエンジニアにとって何を意味するか。従来は既存業務のシステム化だったが、ここではLLMと従事者が一緒に働く構造そのものを設計する。仕事と知見が循環し続ける環境を設計することが、これからのエンジニアリングの面白さになる。</p>
         </div>
     </section>
 
@@ -960,9 +738,8 @@
 
 <div class="controls">
     <div class="controls-inner">
-        <a class="nav-back" id="close-tab" href="{% url 'welfare_activity:home' %}" aria-label="このタブを閉じる">× 閉じる</a>
         <button class="nav-btn" id="prev" type="button">‹ 前</button>
-        <span class="counter" id="counter">01 / 22</span>
+        <span class="counter" id="counter">01 / 14</span>
         <span class="dots" id="dots"></span>
         <button class="nav-btn" id="next" type="button">次 ›</button>
     </div>
@@ -1043,15 +820,6 @@
         }
         touchX = touchY = null;
     }, { passive: true });
-
-    // 活動ページから別タブで開かれるので、閉じれば活動ページに戻る。直接開かれたときなどは
-    // 閉じる操作をブラウザに拒まれる。拒まれても何も起きないので、少し待って活動ページへ移る。
-    document.getElementById('close-tab').addEventListener('click', function (e) {
-        var back = this.href;
-        e.preventDefault();
-        window.close();
-        setTimeout(function () { window.location.href = back; }, 300);
-    });
 
     fromHash();
 }());

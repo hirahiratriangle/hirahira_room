@@ -1844,4 +1844,4 @@ class ConceptTests(TestCase):
         self.assertContains(res, '#2F6B5E')
         self.assertContains(res, 'genba 構想 · 立場ごとの機能')
         self.assertContains(res, 'id="slide-21" class="slide slide-dark"')
-        self.assertContains(res, f'href="{reverse("genba:about")}"')
+        self.assertNotContains(res, '案内へ戻る')

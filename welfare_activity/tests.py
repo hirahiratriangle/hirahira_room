@@ -540,23 +540,19 @@ class SlidesTests(SimpleTestCase):
         self.assertContains(home, '構想の資料')
 
     def test_slides_open_in_a_new_tab(self):
-        """トップの「スライドを見る」とナビの「構想資料」の両方。スライドの「閉じる」で戻れるように。"""
+        """トップの「スライドを見る」とナビの「構想資料」の両方。"""
         with mock.patch.object(content, 'SLIDES_TITLE', '構想の資料'):
             home = self.client.get(reverse('welfare_activity:home'))
         self.assertContains(
             home, 'href="{}" target="_blank" rel="noopener noreferrer"'.format(
                 reverse('welfare_activity:slides')), count=2)
 
-    def test_slides_have_navigation_and_a_close_button(self):
-        """「閉じる」はタブを閉じる。閉じられないときの行き先として活動ページを指しておく。"""
+    def test_slides_have_navigation(self):
         with mock.patch.object(content, 'SLIDES_TITLE', '構想の資料'):
             response = self.client.get(reverse('welfare_activity:slides'))
         for marker in ('id="prev"', 'id="next"', 'id="counter"', 'id="dots"', 'name="viewport"'):
             self.assertContains(response, marker)
-        self.assertContains(
-            response, 'id="close-tab" href="{}"'.format(reverse('welfare_activity:home')))
-        self.assertContains(response, '× 閉じる')
-        self.assertNotContains(response, '‹ 活動ページ')
+        self.assertNotContains(response, '閉じる')
 
 
 class GitHubTokenTests(SimpleTestCase):

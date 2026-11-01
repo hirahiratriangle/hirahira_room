@@ -157,7 +157,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.conc
 {% block contents %}
 <div class="deck"><div class="deck-wrap">
     <nav class="deck-bar">
-        <a href="{% url 'genba:about' %}">案内へ戻る</a>
+        <span aria-hidden="true"></span>
         <div class="deck-pager">
             <button type="button" class="deck-btn" id="deck-prev" aria-label="前のスライド"><i class="fas fa-chevron-left"></i></button>
             <span class="deck-count" id="deck-count" aria-live="polite">1 / {{ total }}</span>

@@ -113,7 +113,7 @@ class DemoGuideView(generic.TemplateView):
             if sites:
                 teams.append({'name': name, 'sites': sites})
         context.update(organization=kit.DEMO_ORGANIZATION, personas=kit.DEMO_PERSONAS, teams=teams,
-                       current_persona=self.request.session.get(roles.PERSONA_SESSION_KEY))
+                       main_persona=kit.DEMO_DEFAULT_PERSONA)
         return context
 
 
