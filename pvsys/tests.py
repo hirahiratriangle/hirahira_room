@@ -8,7 +8,7 @@ class IndexTests(TestCase):
     def test_opens_without_login(self):
         res = self.client.get(reverse('pvsys:index'))
         self.assertEqual(res.status_code, 200)
-        self.assertContains(res, '一人ひとりの成長が、会社を育て社会を支える。')
+        self.assertContains(res, '企業価値の源泉は人月。その時間を実りあるものにする。')
 
     def test_links_to_each_page(self):
         res = self.client.get(reverse('pvsys:index'))

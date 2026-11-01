@@ -13,5 +13,5 @@ class IndexView(generic.TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['vision'] = ''.join(concept_data.SLIDES[2]['lines'])
+        context['vision'] = ''.join(concept_data.SLIDES[1]['lines'])
         return context

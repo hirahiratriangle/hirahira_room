@@ -3,7 +3,7 @@
 {% block title %}社内活動 3つの構想 | HirahiraRoom{% endblock %}
 
 {% comment %}
-3つの構想のページ。1枚ずつ送って読む。内容は concept_data.SLIDES、配色は下の CSS 変数で、どちらも「社内活動 3つの構想.pptx」のまま。
+3つの構想のページ。1枚ずつ送って読む。内容は concept_data.SLIDES、配色は下の CSS 変数で、配色は「社内活動 3つの構想.pptx」のまま。
 JavaScript が動かないときは、全スライドが縦に並ぶ（html.proposals-paged のときだけ1枚に絞る）。
 各自に読んでもらうページなので、スライドの下に発表者ノートの説明を出す。
 {% endcomment %}
@@ -12,7 +12,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
 <style>
     :root {
         --deck-ink: #1E3550; --deck-paper: #F2F7FC; --deck-blue: #2E6DB4; --deck-card: #E1ECF8; --deck-rule: #C9DAEC;
-        --deck-bar: #D3E4F6; --deck-body: #3A5470; --deck-muted: #6F86A0; --deck-link: #0000FF; --deck-black: #000000;
+        --deck-bar: #D3E4F6; --deck-body: #3A5470; --deck-muted: #6F86A0; --deck-link: #0000FF;
     }
     body { background: var(--deck-ink); }
     .deck { font-family: "Helvetica Neue", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, Meiryo, sans-serif; color: var(--deck-ink); }
@@ -39,7 +39,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     .slide a { text-decoration: none; }
     /* サイト共通の CSS が見出しに Catamaran を当てるので、数字と英字の書体が本文とずれないよう戻す */
     .slide h1, .slide h2 { font-family: inherit; }
-    .slide-foot { position: absolute; left: 5.04em; right: 5.04em; top: 50.3em; display: flex; justify-content: space-between; color: var(--deck-muted); font-size: 1em; }
+    .slide-foot { position: absolute; left: 5.04em; right: 5.04em; top: 50.3em; display: flex; justify-content: flex-end; color: var(--deck-muted); font-size: 1em; }
 
     /* 表紙・ビジョン・結び */
     .slide-title { padding-top: 7.75em; }
@@ -48,14 +48,12 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     .title-sub { color: var(--deck-body); font-size: 2em; line-height: 1.2; margin: .45em 0 0; }
     .title-under { position: absolute; left: 5.04em; right: 5.04em; top: 34.2em; height: 9.72em; }
     .title-meta { position: absolute; left: 5.04em; top: 48.8em; color: var(--deck-muted); font-size: 1em; margin: 0; }
-    .slide-title.is-plain .title-lines { color: var(--deck-black); margin: .48em 0 0 .21em; line-height: 1.84; }
+    .slide-title.is-center { justify-content: center; padding-top: 0; padding-bottom: 3em; }
+    /* 結びは青地に白で、ほかのスライドから際立たせる */
+    .slide-title.is-plain { background: var(--deck-blue); text-align: center; }
+    .slide-title.is-plain .title-kicker { color: var(--deck-card); }
+    .slide-title.is-plain .title-lines { color: var(--deck-paper); font-size: 5.2em; height: auto; line-height: 1.6; margin-top: .25em; }
 
-    .concept-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2.2em; height: 100%; }
-    .concept-chip { display: flex; flex-direction: column; justify-content: center; background: var(--deck-card); border-radius: .9em; padding: 0 1.8em; }
-    .chip-label { color: var(--deck-blue); font-size: 1.2em; font-weight: 700; line-height: 1.7; }
-    .chip-name { color: var(--deck-ink); font-size: 1.6em; font-weight: 700; line-height: 1.75; }
-    .chip-link { color: var(--deck-link); font-size: 1.2em; font-weight: 700; line-height: 2; text-decoration: underline; }
-    a.concept-chip:hover { background: var(--deck-bar); }
     .words { display: flex; flex-direction: column; justify-content: center; height: 100%; background: var(--deck-card); border-radius: .9em; padding: 0 2.5em; }
     .words-label { color: var(--deck-blue); font-size: 1.2em; font-weight: 700; line-height: 1.5; }
     .words-text { color: var(--deck-ink); font-size: 1.9em; font-weight: 700; line-height: 1.5; }
@@ -79,7 +77,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     .item-head { color: var(--deck-ink); font-size: 1.7em; font-weight: 700; line-height: 1.2; }
     .item-text { color: var(--deck-body); font-size: 1.4em; line-height: 2.2; margin: 0; }
 
-    /* 商流を上げる（2枚目）。商流の次数と3つの構想は対応しないので、列をそろえず左右に分ける */
+    /* 商流を上げる（3枚目）。商流の次数と3つの構想は対応しないので、列をそろえず左右に分ける */
     .slide-route { padding-top: 4.45em; }
     .route-body { position: absolute; left: 5.04em; right: 5.04em; top: 13em; height: 34.9em; display: grid; grid-template-columns: 32.4em minmax(0, 1fr); gap: 2.88em; }
     .route-panel { display: flex; flex-direction: column; justify-content: center; background: var(--deck-card); border-radius: .9em; padding: 2em 2.16em; }
@@ -87,7 +85,8 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     .route-tier.is-target { background: var(--deck-bar); border-color: var(--deck-blue); }
     .tier-name { color: var(--deck-blue); font-size: 1.4em; font-weight: 700; white-space: nowrap; }
     .tier-owner { color: var(--deck-ink); font-size: 1.7em; font-weight: 700; }
-    .route-target { color: var(--deck-blue); font-size: 1.6em; font-weight: 700; line-height: 1.4; margin: .9em 0 0; }
+    .route-tier.is-current { background: transparent; border-color: var(--deck-muted); border-style: dashed; }
+    .tier-tag { color: var(--deck-blue); font-size: 1.3em; font-weight: 700; white-space: nowrap; margin-left: auto; }
     .routes { display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); }
     .route { display: flex; flex-direction: column; justify-content: center; border-top: .1em solid var(--deck-rule); }
     .route:first-child { border-top: 0; }
@@ -100,7 +99,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     @media (max-width: 767.98px) {
         .deck-wrap { padding: .75rem; }
         .slide { font-size: 11px; aspect-ratio: auto; overflow: visible; padding: 2.4em 1.6em 3.2em; }
-        .slide-title { padding-top: 2.4em; }
+        .slide-title, .slide-title.is-center { padding-top: 2.4em; }
         .slide-concept, .slide-route { padding-top: 2.4em; }
         .route-body { position: static; height: auto; grid-template-columns: minmax(0, 1fr); gap: 1.6em; margin-top: 1.6em; }
         .route-panel { padding: 1.6em; }
@@ -112,8 +111,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
         .title-under, .concept-link, .concept-body { position: static; height: auto; }
         .title-under { margin-top: 2em; }
         .title-meta { position: static; margin-top: 1.5em; }
-        .concept-chips { grid-template-columns: minmax(0, 1fr); gap: 1em; }
-        .concept-chip, .words { padding: 1.2em 1.6em; }
+        .words { padding: 1.2em 1.6em; }
         .concept-title { font-size: 2.1em; line-height: 1.4; margin-top: .3em; }
         .concept-link { flex-wrap: wrap; gap: .3em .8em; margin-top: 1.6em; padding: 1em 1.4em; }
         .link-url { font-size: 1.45em; white-space: normal; overflow-wrap: anywhere; }
@@ -138,30 +136,13 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
     <div class="deck-frame">
     {% for s in slides %}
     <div class="deck-page">
-    <section id="slide-{{ forloop.counter }}" class="slide slide-{{ s.kind }}{% if s.plain %} is-plain{% endif %}">
+    <section id="slide-{{ forloop.counter }}" class="slide slide-{{ s.kind }}{% if s.kind == 'title' and not s.words %} is-center{% endif %}{% if s.plain %} is-plain{% endif %}">
         {% if s.kind == 'title' %}
             <div class="title-kicker">{{ s.kicker }}</div>
             <h1 class="title-lines">{% for line in s.lines %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</h1>
             {% if s.sub %}<p class="title-sub">{{ s.sub }}</p>{% endif %}
             <div class="title-under">
-                {% if s.chips %}
-                <div class="concept-chips">
-                    {% for c in concepts %}
-                    {% if s.chips_plain %}
-                    <div class="concept-chip">
-                        <span class="chip-label">{{ c.label }}</span>
-                        <span class="chip-name">{{ c.name }}</span>
-                    </div>
-                    {% else %}
-                    <a class="concept-chip" href="{{ c.path }}" target="_blank" rel="noopener noreferrer" aria-label="{{ c.label }} {{ c.name }}（別タブで開きます）">
-                        <span class="chip-label">{{ c.label }}</span>
-                        <span class="chip-name">{{ c.name }}</span>
-                        <span class="chip-link">{{ c.link }} ▶</span>
-                    </a>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-                {% elif s.words %}
+                {% if s.words %}
                 <div class="words">
                     <span class="words-label">{{ s.words.label }}</span>
                     <span class="words-text">{{ s.words.text }}</span>
@@ -176,9 +157,8 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
                 <div class="route-panel">
                     <div class="purpose-label">商流の定義</div>
                     {% for t in s.tiers %}
-                    <div class="route-tier{% if t.target %} is-target{% endif %}"><span class="tier-name">{{ t.name }}</span><span class="tier-owner">{{ t.owner }}</span></div>
+                    <div class="route-tier{% if t.target %} is-target{% endif %}{% if t.current %} is-current{% endif %}"><span class="tier-name">{{ t.name }}</span><span class="tier-owner">{{ t.owner }}</span>{% if t.tag %}<span class="tier-tag">{{ t.tag }}</span>{% endif %}</div>
                     {% endfor %}
-                    <p class="route-target">{{ s.target_label }}</p>
                 </div>
                 <div class="routes">
                     {% for r in s.routes %}
@@ -201,7 +181,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
                     <div class="purpose-label">目的</div>
                     <p class="purpose-lines">{% for line in s.purpose.lines %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
                     <p class="purpose-text">{{ s.purpose.text }}</p>
-                    <p class="purpose-close">{% for line in s.purpose.close %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
+                    {% if s.purpose.close %}<p class="purpose-close">{% for line in s.purpose.close %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% endif %}
                 </div>
                 <div class="items">
                     {% for head, text in s.items %}
@@ -213,7 +193,7 @@ JavaScript が動かないときは、全スライドが縦に並ぶ（html.prop
                 </div>
             </div>
         {% endif %}
-        {% if s.footer %}<div class="slide-foot"><span>{{ s.footer }}</span><span>{{ forloop.counter }}</span></div>{% endif %}
+        {% if s.numbered %}<div class="slide-foot"><span>{{ forloop.counter }}</span></div>{% endif %}
     </section>
     <p class="deck-reading">{{ s.reading }}</p>
     </div>

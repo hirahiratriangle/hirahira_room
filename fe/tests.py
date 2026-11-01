@@ -3623,15 +3623,15 @@ class AboutTests(TestCase):
     def test_opens_without_login_and_links_to_app(self):
         res = self.client.get(reverse('fe:about'))
         self.assertEqual(res.status_code, 200)
-        for text in ('基本情報 取得者80％計画', '基本情報を、全社の共通言語にする', 'T職級からJA職級へ上がる要件',
+        for text in ('基本情報 取得者80％計画', '身につけた力を国家資格で示す', 'T職級からJA職級へ上がる要件',
                      '資格取得後、本人の申請に基づき会社が負担する。'):
             self.assertContains(res, text)
         self.assertContains(res, f'href="{reverse("fe:index")}"')
-        self.assertContains(res, f'href="{reverse("proposals:index")}#slide-4"')
+        self.assertContains(res, f'href="{reverse("proposals:index")}#slide-5"')
 
     def test_three_proofs_cite_ipa(self):
         res = self.client.get(reverse('fe:about'))
-        for title in ('技術レベルの証明', 'オールエンジニアという姿勢', '学習する能力の高さの証明'):
+        for title in ('技術レベルの証明', 'エンジニア企業である証', '学習する能力の高さの証明'):
             self.assertContains(res, title)
         self.assertContains(res, '経営層からメンバーまで、皆エンジニア。')
         self.assertContains(res, 'href="https://www.ipa.go.jp/shiken/', count=4)

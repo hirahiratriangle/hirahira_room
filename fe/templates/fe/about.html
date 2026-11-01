@@ -35,18 +35,6 @@
     </section>
 
     <section class="mb-5">
-        <h2 class="h5 mb-3" style="color: #2c5aa0;">計画で得られるもの</h2>
-        <div class="row g-3">
-            {% for name, text in reasons %}
-            <div class="col-md-4 d-flex"><div class="card w-100"><div class="card-body">
-                <h3 class="h6 fw-bold">{{ name }}</h3>
-                <p class="small mb-0">{{ text }}</p>
-            </div></div></div>
-            {% endfor %}
-        </div>
-    </section>
-
-    <section class="mb-5">
         <h2 class="h5 mb-3" style="color: #2c5aa0;">会社の制度</h2>
         <div class="row g-3">
             {% for name, text in supports %}
@@ -71,7 +59,7 @@
     </section>
 
     <section class="d-flex flex-wrap justify-content-center gap-3">
-        <a class="btn btn-outline-primary btn-lg" href="{% url 'proposals:index' %}#slide-4">3つの構想</a>
+        <a class="btn btn-outline-primary btn-lg" href="{% url 'proposals:index' %}#slide-5">3つの構想</a>
         <a class="btn btn-primary btn-lg" href="{% url 'fe:index' %}">対策アプリ</a>
     </section>
 </div>
