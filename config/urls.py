@@ -36,7 +36,7 @@ urlpatterns = [
 
     # 銀行業務検定 法務3級 対策アプリ
     path('bk_houmu3/', include('bk_houmu3.urls', namespace='bk_houmu3')),
-    # 取り組み（genba・3つの構想・基本情報・福祉従事者の活動ページをまとめた入り口。ログインなしで公開）
+    # 取り組み（genba・3つの構想・基本情報・福祉従事者の活動ページをまとめた入り口。ログイン必須）
     # 公開ページの URL に社名を出さない。/pvsys/ からの転送も置かない
     path('works/', include('pvsys.urls', namespace='pvsys')),
     # 基本情報技術者試験（FE）対策アプリ。Logic Apps と GitHub Actions の定期実行もここを叩く

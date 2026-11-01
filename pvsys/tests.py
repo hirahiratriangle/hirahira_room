@@ -5,7 +5,15 @@ from accounts.models import CustomUser
 
 
 class IndexTests(TestCase):
-    def test_opens_without_login(self):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))
+
+    def test_requires_login(self):
+        self.client.logout()
+        res = self.client.get(reverse('pvsys:index'))
+        self.assertRedirects(res, f'{reverse("account_login")}?next=/works/', fetch_redirect_response=False)
+
+    def test_opens_after_login(self):
         res = self.client.get(reverse('pvsys:index'))
         self.assertEqual(res.status_code, 200)
         self.assertContains(res, '企業価値の源泉は人月。その時間を実りあるものにする。')
@@ -36,7 +44,7 @@ class UrlTests(TestCase):
                 self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_public_pages_do_not_show_the_company_name(self):
-        for name in ('pvsys:index', 'genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'fe:about',
+        for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'fe:about',
                      'fe:index', 'fe:stats', 'welfare_activity:home', 'welfare_activity:slides'):
             with self.subTest(name):
                 self.assertNotContains(self.client.get(reverse(name)), 'pvsys', html=False)

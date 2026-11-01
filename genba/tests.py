@@ -1755,6 +1755,7 @@ class AboutTests(TestCase):
             self.assertNotContains(res, 'Log In')
 
     def test_pvsys_opens_about_first(self):
+        self.client.force_login(CustomUser.objects.create_user('visitor', 'v@example.com', 'pass12345'))
         res = self.client.get(reverse('pvsys:index'))
         self.assertContains(res, f'href="{reverse("genba:about")}"')
         self.assertNotContains(res, f'href="{reverse("genba:portal")}"')
