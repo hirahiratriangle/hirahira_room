@@ -1736,6 +1736,11 @@ class AboutTests(TestCase):
         self.assertContains(res, 'デモ（genba）')
         self.assertContains(res, f'href="{reverse("genba:concept")}"')
 
+    def test_about_says_position_after_message(self):
+        html = self.client.get(reverse('genba:about')).content.decode()
+        self.assertLess(html.index(kit.ABOUT_MESSAGE), html.index(kit.ABOUT_POSITION))
+        self.assertLess(html.index(kit.ABOUT_POSITION), html.index('課題：'))
+
     def test_no_site_header(self):
         for name in ('about', 'concept', 'demo', 'portal'):
             res = self.client.get(reverse(f'genba:{name}'))
