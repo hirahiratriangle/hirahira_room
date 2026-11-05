@@ -1,0 +1,555 @@
+{% extends 'base.html' %}
+
+{% block title %}SE／PGの賃金と仕事の実質 | HirahiraRoom{% endblock %}
+
+{% comment %}
+SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は deck_data.SLIDES、配色は下の CSS 変数で、「SE_PG賃金_第1弾.pptx」のテーマ色のまま。
+ページ送りの作りは 3つの構想のページ（proposals/index.html）と同じ。JavaScript が動かないときは、全スライドが縦に並ぶ。
+各自に読んでもらうページなので、スライドの下に発表者ノートを出す。
+{% endcomment %}
+
+{% block head %}
+<style>
+    :root {
+        --w-ink: #1F2230; --w-navy: #2B2D42; --w-paper: #FFFFFF; --w-card: #EEF0F4; --w-orange: #D9822B; --w-peach: #F3D3B0;
+        --w-body: #4A5568; --w-gray: #8D99AE; --w-rule: #C9D1DC; --w-muted: #6B7A99; --w-slate: #4A5568;
+    }
+    body { background: var(--w-ink); }
+    .deck { font-family: "Helvetica Neue", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, Meiryo, sans-serif; color: var(--w-navy); }
+    /* 枠は画面に収まる大きさまで広げる（帯・進み具合の線と、スライドの下の説明の分 15rem を除いた高さから、16:9 で幅を決める） */
+    .deck-wrap { max-width: min(1500px, calc((100vh - 15rem) * 16 / 9 + 2rem)); margin: 0 auto; padding: 1rem; }
+    .deck-frame { container-type: inline-size; }
+
+    /* 操作の帯 */
+    .deck-bar { display: flex; align-items: center; justify-content: center; gap: .5rem; color: var(--w-rule); font-size: .85rem; padding: .25rem 0 .75rem; }
+    .deck-btn { background: transparent; border: 1px solid var(--w-rule); color: var(--w-rule); border-radius: .25rem; padding: .3rem .85rem; }
+    .deck-btn:hover:not(:disabled) { background: var(--w-rule); color: var(--w-ink); }
+    .deck-btn:disabled { opacity: .35; }
+    .deck-count { min-width: 3.5rem; text-align: center; }
+    .deck-progress { height: 3px; background: var(--w-slate); margin-top: .75rem; }
+    .deck-progress div { height: 100%; width: 0; background: var(--w-orange); }
+
+    /* スライド。枠の幅の 1/96 を 1em にする。元のスライドは幅 960pt なので、1em が 10pt にあたり、
+       下の em の値は元のスライドの pt（左上からの位置）を 10 で割った数になる。枠の幅が変わっても全体が同じ比率で伸び縮みする */
+    .slide { position: relative; background: var(--w-paper); font-size: 1.04vw; font-size: calc(100cqw / 96); padding: 3.7em 4.3em 0; aspect-ratio: 16 / 9; overflow: hidden; line-height: 1.5; }
+    .slide p, .slide h1, .slide h2, .slide h3, .slide ul, .slide ol { margin: 0; }
+    /* サイト共通の CSS が見出しに Catamaran を当てるので、数字と英字の書体が本文とずれないよう戻す */
+    .slide h1, .slide h2, .slide h3 { font-family: inherit; }
+    .deck-page { margin-bottom: 1.5rem; }
+    .wages-paged .deck-page { display: none; margin-bottom: 0; }
+    .wages-paged .deck-page.is-current { display: block; }
+    .deck-reading { color: var(--w-card); font-size: .95rem; line-height: 1.8; margin: .9rem 0 0; }
+
+    .s-title { color: var(--w-navy); font-size: 3em; font-weight: 700; line-height: 1.2; }
+    .s-body { position: absolute; left: 4.3em; right: 4.5em; top: 10.8em; }
+    .s-label { color: var(--w-navy); font-size: 1.6em; font-weight: 700; }
+    /* 位置（top）は親の em で決めるので、文字の大きさは中の要素に持たせる */
+    .s-source { position: absolute; left: 4.3em; right: 4.5em; top: 46.6em; }
+    .s-source p { color: var(--w-body); font-size: .95em; line-height: 1.75; }
+    .s-foot { position: absolute; left: 4.3em; right: 4.9em; top: 50.8em; display: flex; justify-content: space-between; color: var(--w-gray); }
+    .s-foot span { font-size: .95em; }
+    .s-close { color: var(--w-navy); font-size: 1.6em; font-weight: 700; line-height: 1.7; }
+    .s-card { background: var(--w-card); border-radius: .6em; }
+    /* 番号の丸 */
+    .num { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 4em; height: 4em; border-radius: 50%; background: var(--w-orange); color: var(--w-paper); }
+    .num span { font-size: 1.5em; font-weight: 700; }
+
+    /* 濃い地（表紙・問い・結論） */
+    .is-dark { background: var(--w-navy); }
+    .is-dark .s-title { color: var(--w-paper); }
+    .is-dark .s-foot { color: var(--w-rule); }
+    .cover-dot { position: absolute; left: 5.6em; top: 9.6em; display: flex; align-items: center; gap: 1.6em; }
+    .cover-dot::before { content: ""; width: 3.4em; height: 3.4em; border-radius: 50%; background: var(--w-orange); }
+    .cover-kicker { color: var(--w-orange); font-size: 1.6em; font-weight: 700; }
+    .cover-main { position: absolute; left: 5.6em; right: 5.6em; top: 22.4em; }
+    .has-kicker .cover-main { top: 15.8em; }
+    .cover-lines { color: var(--w-paper); font-size: 3.4em; font-weight: 700; line-height: 1.7; }
+    .cover-sub { color: var(--w-rule); font-size: 1.5em; margin-top: .2em !important; }
+
+    /* 番号・見出し・説明の行（3・7枚目） */
+    .steps { display: grid; grid-template-rows: repeat(4, 8.8em); top: 9.4em; }
+    .steps.is-card { top: 10em; }
+    .step { display: grid; grid-template-columns: 4em 15.8em minmax(0, 1fr); column-gap: 1.8em; align-items: center; }
+    .is-card .step { grid-template-columns: 4em 16.8em minmax(0, 1fr); column-gap: 1.8em; }
+    .step-head { color: var(--w-navy); font-size: 1.8em; font-weight: 700; }
+    .step-text { color: var(--w-navy); font-size: 1.45em; line-height: 1.7; }
+    .is-card .step-box { background: var(--w-card); border-radius: .6em; min-height: 7.4em; padding: .9em 2em; display: flex; flex-direction: column; justify-content: center; }
+    .is-card .step-text { font-size: 1.55em; line-height: 1.6; }
+    .step-text.is-formula { font-size: 2.1em; font-weight: 700; }
+    .step-sub { color: var(--w-body); font-size: 1.25em; line-height: 1.6; margin-top: .4em !important; }
+
+    /* 使用データと限界（4枚目） */
+    .sources { display: grid; grid-template-columns: 40.4em minmax(0, 1fr); column-gap: 4.3em; top: 9.9em; }
+    .source-cards { display: grid; grid-template-rows: repeat(2, 13.4em); row-gap: 1.4em; margin-top: 1.9em; }
+    .source-card { padding: 1.4em 2.2em; }
+    .source-org { color: var(--w-body); font-size: 1.25em; }
+    .source-name { color: var(--w-navy); font-size: 1.65em; font-weight: 700; margin-top: .3em !important; }
+    .source-text { color: var(--w-navy); font-size: 1.35em; margin-top: 1em !important; }
+    .limits { display: grid; grid-template-rows: repeat(3, 9.8em); margin-top: 3.9em; }
+    .limit { display: flex; align-items: flex-start; gap: 1.8em; }
+    .limit p { color: var(--w-navy); font-size: 1.45em; line-height: 1.7; margin-top: -.25em !important; }
+
+    /* 実質時給の棒グラフ（5枚目） */
+    .bars { display: grid; grid-template-columns: 60.7em minmax(0, 1fr); column-gap: 2.7em; top: 9.4em; }
+    .bars .s-label { font-size: 1.3em; }
+    .bar-rows { display: grid; grid-template-rows: repeat(11, 3.02em); margin-top: 1.7em; }
+    .bar-row { display: grid; grid-template-columns: 21.5em minmax(0, 1fr); column-gap: .8em; align-items: center; }
+    .bar-name { color: var(--w-body); font-size: 1.2em; text-align: right; white-space: nowrap; }
+    .bar-track { display: flex; align-items: center; gap: .5em; }
+    .bar { height: 2.2em; background: var(--w-gray); }
+    .bar-value { color: var(--w-navy); font-size: 1.2em; }
+    .bar-row.is-self .bar-name { color: var(--w-orange); font-weight: 700; }
+    .bar-row.is-self .bar { background: var(--w-orange); }
+    .side { padding: 1.8em 2.2em; margin-top: 1.4em; height: 33.8em; }
+    .side-head { color: var(--w-navy); font-size: 1.7em; font-weight: 700; margin-bottom: .9em !important; }
+    .side-line { color: var(--w-navy); font-size: 1.4em; line-height: 1.75; margin-bottom: .55em !important; }
+
+    /* 職務特性の表（6枚目） */
+    .heat { display: grid; grid-template-columns: 58.7em minmax(0, 1fr); column-gap: 2.5em; top: 9.7em; }
+    .heat-scale { display: flex; gap: 0; }
+    .heat-scale span { width: 2.24em; height: 1.6em; border: .05em solid var(--w-rule); }
+    .heat-scale-label { color: var(--w-body); font-size: .9em; margin-top: -.1em !important; }
+    .heat-table { display: grid; grid-template-columns: 15.2em repeat(4, minmax(0, 1fr)); gap: .3em .6em; align-items: center; margin-top: -1.9em; }
+    .heat-col { color: var(--w-navy); font-size: 1.1em; font-weight: 700; text-align: center; white-space: nowrap; }
+    .heat-name { color: var(--w-body); font-size: 1.3em; text-align: right; padding-right: .3em; white-space: nowrap; }
+    .heat-cell { height: 3.3em; display: flex; align-items: center; justify-content: center; border: .15em solid transparent; }
+    .heat-cell span { color: var(--w-navy); font-size: 1.4em; font-weight: 700; }
+    .heat-cell.is-light span { color: var(--w-paper); }
+    .heat-name.is-self { color: var(--w-orange); font-weight: 700; }
+    .heat-cell.is-self { border-color: var(--w-orange); }
+    .heat .side { margin-top: 0; height: 36.3em; padding: 1.4em 1.8em; }
+    .heat .side-head { font-size: 1.6em; margin-bottom: .6em !important; }
+    .heat .side-line { font-size: 1.25em; line-height: 1.7; margin-bottom: 1.2em !important; }
+    .side-def { display: flex; gap: .7em; color: var(--w-navy); font-size: 1.2em; line-height: 1.75; margin-bottom: 1.6em !important; }
+    .side-def::before { content: ""; flex: none; width: .9em; height: .9em; background: var(--w-body); margin-top: .45em; }
+    .side-def b { font-weight: 700; }
+    .heat-source { top: 47.2em; }
+
+    /* 順位の対応（8枚目）。左の9行と右の8行の高さを合わせ、間の線は SVG で引く */
+    .slope { display: grid; grid-template-columns: 29.5em 22.3em 14em minmax(0, 1fr); column-gap: .7em; top: 9.6em; }
+    .slope .s-label { font-size: 1.3em; color: var(--w-body); }
+    .slope-left, .slope-right { display: grid; height: 32.4em; margin-top: 1.2em; }
+    .slope-left { grid-template-rows: repeat(9, 1fr); }
+    .slope-right { grid-template-rows: repeat(8, 1fr); }
+    .slope-row { display: flex; align-items: center; justify-content: space-between; color: var(--w-navy); font-size: 1.35em; }
+    .slope-right .slope-row { justify-content: flex-start; gap: 0; }
+    .slope-right .slope-value { width: 6.4em; }
+    .slope-row.is-self { color: var(--w-orange); font-weight: 700; }
+    .slope-right .slope-row.is-self .slope-value { color: var(--w-navy); font-weight: 400; }
+    .slope-svg { display: block; width: 100%; height: 32.4em; margin-top: calc(1.3em * 1.5 + 1.2em); }
+    .slope-svg line { stroke: var(--w-gray); stroke-width: 1.5px; }
+    .slope-svg line.is-self { stroke: var(--w-orange); stroke-width: 3px; }
+    .slope-stat { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 29.6em; margin-top: 2.6em; }
+    .slope-stat-value { color: var(--w-navy); font-size: 3.2em; font-weight: 700; }
+    .slope-stat-label { color: var(--w-body); font-size: 1.2em; line-height: 1.7; margin-top: .8em !important; }
+
+    /* 二つの場合の比較（9枚目） */
+    .compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.5em; }
+    .case { height: 23.8em; padding: 1.7em 2.7em; }
+    .case-head { color: var(--w-navy); font-size: 1.6em; font-weight: 700; }
+    .case-rank { display: flex; align-items: baseline; gap: .4em; color: var(--w-muted); margin-top: 2.6em !important; }
+    .case-rank small { font-size: 1.6em; }
+    .case-rank strong { color: var(--w-navy); font-size: 3.6em; line-height: 1.1; margin-right: .2em; }
+    .case-rank .arrow { font-size: 2em; margin: 0 .2em; }
+    .case-rank strong.is-accent { color: var(--w-orange); }
+    .case-result { color: var(--w-navy); font-size: 1.7em; font-weight: 700; margin-top: .6em !important; }
+    .case-result.is-accent { color: var(--w-orange); }
+    .case-text { color: var(--w-navy); font-size: 1.35em; margin-top: 1.3em !important; }
+    .band { grid-column: 1 / -1; background: var(--w-peach); border-radius: .6em; padding: 1.2em 2.2em; margin-top: 1.7em; }
+    .band p { color: var(--w-navy); font-size: 1.45em; line-height: 1.65; }
+    .band p:first-child { font-weight: 700; }
+
+    /* 調達調整価（10枚目） */
+    .premium { display: grid; grid-template-columns: 37.5em minmax(0, 1fr); column-gap: 3.5em; }
+    .claim { display: flex; flex-direction: column; justify-content: space-between; height: 34.6em; background: var(--w-navy); border-radius: .6em; padding: 2.4em 2.5em 7.6em; }
+    .claim-text { color: var(--w-paper); font-size: 2.2em; font-weight: 700; line-height: 1.65; }
+    .claim-sub { color: var(--w-rule); font-size: 1.45em; line-height: 1.7; }
+    .premium-items { display: grid; grid-template-rows: repeat(4, 7.1em); margin-top: 2.6em; }
+    .premium .limit p { font-size: 1.45em; }
+
+    /* カードを並べる（11・12・15枚目） */
+    .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 2.1em; right: 5.3em; }
+    .card { height: 25.2em; padding: 2em 2.2em; }
+    .card-head { color: var(--w-navy); font-size: 1.6em; font-weight: 700; line-height: 1.75; margin-top: .9em !important; }
+    .card-text { color: var(--w-navy); font-size: 1.35em; line-height: 1.75; margin-top: 2em !important; }
+    .cards .s-close { grid-column: 1 / -1; margin-top: 1em; }
+    .card-question { color: var(--w-orange); font-size: 3.6em; font-weight: 700; line-height: 1.1; }
+    .is-question .card { height: 28.8em; padding: 1.5em 2.2em; }
+    .is-question .card-head { font-size: 1.7em; line-height: 1.65; margin-top: .7em !important; min-height: 5em; }
+    .is-question .card-text { color: var(--w-body); font-size: 1.35em; line-height: 1.6; margin-top: 1.4em !important; }
+    .cards.is-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.5em; row-gap: 1.8em; right: 4.5em; }
+    .is-grid .card { height: 15.8em; padding: 2.1em 2.1em; display: grid; grid-template-columns: 4em minmax(0, 1fr); column-gap: 1.5em; align-content: start; }
+    .is-grid .card-head { font-size: 1.75em; margin-top: 0 !important; line-height: 2.3; }
+    .is-grid .card-text { grid-column: 2; font-size: 1.4em; line-height: 1.7; margin-top: .2em !important; }
+
+    /* 得ているものと手放しているもの（13枚目） */
+    .trade { display: grid; grid-template-columns: 38.9em 9.3em minmax(0, 1fr); align-items: start; }
+    .trade-box { height: 25.9em; padding: 1.4em 2.2em; }
+    .trade-gain { background: var(--w-peach); }
+    .trade-head { color: var(--w-navy); font-size: 1.8em; font-weight: 700; }
+    .trade-sub { color: var(--w-orange); font-size: 1.8em; font-weight: 700; margin-top: .6em !important; }
+    .trade-text { color: var(--w-navy); font-size: 1.3em; line-height: 1.7; margin-top: .7em !important; }
+    .trade-arrow { display: flex; justify-content: center; padding-top: 10.5em; }
+    .trade-arrow svg { width: 6.6em; height: 5em; fill: var(--w-gray); }
+    .trade-loss ul { padding-left: 1.4em; margin-top: 1.3em; }
+    .trade-loss li { color: var(--w-navy); font-size: 1.65em; line-height: 2.25; padding-left: .6em; }
+    .trade .s-close { grid-column: 1 / -1; font-size: 1.65em; margin-top: .9em; }
+
+    /* 結論（14枚目） */
+    .conclusion { left: 5.7em; right: 6em; top: 11.1em; }
+    .conclusion-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2.1em; }
+    .conclusion-card { height: 12.6em; background: var(--w-slate); border-radius: .6em; padding: .9em 2.2em; }
+    .conclusion-head { color: var(--w-orange); font-size: 1.95em; font-weight: 700; }
+    .conclusion-text { color: var(--w-paper); font-size: 1.35em; line-height: 1.8; margin-top: .9em !important; }
+    .conclusion-arrow { display: flex; justify-content: center; margin: .8em 0 .7em; }
+    .conclusion-arrow svg { width: 6em; height: 4.2em; fill: var(--w-rule); }
+    .conclusion-band { display: flex; align-items: center; height: 8.3em; background: var(--w-orange); border-radius: .6em; padding: 0 2.2em; }
+    .conclusion-band p { color: var(--w-navy); font-size: 2.1em; font-weight: 700; }
+    .premise { margin-top: 2.3em; }
+    .premise p { color: var(--w-rule); font-size: 1.45em; line-height: 1.9; }
+    .premise b { font-weight: 400; margin-right: 1em; }
+
+    /* 限界と出典（16枚目） */
+    .refs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 4em; top: 9.9em; }
+    .refs .s-label { font-size: 1.5em; }
+    .refs ul { padding-left: 1.6em; margin-top: 1.1em; }
+    .refs li { color: var(--w-navy); font-size: 1.25em; line-height: 1.75; padding-left: 1.4em; margin-bottom: .45em; }
+
+    /* スマホは 16:9 の枠を使わず、縦に積んで伸ばす。1em を画面に合わせた固定の大きさにする */
+    @media (max-width: 767.98px) {
+        .deck-wrap { padding: .75rem; }
+        .slide { font-size: 11px; aspect-ratio: auto; overflow: visible; padding: 2.4em 1.6em 2.4em; }
+        .s-title { font-size: 2.1em; line-height: 1.4; }
+        .s-body, .s-source, .s-foot, .cover-dot, .cover-main { position: static; }
+        .s-body { margin-top: 1.6em; }
+        .s-source { margin-top: 1.4em; }
+        .s-foot { margin-top: 1.6em; }
+        .cover-dot { margin-top: 2em; }
+        .cover-main { margin-top: 2.4em; }
+        .cover-lines { font-size: 2.3em; line-height: 1.5; }
+        .is-dark { padding-bottom: 3.2em; }
+
+        .steps, .sources, .bars, .heat, .compare, .premium, .cards, .cards.is-grid, .trade, .conclusion-cards, .refs { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 1.2em; }
+        .step, .is-card .step { grid-template-columns: 3.2em minmax(0, 1fr); column-gap: 1.2em; row-gap: .4em; align-items: start; }
+        .step-head { align-self: center; }
+        .step-text, .is-card .step-box { grid-column: 2; }
+        .step-text.is-formula { font-size: 1.6em; }
+        .num { width: 3.2em; height: 3.2em; }
+        .source-cards, .limits, .premium-items, .bar-rows { grid-template-rows: none; row-gap: 1em; margin-top: 1em; }
+        .limit { gap: 1.2em; }
+        .limit p { margin-top: .4em !important; }
+        .bar-row { grid-template-columns: 11em minmax(0, 1fr); }
+        .bar-name { white-space: normal; font-size: 1.05em; line-height: 1.3; }
+        .bar { height: 1.6em; }
+        .side, .heat .side, .case, .claim, .card, .is-question .card, .is-grid .card, .trade-box, .conclusion-card, .conclusion-band, .slope-stat { height: auto; }
+        .side { margin-top: 0; }
+        .heat-table { grid-template-columns: 7.5em repeat(4, minmax(0, 1fr)); margin-top: .8em; }
+        .heat-col { font-size: .95em; line-height: 1.3; white-space: normal; }
+        .heat-name { font-size: 1.05em; white-space: normal; line-height: 1.3; }
+        .heat-cell { height: 2.8em; }
+        .slope { grid-template-columns: minmax(0, 1.25fr) 3.5em minmax(0, 1fr); column-gap: .5em; }
+        .slope .s-label { font-size: 1.1em; line-height: 1.4; min-height: 2.8em; }
+        .slope-row { font-size: 1.05em; line-height: 1.3; gap: .4em; }
+        .slope-right .slope-row { flex-direction: row-reverse; justify-content: flex-end; }
+        .slope-right .slope-value { width: auto; margin-left: auto; }
+        .slope-svg { margin-top: calc(1.1em * 1.4 * 2 + 1.2em); }
+        .slope-stat { grid-column: 1 / -1; padding: 1.4em; margin-top: 1em; }
+        .case { padding: 1.6em; }
+        .case-rank { margin-top: 1em !important; }
+        .band { margin-top: 0; }
+        .claim { padding: 1.8em; gap: 1.4em; }
+        .claim-text { font-size: 1.8em; }
+        .card { padding: 1.6em; }
+        .card-text, .is-question .card-text { margin-top: .8em !important; }
+        .is-question .card-head { min-height: 0; }
+        .trade-arrow { padding: 0; transform: rotate(90deg); }
+        .trade-arrow svg { width: 4.4em; height: 3.4em; }
+        .conclusion-card { padding: 1.4em 1.6em; }
+        .conclusion-band { padding: 1.2em 1.6em; }
+        .conclusion-band p { font-size: 1.6em; }
+    }
+</style>
+{% endblock %}
+
+{% block contents %}
+<div class="deck"><div class="deck-wrap">
+    <nav class="deck-bar">
+        <button type="button" class="deck-btn" id="deck-prev" aria-label="前のスライド"><i class="fas fa-chevron-left"></i></button>
+        <span class="deck-count" id="deck-count" aria-live="polite">1 / {{ total }}</span>
+        <button type="button" class="deck-btn" id="deck-next" aria-label="次のスライド"><i class="fas fa-chevron-right"></i></button>
+    </nav>
+
+    <div class="deck-frame">
+    {% for s in slides %}
+    <div class="deck-page">
+    <section id="slide-{{ forloop.counter }}" class="slide slide-{{ s.kind }}{% if s.kind == 'cover' or s.kind == 'conclusion' %} is-dark{% endif %}{% if s.kicker %} has-kicker{% endif %}">
+        {% if s.kind == 'cover' %}
+            <div class="cover-dot">{% if s.kicker %}<span class="cover-kicker">{{ s.kicker }}</span>{% endif %}</div>
+            <div class="cover-main">
+                <h1 class="cover-lines">{% for line in s.lines %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</h1>
+                <p class="cover-sub">{{ s.sub }}</p>
+            </div>
+        {% else %}
+            <h2 class="s-title">{{ s.title }}</h2>
+        {% endif %}
+
+        {% if s.kind == 'steps' %}
+            <div class="s-body steps{% if s.card %} is-card{% endif %}">
+                {% for item in s.items %}
+                <div class="step">
+                    <span class="num"><span>{{ forloop.counter }}</span></span>
+                    <h3 class="step-head">{{ item.head }}</h3>
+                    {% if s.card %}
+                    <div class="step-box">
+                        <p class="step-text{% if item.formula %} is-formula{% endif %}">{{ item.text }}</p>
+                        <p class="step-sub">{{ item.sub }}</p>
+                    </div>
+                    {% else %}
+                    <p class="step-text">{{ item.text }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+        {% elif s.kind == 'sources' %}
+            <div class="s-body sources">
+                <div>
+                    <h3 class="s-label">{{ s.left_label }}</h3>
+                    <div class="source-cards">
+                        {% for org, name, text in s.sources %}
+                        <div class="s-card source-card">
+                            <p class="source-org">{{ org }}</p>
+                            <p class="source-name">{{ name }}</p>
+                            <p class="source-text">{{ text }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div>
+                    <h3 class="s-label">{{ s.right_label }}</h3>
+                    <div class="limits">
+                        {% for text in s.items %}
+                        <div class="limit"><span class="num"><span>{{ forloop.counter }}</span></span><p>{{ text }}</p></div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+        {% elif s.kind == 'bars' %}
+            <div class="s-body bars">
+                <div>
+                    <h3 class="s-label">{{ s.label }}</h3>
+                    <div class="bar-rows">
+                        {% for b in s.bars %}
+                        <div class="bar-row{% if b.self %} is-self{% endif %}">
+                            <span class="bar-name">{{ b.name }}</span>
+                            <span class="bar-track"><span class="bar" style="width: {{ b.width|stringformat:'.2f' }}%"></span><span class="bar-value">{{ b.value }}</span></span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="s-card side">
+                    <h3 class="side-head">{{ s.side.head }}</h3>
+                    {% for line in s.side.lines %}<p class="side-line">{{ line }}</p>{% endfor %}
+                </div>
+            </div>
+
+        {% elif s.kind == 'heat' %}
+            <div class="s-body heat">
+                <div>
+                    <div class="heat-scale" aria-hidden="true">{% for color in s.scale %}<span style="background: {{ color }}"></span>{% endfor %}</div>
+                    <p class="heat-scale-label">低い ← 50 → 高い</p>
+                    <div class="heat-table">
+                        <span></span>
+                        {% for col in s.columns %}<span class="heat-col">{{ col }}</span>{% endfor %}
+                        {% for row in s.rows %}
+                        <span class="heat-name{% if row.self %} is-self{% endif %}">{{ row.name }}</span>
+                        {% for cell in row.cells %}<span class="heat-cell{% if row.self %} is-self{% endif %}{% if cell.light %} is-light{% endif %}" style="background: {{ cell.color }}"><span>{{ cell.value }}</span></span>{% endfor %}
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="s-card side">
+                    <h3 class="side-head">{{ s.side.head }}</h3>
+                    <p class="side-line">{{ s.side.text }}</p>
+                    {% for term, text in s.side.defs %}<p class="side-def"><span><b>{{ term }}：</b>{{ text }}</span></p>{% endfor %}
+                </div>
+            </div>
+
+        {% elif s.kind == 'slope' %}
+            <div class="s-body slope">
+                <div>
+                    <h3 class="s-label">{{ s.left_label }}</h3>
+                    <div class="slope-left">
+                        {% for r in s.left %}<div class="slope-row{% if r.self %} is-self{% endif %}"><span>{{ r.name }}</span><span class="slope-value">{{ r.value }}</span></div>{% endfor %}
+                    </div>
+                </div>
+                <svg class="slope-svg" viewBox="0 0 100 72" preserveAspectRatio="none" aria-hidden="true">
+                    {% for line in s.lines %}<line x1="2" y1="{{ line.y1|stringformat:'s' }}" x2="98" y2="{{ line.y2|stringformat:'s' }}" vector-effect="non-scaling-stroke"{% if line.self %} class="is-self"{% endif %}/>{% endfor %}
+                </svg>
+                <div>
+                    <h3 class="s-label">{{ s.right_label }}</h3>
+                    <div class="slope-right">
+                        {% for r in s.right %}<div class="slope-row{% if r.self %} is-self{% endif %}"><span class="slope-value">{{ r.value }}</span><span>{{ r.name }}</span></div>{% endfor %}
+                    </div>
+                </div>
+                <div class="s-card slope-stat">
+                    <p class="slope-stat-value">{{ s.stat.value }}</p>
+                    <p class="slope-stat-label">{% for line in s.stat.label %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
+                </div>
+            </div>
+
+        {% elif s.kind == 'compare' %}
+            <div class="s-body compare">
+                {% for c in s.cases %}
+                <div class="s-card case">
+                    <h3 class="case-head">{{ c.head }}</h3>
+                    <p class="case-rank"><small>中身</small><strong>{{ c.content }}</strong><span class="arrow">→</span><small>対価</small><strong{% if c.accent %} class="is-accent"{% endif %}>{{ c.pay }}</strong></p>
+                    <p class="case-result{% if c.accent %} is-accent{% endif %}">{{ c.result }}</p>
+                    <p class="case-text">{{ c.text }}</p>
+                </div>
+                {% endfor %}
+                <div class="band">{% for line in s.band %}<p>{{ line }}</p>{% endfor %}</div>
+            </div>
+
+        {% elif s.kind == 'premium' %}
+            <div class="s-body premium">
+                <div class="claim">
+                    <p class="claim-text">{{ s.claim }}</p>
+                    <p class="claim-sub">{{ s.claim_sub }}</p>
+                </div>
+                <div>
+                    <h3 class="s-label">{{ s.label }}</h3>
+                    <div class="premium-items">
+                        {% for text in s.items %}
+                        <div class="limit"><span class="num"><span>{{ forloop.counter }}</span></span><p>{{ text }}</p></div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+        {% elif s.kind == 'cards' %}
+            <div class="s-body cards{% if s.grid %} is-grid{% endif %}{% if s.mark == 'question' %} is-question{% endif %}">
+                {% for c in s.cards %}
+                <div class="s-card card">
+                    {% if s.mark == 'question' %}<span class="card-question">問{{ forloop.counter }}</span>{% else %}<span class="num"><span>{{ forloop.counter }}</span></span>{% endif %}
+                    <h3 class="card-head">{{ c.head }}</h3>
+                    <p class="card-text">{{ c.text }}</p>
+                </div>
+                {% endfor %}
+                {% if s.close %}<p class="s-close">{{ s.close }}</p>{% endif %}
+            </div>
+
+        {% elif s.kind == 'trade' %}
+            <div class="s-body trade">
+                <div class="trade-box trade-gain s-card">
+                    <h3 class="trade-head">{{ s.gain.head }}</h3>
+                    {% for head, text in s.gain.items %}<p class="trade-sub">{{ head }}</p><p class="trade-text">{{ text }}</p>{% endfor %}
+                </div>
+                <div class="trade-arrow" aria-hidden="true">
+                    <svg viewBox="0 0 66 50"><path d="M0 25 L20 0 V14 H46 V0 L66 25 L46 50 V36 H20 V50 Z"/></svg>
+                </div>
+                <div class="trade-box trade-loss s-card">
+                    <h3 class="trade-head">{{ s.loss.head }}</h3>
+                    <ul>{% for item in s.loss.items %}<li>{{ item }}</li>{% endfor %}</ul>
+                </div>
+                <p class="s-close">{{ s.close }}</p>
+            </div>
+
+        {% elif s.kind == 'conclusion' %}
+            <div class="s-body conclusion">
+                <div class="conclusion-cards">
+                    {% for head, text in s.cards %}
+                    <div class="conclusion-card">
+                        <h3 class="conclusion-head">{{ head }}</h3>
+                        <p class="conclusion-text">{{ text }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="conclusion-arrow" aria-hidden="true"><svg viewBox="0 0 60 42"><path d="M14 0 H46 V18 H60 L30 42 L0 18 H14 Z"/></svg></div>
+                <div class="conclusion-band"><p>{{ s.band }}</p></div>
+                <div class="premise">
+                    {% for head, text in s.premise %}<p><b>{{ head }}</b>{{ text }}</p>{% endfor %}
+                </div>
+            </div>
+
+        {% elif s.kind == 'refs' %}
+            <div class="s-body refs">
+                {% for head, items in s.columns %}
+                <div>
+                    <h3 class="s-label">{{ head }}</h3>
+                    <ul>{% for item in items %}<li>{{ item }}</li>{% endfor %}</ul>
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if s.source %}<div class="s-source{% if s.kind == 'heat' %} heat-source{% endif %}"><p>{{ s.source }}</p></div>{% endif %}
+        {% if s.numbered %}<div class="s-foot"><span>{% if s.footer %}{{ footer }}{% endif %}</span><span>{{ forloop.counter }}</span></div>{% endif %}
+    </section>
+    <p class="deck-reading">{{ s.reading }}</p>
+    </div>
+    {% endfor %}
+    </div>
+
+    <div class="deck-progress"><div id="deck-progress"></div></div>
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ページ送り：前後のボタン・キーボード（← → スペース Home End）・スワイプで1枚ずつ送る（3つの構想のページと同じ作り）。
+// 今のスライドは URL の #slide-N に持つので、再読み込みや共有をしても同じスライドが開く。
+(function () {
+    var slides = document.querySelectorAll('.deck-page');
+    var total = slides.length;
+    var prev = document.getElementById('deck-prev');
+    var next = document.getElementById('deck-next');
+    var current = 1;
+
+    function numberFromHash() {
+        var m = location.hash.match(/^#slide-(\d+)$/);
+        var n = m ? parseInt(m[1], 10) : 1;
+        return n >= 1 && n <= total ? n : 1;
+    }
+
+    function show(n, keepHash) {
+        current = Math.min(Math.max(n, 1), total);
+        slides.forEach(function (el, i) { el.classList.toggle('is-current', i === current - 1); });
+        document.getElementById('deck-count').textContent = current + ' / ' + total;
+        document.getElementById('deck-progress').style.width = (current / total * 100) + '%';
+        prev.disabled = current === 1;
+        next.disabled = current === total;
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        if (!keepHash) { history.replaceState(null, '', '#slide-' + current); }
+    }
+
+    document.documentElement.classList.add('wages-paged');
+    prev.addEventListener('click', function () { show(current - 1); });
+    next.addEventListener('click', function () { show(current + 1); });
+    window.addEventListener('hashchange', function () { show(numberFromHash(), true); });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.altKey || e.ctrlKey || e.metaKey) { return; }
+        var onControl = /^(BUTTON|A)$/.test(e.target.tagName);
+        if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !onControl)) { e.preventDefault(); show(current + 1); }
+        else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(current - 1); }
+        else if (e.key === 'Home') { e.preventDefault(); show(1); }
+        else if (e.key === 'End') { e.preventDefault(); show(total); }
+    });
+
+    var startX = null, startY = null;
+    document.addEventListener('touchstart', function (e) {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', function (e) {
+        if (startX === null) { return; }
+        var dx = e.changedTouches[0].clientX - startX;
+        var dy = e.changedTouches[0].clientY - startY;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { show(current + (dx < 0 ? 1 : -1)); }
+    }, { passive: true });
+
+    show(numberFromHash());
+})();
+</script>
+{% endblock %}

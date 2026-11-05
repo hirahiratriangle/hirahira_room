@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'genba',
     'proposals',
     'welfare_activity',
+    'wages',
     'works',
 ]
 

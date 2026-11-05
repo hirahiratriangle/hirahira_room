@@ -20,13 +20,13 @@ class IndexTests(TestCase):
 
     def test_links_to_each_page(self):
         res = self.client.get(reverse('works:index'))
-        for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'fe:about', 'fe:index', 'fe:stats',
+        for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'wages:index', 'fe:about', 'fe:index', 'fe:stats',
                      'welfare_activity:home', 'welfare_activity:slides'):
             self.assertContains(res, f'href="{reverse(name)}"')
 
     def test_links_open_in_new_tab(self):
         res = self.client.get(reverse('works:index'))
-        self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=9)
+        self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=10)
 
 
 class UrlTests(TestCase):
@@ -36,6 +36,7 @@ class UrlTests(TestCase):
         self.assertEqual(reverse('proposals:index'), '/proposals/')
         self.assertEqual(reverse('welfare_activity:home'), '/welfare/')
         self.assertEqual(reverse('fe:index'), '/fe/')
+        self.assertEqual(reverse('wages:index'), '/wages/')
 
     def test_old_pvsys_urls_are_gone(self):
         # 転送を置くと、社名の URL が生き続ける
@@ -44,14 +45,14 @@ class UrlTests(TestCase):
                 self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_public_pages_do_not_show_the_company_name(self):
-        for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'fe:about',
+        for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'wages:index', 'fe:about',
                      'fe:index', 'fe:stats', 'welfare_activity:home', 'welfare_activity:slides'):
             with self.subTest(name):
                 self.assertNotContains(self.client.get(reverse(name)), 'pvsys', html=False)
 
     def test_presentation_urls_open_without_login(self):
         # プレゼンの資料に載っている URL
-        for url in ('/genba/about/', '/proposals/', '/welfare/slides/'):
+        for url in ('/genba/about/', '/proposals/', '/wages/', '/welfare/slides/'):
             with self.subTest(url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 

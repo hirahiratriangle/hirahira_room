@@ -36,7 +36,7 @@ urlpatterns = [
 
     # 銀行業務検定 法務3級 対策アプリ
     path('bk_houmu3/', include('bk_houmu3.urls', namespace='bk_houmu3')),
-    # 取り組み（genba・3つの構想・基本情報・福祉従事者の活動ページをまとめた入り口。ログイン必須）
+    # 取り組み（genba・3つの構想・SE／PGの賃金・基本情報・福祉従事者の活動ページをまとめた入り口。ログイン必須）
     # /pvsys/ からの転送は置かない
     path('works/', include('works.urls', namespace='works')),
     # 基本情報技術者試験（FE）対策アプリ。Logic Apps と GitHub Actions の定期実行もここを叩く
@@ -47,6 +47,8 @@ urlpatterns = [
     path('proposals/', include('proposals.urls', namespace='proposals')),
     # 福祉従事者の活動ページ（fun IT club WG-03。ログインなしで公開）
     path('welfare/', include('welfare_activity.urls', namespace='welfare_activity')),
+    # SE／PGの賃金の議論（「SE_PG賃金_第1弾.pptx」を順に読むページ）
+    path('wages/', include('wages.urls', namespace='wages')),
 ]
 
 # メディアファイルの配信設定
