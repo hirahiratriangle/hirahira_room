@@ -5,7 +5,7 @@
 {% comment %}
 SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は deck_data.SLIDES、配色は下の CSS 変数で、「SE_PG賃金_第1弾.pptx」のテーマ色のまま。
 ページ送りの作りは 3つの構想のページ（proposals/index.html）と同じ。JavaScript が動かないときは、全スライドが縦に並ぶ。
-各自に読んでもらうページなので、スライドの下に発表者ノートを出す。
+発表者ノートは載せない。
 {% endcomment %}
 
 {% block head %}
@@ -16,8 +16,8 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
     }
     body { background: var(--w-ink); }
     .deck { font-family: "Helvetica Neue", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", YuGothic, Meiryo, sans-serif; color: var(--w-navy); }
-    /* 枠は画面に収まる大きさまで広げる（帯・進み具合の線と、スライドの下の説明の分 15rem を除いた高さから、16:9 で幅を決める） */
-    .deck-wrap { max-width: min(1500px, calc((100vh - 15rem) * 16 / 9 + 2rem)); margin: 0 auto; padding: 1rem; }
+    /* 枠は画面に収まる大きさまで広げる（帯・進み具合の線の分 9rem を除いた高さから、16:9 で幅を決める） */
+    .deck-wrap { max-width: min(1500px, calc((100vh - 9rem) * 16 / 9 + 2rem)); margin: 0 auto; padding: 1rem; }
     .deck-frame { container-type: inline-size; }
 
     /* 操作の帯 */
@@ -38,7 +38,6 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
     .deck-page { margin-bottom: 1.5rem; }
     .wages-paged .deck-page { display: none; margin-bottom: 0; }
     .wages-paged .deck-page.is-current { display: block; }
-    .deck-reading { color: var(--w-card); font-size: .95rem; line-height: 1.8; margin: .9rem 0 0; }
 
     .s-title { color: var(--w-navy); font-size: 3em; font-weight: 700; line-height: 1.2; }
     .s-body { position: absolute; left: 4.3em; right: 4.5em; top: 10.8em; }
@@ -486,7 +485,6 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
         {% if s.source %}<div class="s-source{% if s.kind == 'heat' %} heat-source{% endif %}"><p>{{ s.source }}</p></div>{% endif %}
         {% if s.numbered %}<div class="s-foot"><span>{% if s.footer %}{{ footer }}{% endif %}</span><span>{{ forloop.counter }}</span></div>{% endif %}
     </section>
-    <p class="deck-reading">{{ s.reading }}</p>
     </div>
     {% endfor %}
     </div>

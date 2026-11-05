@@ -15,12 +15,10 @@ class IndexTests(TestCase):
                      '上乗せの源泉：調達調整価', '結論：得ている対価をどう使うか？', '分析の限界と出典'):
             self.assertContains(res, text)
 
-    def test_reading_text_under_each_slide(self):
+    def test_no_speaker_notes(self):
         res = self.client.get(reverse('wages:index'))
-        self.assertEqual(len(deck_data.NOTES), len(deck_data.SLIDES))
-        self.assertContains(res, 'class="deck-reading"', count=16)
-        for note in deck_data.NOTES:
-            self.assertContains(res, note)
+        self.assertNotContains(res, 'deck-reading')
+        self.assertNotContains(res, '本日は、客先常駐で働くSE／PGの賃金')
 
     def test_charts_keep_the_numbers(self):
         res = self.client.get(reverse('wages:index'))
