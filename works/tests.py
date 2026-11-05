@@ -10,28 +10,28 @@ class IndexTests(TestCase):
 
     def test_requires_login(self):
         self.client.logout()
-        res = self.client.get(reverse('pvsys:index'))
+        res = self.client.get(reverse('works:index'))
         self.assertRedirects(res, f'{reverse("account_login")}?next=/works/', fetch_redirect_response=False)
 
     def test_opens_after_login(self):
-        res = self.client.get(reverse('pvsys:index'))
+        res = self.client.get(reverse('works:index'))
         self.assertEqual(res.status_code, 200)
         self.assertContains(res, '企業価値の源泉は人月。その時間を実りあるものにする。')
 
     def test_links_to_each_page(self):
-        res = self.client.get(reverse('pvsys:index'))
+        res = self.client.get(reverse('works:index'))
         for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'fe:about', 'fe:index', 'fe:stats',
                      'welfare_activity:home', 'welfare_activity:slides'):
             self.assertContains(res, f'href="{reverse(name)}"')
 
     def test_links_open_in_new_tab(self):
-        res = self.client.get(reverse('pvsys:index'))
+        res = self.client.get(reverse('works:index'))
         self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=9)
 
 
 class UrlTests(TestCase):
     def test_urls_do_not_show_the_company_name(self):
-        self.assertEqual(reverse('pvsys:index'), '/works/')
+        self.assertEqual(reverse('works:index'), '/works/')
         self.assertEqual(reverse('genba:about'), '/genba/about/')
         self.assertEqual(reverse('proposals:index'), '/proposals/')
         self.assertEqual(reverse('welfare_activity:home'), '/welfare/')
@@ -67,6 +67,6 @@ class HomeTests(TestCase):
         # genba・3つの構想・基本情報・福祉従事者は「取り組み」にまとめたので、ホームには入り口だけを出す
         self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))
         res = self.client.get(reverse('home:home'))
-        self.assertContains(res, f'href="{reverse("pvsys:index")}"')
+        self.assertContains(res, f'href="{reverse("works:index")}"')
         for name in ('genba:about', 'proposals:index', 'fe:index', 'welfare_activity:home'):
             self.assertNotContains(res, f'href="{reverse(name)}"')

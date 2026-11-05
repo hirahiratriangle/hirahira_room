@@ -34,7 +34,7 @@ INSTALLED_APPS = [
     'genba',
     'proposals',
     'welfare_activity',
-    'pvsys',
+    'works',
 ]
 
 MIDDLEWARE = [

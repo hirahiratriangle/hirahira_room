@@ -2,7 +2,7 @@ from django.urls import path
 
 from . import views
 
-app_name = 'pvsys'
+app_name = 'works'
 
 # 入り口はログインが要る（LoginRequiredMiddleware）。リンク先の genba・3つの構想・基本情報・福祉従事者の活動ページは
 # URL を知っていればログインなしで開ける

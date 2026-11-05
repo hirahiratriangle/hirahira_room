@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 
 
-class PvsysConfig(AppConfig):
+class WorksConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'pvsys'
-    verbose_name = 'PVSYS'
+    name = 'works'
+    verbose_name = '取り組み'
