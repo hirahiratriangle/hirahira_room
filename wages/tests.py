@@ -8,11 +8,11 @@ class IndexTests(TestCase):
     def test_all_slides_open_without_login(self):
         res = self.client.get(reverse('wages:index'))
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.context['total'], 16)
-        self.assertContains(res, 'id="slide-16"')
+        self.assertEqual(res.context['total'], 17)
+        self.assertContains(res, 'id="slide-17"')
         self.assertContains(res, 'id="deck-next"')
         for text in ('SE／PGの賃金と仕事の実質', 'どんな価値の対価か？', 'SE／PGの実質時給は11職種中4位', '仕事の中身を4つの職務特性で比べる',
-                     '上乗せの源泉：調達調整価', '結論：得ている対価をどう使うか？', '分析の限界と出典'):
+                     '割高分の正体：雇用の制約を負わないことへの補償', '対価に含まれるもう一つのもの：成果物責任を負わない立場', '結論：得ている対価をどう使うか？', '分析の限界と出典'):
             self.assertContains(res, text)
 
     def test_no_speaker_notes(self):
@@ -22,7 +22,7 @@ class IndexTests(TestCase):
 
     def test_charts_keep_the_numbers(self):
         res = self.client.get(reverse('wages:index'))
-        for text in ('2,566', '1,652', '−0.09', '59.3', '32.0', 'T ＝ 50 ＋ 10 ×（x − μ）÷ σ'):
+        for text in ('2,566', '2,184', '1,652', '1,970円', '−0.09', '59.3', '32.0', 'T ＝ 50 ＋ 10 ×（x − μ）÷ σ'):
             self.assertContains(res, text)
         # SE／PG の棒・行・線だけをオレンジにする
         self.assertContains(res, 'bar-row is-self', count=1)

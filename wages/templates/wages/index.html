@@ -142,27 +142,36 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
     .slope-stat-value { color: var(--w-navy); font-size: 3.2em; font-weight: 700; }
     .slope-stat-label { color: var(--w-body); font-size: 1.2em; line-height: 1.7; margin-top: .8em !important; }
 
-    /* 二つの場合の比較（9枚目） */
-    .compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.5em; }
-    .case { height: 23.8em; padding: 1.7em 2.7em; }
+    /* 実装中心は割高（9枚目）。主の場合をオレンジのカード、参考の場合を灰色のカードにし、下に濃い帯で問いを置く */
+    .compare { display: grid; grid-template-columns: 55.5em minmax(0, 1fr); column-gap: 2.1em; }
+    .case { height: 24.5em; padding: 1.5em 2.5em; }
+    .case-main { background: var(--w-peach); }
     .case-head { color: var(--w-navy); font-size: 1.6em; font-weight: 700; }
-    .case-rank { display: flex; align-items: baseline; gap: .4em; color: var(--w-muted); margin-top: 2.6em !important; }
+    .case-ref .case-head { color: var(--w-body); font-size: 1.35em; }
+    .case-rank { display: flex; align-items: baseline; gap: .4em; color: var(--w-body); margin-top: 1.6em !important; }
     .case-rank small { font-size: 1.6em; }
-    .case-rank strong { color: var(--w-navy); font-size: 3.6em; line-height: 1.1; margin-right: .2em; }
+    .case-rank strong { color: var(--w-navy); font-size: 4.4em; line-height: 1.1; margin-right: .1em; }
     .case-rank .arrow { font-size: 2em; margin: 0 .2em; }
-    .case-rank strong.is-accent { color: var(--w-orange); }
-    .case-result { color: var(--w-navy); font-size: 1.7em; font-weight: 700; margin-top: .6em !important; }
-    .case-result.is-accent { color: var(--w-orange); }
-    .case-text { color: var(--w-navy); font-size: 1.35em; margin-top: 1.3em !important; }
-    .band { grid-column: 1 / -1; background: var(--w-peach); border-radius: .6em; padding: 1.2em 2.2em; margin-top: 1.7em; }
-    .band p { color: var(--w-navy); font-size: 1.45em; line-height: 1.65; }
-    .band p:first-child { font-weight: 700; }
+    .case-rank strong.is-accent, .case-tag { color: var(--w-orange); }
+    .case-tag { font-size: 2.9em; font-weight: 700; margin-left: .7em; }
+    .case-ref .case-rank { margin-top: 3.4em !important; }
+    .case-ref .case-rank small { font-size: 1.3em; }
+    .case-ref .case-rank strong { font-size: 3.2em; }
+    .case-ref .case-rank .arrow { font-size: 1.6em; margin: 0; }
+    .case-points { padding-left: 1.6em; margin-top: 1em !important; }
+    .case-points li { color: var(--w-navy); font-size: 1.5em; line-height: 2.1; padding-left: 1.2em; }
+    .case-text { color: var(--w-navy); font-size: 1.4em; margin-top: 1.4em !important; }
+    .band { grid-column: 1 / -1; display: flex; flex-direction: column; justify-content: center; height: 8.7em; background: var(--w-navy); border-radius: .6em; padding: 0 2.4em; margin-top: 1.8em; }
+    .band-lead { color: var(--w-card); font-size: 1.45em; }
+    .band-question { color: var(--w-orange); font-size: 2.1em; font-weight: 700; margin-top: .1em !important; }
 
     /* 調達調整価（10枚目） */
     .premium { display: grid; grid-template-columns: 37.5em minmax(0, 1fr); column-gap: 3.5em; }
-    .claim { display: flex; flex-direction: column; justify-content: space-between; height: 34.6em; background: var(--w-navy); border-radius: .6em; padding: 2.4em 2.5em 7.6em; }
-    .claim-text { color: var(--w-paper); font-size: 2.2em; font-weight: 700; line-height: 1.65; }
-    .claim-sub { color: var(--w-rule); font-size: 1.45em; line-height: 1.7; }
+    .claim { display: flex; flex-direction: column; justify-content: space-between; height: 34.6em; background: var(--w-navy); border-radius: .6em; padding: 1.9em 2.5em 3.2em; }
+    .claim-lead { color: var(--w-paper); font-size: 1.75em; font-weight: 700; line-height: 1.55; }
+    .claim-lead + .claim-lead { font-size: 1.6em; margin-top: .6em !important; }
+    .claim-key { color: var(--w-orange); font-size: 2.8em; font-weight: 700; line-height: 1.6; margin-top: .3em !important; }
+    .claim-sub { color: var(--w-rule); font-size: 1.3em; line-height: 1.7; }
     .premium-items { display: grid; grid-template-rows: repeat(4, 7.1em); margin-top: 2.6em; }
     .premium .limit p { font-size: 1.45em; }
 
@@ -181,18 +190,33 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
     .is-grid .card-head { font-size: 1.75em; margin-top: 0 !important; line-height: 2.3; }
     .is-grid .card-text { grid-column: 2; font-size: 1.4em; line-height: 1.7; margin-top: .2em !important; }
 
-    /* 得ているものと手放しているもの（13枚目） */
+    /* 成果物責任を負わない立場（13枚目）。左に請負、右に客先常駐（オレンジ）、下に濃い帯 */
+    .liability { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.5em; }
+    .duty { height: 19.8em; padding: 1.4em 2.5em; }
+    .duty.is-accent { background: var(--w-peach); }
+    .duty-head { color: var(--w-navy); font-size: 1.8em; font-weight: 700; }
+    .duty.is-accent .duty-head { color: var(--w-orange); }
+    .duty ul { padding-left: 1.6em; margin-top: .9em; }
+    .duty li { color: var(--w-navy); font-size: 1.5em; line-height: 1.6; padding-left: 1.2em; margin-bottom: .7em; }
+    .liability .band { height: 8.7em; margin-top: 2.1em; }
+    .band-line { color: var(--w-paper); font-size: 1.85em; font-weight: 700; }
+    .band-line em { color: var(--w-orange); font-style: normal; }
+
+    /* 得ているものと手放しているもの（14枚目）。挑戦が許される立場をオレンジの箱で目立たせる */
     .trade { display: grid; grid-template-columns: 38.9em 9.3em minmax(0, 1fr); align-items: start; }
-    .trade-box { height: 25.9em; padding: 1.4em 2.2em; }
-    .trade-gain { background: var(--w-peach); }
+    .trade-box { height: 28.5em; padding: 1.3em 2.2em; }
     .trade-head { color: var(--w-navy); font-size: 1.8em; font-weight: 700; }
-    .trade-sub { color: var(--w-orange); font-size: 1.8em; font-weight: 700; margin-top: .6em !important; }
-    .trade-text { color: var(--w-navy); font-size: 1.3em; line-height: 1.7; margin-top: .7em !important; }
-    .trade-arrow { display: flex; justify-content: center; padding-top: 10.5em; }
+    .trade-plain { color: var(--w-navy); font-size: 1.55em; font-weight: 700; margin-top: .7em !important; }
+    .trade-plain-text { color: var(--w-body); font-size: 1.2em; margin-top: .4em !important; }
+    .trade-key { background: var(--w-orange); border-radius: .4em; padding: 1em 1.8em 1.4em; margin: 1.9em -.4em 0 -.4em; }
+    .trade-key-head { color: var(--w-paper); font-size: 2.6em; font-weight: 700; }
+    .trade-key-text { color: var(--w-paper); font-size: 1.35em; line-height: 1.75; margin-top: .6em !important; }
+    .trade-arrow { display: flex; justify-content: center; padding-top: 11.5em; }
     .trade-arrow svg { width: 6.6em; height: 5em; fill: var(--w-gray); }
-    .trade-loss ul { padding-left: 1.4em; margin-top: 1.3em; }
-    .trade-loss li { color: var(--w-navy); font-size: 1.65em; line-height: 2.25; padding-left: .6em; }
-    .trade .s-close { grid-column: 1 / -1; font-size: 1.65em; margin-top: .9em; }
+    .trade-loss ul { padding-left: 1.4em; margin-top: 1.1em; }
+    .trade-loss li { color: var(--w-body); font-size: 1.65em; line-height: 2.25; padding-left: .6em; }
+    .trade .s-close { grid-column: 1 / -1; font-size: 1.75em; margin-top: .6em; }
+    .trade .s-close em { color: var(--w-orange); font-style: normal; }
 
     /* 結論（14枚目） */
     .conclusion { left: 5.7em; right: 6em; top: 11.1em; }
@@ -228,7 +252,7 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
         .cover-lines { font-size: 2.3em; line-height: 1.5; }
         .is-dark { padding-bottom: 3.2em; }
 
-        .steps, .sources, .bars, .heat, .compare, .premium, .cards, .cards.is-grid, .trade, .conclusion-cards, .refs { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 1.2em; }
+        .steps, .sources, .bars, .heat, .compare, .premium, .cards, .cards.is-grid, .liability, .trade, .conclusion-cards, .refs { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 1.2em; }
         .step, .is-card .step { grid-template-columns: 3.2em minmax(0, 1fr); column-gap: 1.2em; row-gap: .4em; align-items: start; }
         .step-head { align-self: center; }
         .step-text, .is-card .step-box { grid-column: 2; }
@@ -240,7 +264,7 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
         .bar-row { grid-template-columns: 11em minmax(0, 1fr); }
         .bar-name { white-space: normal; font-size: 1.05em; line-height: 1.3; }
         .bar { height: 1.6em; }
-        .side, .heat .side, .case, .claim, .card, .is-question .card, .is-grid .card, .trade-box, .conclusion-card, .conclusion-band, .slope-stat { height: auto; }
+        .side, .heat .side, .case, .band, .duty, .claim, .card, .is-question .card, .is-grid .card, .trade-box, .conclusion-card, .conclusion-band, .slope-stat { height: auto; }
         .side { margin-top: 0; }
         .heat-table { grid-template-columns: 7.5em repeat(4, minmax(0, 1fr)); margin-top: .8em; }
         .heat-col { font-size: .95em; line-height: 1.3; white-space: normal; }
@@ -255,9 +279,16 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
         .slope-stat { grid-column: 1 / -1; padding: 1.4em; margin-top: 1em; }
         .case { padding: 1.6em; }
         .case-rank { margin-top: 1em !important; }
-        .band { margin-top: 0; }
+        .band { margin-top: 0; padding: 1.2em 1.6em; }
+        .duty { padding: 1.4em 1.6em; }
+        .case-rank strong { font-size: 3.2em; }
+        .case-tag { font-size: 2em; margin-left: .4em; }
+        .case-ref .case-rank { margin-top: 1em !important; }
+        .case-points li { line-height: 1.6; margin-bottom: .5em; }
+        .trade-key { margin: 1.4em 0 0; padding: 1em 1.4em; }
+        .trade-key-head { font-size: 2em; }
         .claim { padding: 1.8em; gap: 1.4em; }
-        .claim-text { font-size: 1.8em; }
+        .claim-key { font-size: 2.1em; }
         .card { padding: 1.6em; }
         .card-text, .is-question .card-text { margin-top: .8em !important; }
         .is-question .card-head { min-height: 0; }
@@ -399,22 +430,30 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
 
         {% elif s.kind == 'compare' %}
             <div class="s-body compare">
-                {% for c in s.cases %}
-                <div class="s-card case">
-                    <h3 class="case-head">{{ c.head }}</h3>
-                    <p class="case-rank"><small>中身</small><strong>{{ c.content }}</strong><span class="arrow">→</span><small>対価</small><strong{% if c.accent %} class="is-accent"{% endif %}>{{ c.pay }}</strong></p>
-                    <p class="case-result{% if c.accent %} is-accent{% endif %}">{{ c.result }}</p>
-                    <p class="case-text">{{ c.text }}</p>
+                <div class="s-card case case-main">
+                    <h3 class="case-head">{{ s.main.head }}</h3>
+                    <p class="case-rank"><small>中身</small><strong>{{ s.main.content }}</strong><span class="arrow">→</span><small>対価</small><strong class="is-accent">{{ s.main.pay }}</strong><span class="case-tag">{{ s.main.tag }}</span></p>
+                    <ul class="case-points">{% for point in s.main.points %}<li>{{ point }}</li>{% endfor %}</ul>
                 </div>
-                {% endfor %}
-                <div class="band">{% for line in s.band %}<p>{{ line }}</p>{% endfor %}</div>
+                <div class="s-card case case-ref">
+                    <h3 class="case-head">{{ s.ref.head }}</h3>
+                    <p class="case-rank"><small>中身</small><strong>{{ s.ref.content }}</strong><span class="arrow">→</span><small>対価</small><strong>{{ s.ref.pay }}</strong></p>
+                    <p class="case-text">{{ s.ref.text }}</p>
+                </div>
+                <div class="band">
+                    <p class="band-lead">{{ s.band.lead }}</p>
+                    <p class="band-question">{{ s.band.question }}</p>
+                </div>
             </div>
 
         {% elif s.kind == 'premium' %}
             <div class="s-body premium">
                 <div class="claim">
-                    <p class="claim-text">{{ s.claim }}</p>
-                    <p class="claim-sub">{{ s.claim_sub }}</p>
+                    <div>
+                        {% for line in s.claim.lead %}<p class="claim-lead">{{ line }}</p>{% endfor %}
+                        <p class="claim-key">{{ s.claim.key }}</p>
+                    </div>
+                    <p class="claim-sub">{{ s.claim.sub }}</p>
                 </div>
                 <div>
                     <h3 class="s-label">{{ s.label }}</h3>
@@ -438,11 +477,27 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
                 {% if s.close %}<p class="s-close">{{ s.close }}</p>{% endif %}
             </div>
 
+        {% elif s.kind == 'liability' %}
+            <div class="s-body liability">
+                {% for c in s.cases %}
+                <div class="s-card duty{% if c.accent %} is-accent{% endif %}">
+                    <h3 class="duty-head">{{ c.head }}</h3>
+                    <ul>{% for item in c.items %}<li>{{ item }}</li>{% endfor %}</ul>
+                </div>
+                {% endfor %}
+                <div class="band"><p class="band-line">{{ s.band.0 }}<em>{{ s.band.1 }}</em></p></div>
+            </div>
+
         {% elif s.kind == 'trade' %}
             <div class="s-body trade">
-                <div class="trade-box trade-gain s-card">
+                <div class="trade-box s-card">
                     <h3 class="trade-head">{{ s.gain.head }}</h3>
-                    {% for head, text in s.gain.items %}<p class="trade-sub">{{ head }}</p><p class="trade-text">{{ text }}</p>{% endfor %}
+                    <p class="trade-plain">{{ s.gain.plain.0 }}</p>
+                    <p class="trade-plain-text">{{ s.gain.plain.1 }}</p>
+                    <div class="trade-key">
+                        <p class="trade-key-head">{{ s.gain.key.0 }}</p>
+                        <p class="trade-key-text">{{ s.gain.key.1 }}</p>
+                    </div>
                 </div>
                 <div class="trade-arrow" aria-hidden="true">
                     <svg viewBox="0 0 66 50"><path d="M0 25 L20 0 V14 H46 V0 L66 25 L46 50 V36 H20 V50 Z"/></svg>
@@ -451,7 +506,7 @@ SE／PGの賃金の議論のページ。1枚ずつ送って読む。内容は de
                     <h3 class="trade-head">{{ s.loss.head }}</h3>
                     <ul>{% for item in s.loss.items %}<li>{{ item }}</li>{% endfor %}</ul>
                 </div>
-                <p class="s-close">{{ s.close }}</p>
+                <p class="s-close">{{ s.close.0 }}<em>{{ s.close.1 }}</em></p>
             </div>
 
         {% elif s.kind == 'conclusion' %}
