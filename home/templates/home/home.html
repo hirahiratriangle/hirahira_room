@@ -131,7 +131,59 @@
                 </div>
             </div>
 
-            <!-- 取り組み（genba・3つの構想・基本情報・福祉従事者の活動ページ） -->
+            <!-- genba -->
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2">
+                            <i class="fas fa-hard-hat me-2" style="color: #2c5aa0;"></i>
+                            genba
+                        </h5>
+                        <p class="mb-2 text-muted">現場の記録を、成長につなげる仕組み（プロトタイプ）</p>
+                        <div class="mt-2">
+                            <a href="{% url 'genba:about' %}" class="btn btn-sm btn-outline-primary me-2">案内</a>
+                            <a href="{% url 'genba:concept' %}" class="btn btn-sm btn-outline-primary me-2">構想プレゼン</a>
+                            <a href="{% url 'genba:demo' %}" class="btn btn-sm btn-outline-primary">デモ</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 基本情報技術者試験 対策 -->
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2">
+                            <i class="fas fa-graduation-cap me-2" style="color: #2c5aa0;"></i>
+                            基本情報技術者試験 対策
+                        </h5>
+                        <p class="mb-2 text-muted">シラバス準拠の1問1答。分野ごとの正答率を集計し，苦手分野を重点的に出題</p>
+                        <div class="mt-2">
+                            <a href="{% url 'fe:index' %}" class="btn btn-sm btn-outline-primary me-2">ダッシュボード</a>
+                            <a href="{% url 'fe:stats' %}" class="btn btn-sm btn-outline-primary">分野別正答率</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 福祉従事者の活動ページ -->
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-2">
+                            <i class="fas fa-hand-holding-heart me-2" style="color: #2c5aa0;"></i>
+                            福祉従事者の活動ページ
+                        </h5>
+                        <p class="mb-2 text-muted">福祉従事者の勘を支える伴奏者となるプラットフォームの構想と活動の様子</p>
+                        <div class="mt-2">
+                            <a href="{% url 'welfare_activity:home' %}" class="btn btn-sm btn-outline-primary me-2">活動ページ</a>
+                            <a href="{% url 'welfare_activity:slides' %}" class="btn btn-sm btn-outline-primary">構想資料</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 取り組み（3つの構想・SE／PGの賃金） -->
             <div class="list-group-item list-group-item-action">
                 <div class="d-flex w-100 justify-content-between align-items-center">
                     <div>
@@ -139,7 +191,7 @@
                             <i class="fas fa-building me-2" style="color: #2c5aa0;"></i>
                             取り組み
                         </h5>
-                        <p class="mb-2 text-muted">genba、社内活動 3つの構想、基本情報技術者試験 対策、福祉従事者の活動ページ</p>
+                        <p class="mb-2 text-muted">社内活動 3つの構想、SE／PGの賃金と仕事の実質</p>
                         <div class="mt-2">
                             <a href="{% url 'works:index' %}" class="btn btn-sm btn-outline-primary">開く</a>
                         </div>

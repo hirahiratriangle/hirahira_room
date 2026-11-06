@@ -1754,9 +1754,10 @@ class AboutTests(TestCase):
             self.assertNotContains(res, 'HIRAHIRAROOM')
             self.assertNotContains(res, 'Log In')
 
-    def test_works_opens_about_first(self):
+    def test_home_opens_about_first(self):
+        # genba の入り口はホームのアプリ一覧。ポータルではなく案内から読んでもらう
         self.client.force_login(CustomUser.objects.create_user('visitor', 'v@example.com', 'pass12345'))
-        res = self.client.get(reverse('works:index'))
+        res = self.client.get(reverse('home:home'))
         self.assertContains(res, f'href="{reverse("genba:about")}"')
         self.assertNotContains(res, f'href="{reverse("genba:portal")}"')
 

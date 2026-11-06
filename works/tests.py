@@ -20,13 +20,18 @@ class IndexTests(TestCase):
 
     def test_links_to_each_page(self):
         res = self.client.get(reverse('works:index'))
-        for name in ('genba:about', 'genba:concept', 'genba:demo', 'proposals:index', 'wages:index', 'fe:about', 'fe:index', 'fe:stats',
-                     'welfare_activity:home', 'welfare_activity:slides'):
+        for name in ('proposals:index', 'wages:index'):
             self.assertContains(res, f'href="{reverse(name)}"')
+
+    def test_moved_pages_are_not_here(self):
+        # genba・基本情報・福祉従事者はホームのアプリ一覧へ移した
+        res = self.client.get(reverse('works:index'))
+        for name in ('genba:about', 'fe:index', 'welfare_activity:home'):
+            self.assertNotContains(res, f'href="{reverse(name)}"')
 
     def test_links_open_in_new_tab(self):
         res = self.client.get(reverse('works:index'))
-        self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=10)
+        self.assertContains(res, 'target="_blank" rel="noopener noreferrer"', count=2)
 
 
 class UrlTests(TestCase):
@@ -64,10 +69,24 @@ class UrlTests(TestCase):
 
 
 class HomeTests(TestCase):
-    def test_home_gathers_the_pages_here(self):
-        # genba・3つの構想・基本情報・福祉従事者は「取り組み」にまとめたので、ホームには入り口だけを出す
+    def setUp(self):
         self.client.force_login(CustomUser.objects.create_user('me', 'me@example.com', 'pass12345'))
+
+    def test_home_lists_genba_fe_and_welfare_directly(self):
+        # genba・基本情報・福祉従事者はホームのアプリ一覧に直接置く
+        res = self.client.get(reverse('home:home'))
+        for name in ('genba:about', 'genba:concept', 'genba:demo', 'fe:index', 'fe:stats',
+                     'welfare_activity:home', 'welfare_activity:slides'):
+            self.assertContains(res, f'href="{reverse(name)}"')
+
+    def test_home_does_not_link_fe_concept(self):
+        # 基本情報の構想（/fe/about/）は3つの構想から読むので、アプリ一覧には載せない
+        res = self.client.get(reverse('home:home'))
+        self.assertNotContains(res, f'href="{reverse("fe:about")}"')
+
+    def test_home_reaches_proposals_and_wages_through_works(self):
+        # 3つの構想と SE／PGの賃金は「取り組み」の中に残す
         res = self.client.get(reverse('home:home'))
         self.assertContains(res, f'href="{reverse("works:index")}"')
-        for name in ('genba:about', 'proposals:index', 'fe:index', 'welfare_activity:home'):
+        for name in ('proposals:index', 'wages:index'):
             self.assertNotContains(res, f'href="{reverse(name)}"')
