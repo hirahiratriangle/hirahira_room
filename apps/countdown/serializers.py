@@ -33,10 +33,12 @@ class CountEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = CountEvent
         fields = (
-            'id', 'name', 'date', 'memo', 'notify',
+            'id', 'name', 'date', 'memo', 'notify', 'created_at',
             'days_delta', 'count_days', 'count_label', 'weeks', 'extra_days', 'years_passed',
         )
-        read_only_fields = ('id',)
+        # created_at は、画面の「登録した日から当日までの進み具合」のリングと、
+        # 「登録が新しい順」の並べ替えに使う
+        read_only_fields = ('id', 'created_at')
 
     def get_weeks(self, event):
         return event.weeks_and_days[0]

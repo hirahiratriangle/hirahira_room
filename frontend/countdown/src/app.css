@@ -1,32 +1,740 @@
-/* countdown の画面だけで使う見た目。ほかは base.html の Bootstrap をそのまま使う。
-   テンプレートのころ style="..." で直に書いていた色を、ここにまとめた。 */
+/* countdown の画面の見た目。
+   土台は base.html の Bootstrap。ここでは countdown にしか無いもの（リング・トースト・パネル・
+   スケルトン・動き）と、色（急ぎぐあい・ダークモード）を決める。
+   色はすべて下の変数から取る。ダークモードは変数を入れかえるだけで済むようにしてある。 */
 
 :root {
   --cd-accent: #2c5aa0;
+  --cd-accent-soft: #e8eef8;
+  --cd-bg: #ffffff;
+  --cd-surface: #ffffff;
+  --cd-surface-2: #f5f7fa;
+  --cd-text: #212529;
+  --cd-muted: #6c757d;
+  --cd-border: #dfe3e8;
+  /* 急ぎぐあいの色。当日・7日以内・それより先・過ぎた */
+  --cd-today: #2c5aa0;
+  --cd-soon: #d9730d;
+  --cd-later: #2c5aa0;
+  --cd-past: #5f8a6a;
+  --cd-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 2px 8px rgb(0 0 0 / 0.05);
+  --cd-shadow-lift: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+
+/* OS がダークモードのとき。countdown の画面だけで読む CSS なので、body の色も変えてよい */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cd-accent: #8fb3ec;
+    --cd-accent-soft: #1d2a3d;
+    --cd-bg: #111418;
+    --cd-surface: #1a1e24;
+    --cd-surface-2: #22272e;
+    --cd-text: #e6e8eb;
+    --cd-muted: #9aa3ad;
+    --cd-border: #2e343c;
+    --cd-today: #8fb3ec;
+    --cd-soon: #f0a050;
+    --cd-later: #8fb3ec;
+    --cd-past: #8cc29b;
+    --cd-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    --cd-shadow-lift: 0 4px 16px rgb(0 0 0 / 0.5);
+    color-scheme: dark;
+  }
+
+  body,
+  #wrapper {
+    background: var(--cd-bg);
+  }
+
+  /* Bootstrap の部品を、変数の色に合わせる */
+  .cd-app .form-control,
+  .cd-app .form-select {
+    background-color: var(--cd-surface-2);
+    border-color: var(--cd-border);
+    color: var(--cd-text);
+  }
+
+  .cd-app .form-control::placeholder {
+    color: var(--cd-muted);
+  }
+
+  .cd-app .btn-outline-primary {
+    color: var(--cd-accent);
+    border-color: var(--cd-accent);
+  }
+
+  .cd-app .btn-outline-primary:hover {
+    background: var(--cd-accent);
+    color: #111418;
+  }
+
+  .cd-app .btn-outline-secondary {
+    color: var(--cd-muted);
+    border-color: var(--cd-border);
+  }
+
+  .cd-app .btn-primary {
+    background: #3d6fbf;
+    border-color: #3d6fbf;
+  }
+}
+
+.cd-app {
+  color: var(--cd-text);
 }
 
 .cd-header {
-  background-color: var(--cd-accent);
+  background-color: #2c5aa0;
 }
 
 .cd-accent {
   color: var(--cd-accent);
 }
 
-/* メモの改行をそのまま見せる（テンプレートのころの linebreaksbr と同じ） */
+.cd-muted {
+  color: var(--cd-muted);
+}
+
+/* ---- 一覧の上の道具（タブ・検索・並べ替え・新規登録） ---- */
+
+.cd-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+}
+
+.cd-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--cd-surface-2);
+  border-radius: 999px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cd-tab {
+  flex: 1 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--cd-muted);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.cd-tab:hover {
+  color: var(--cd-text);
+}
+
+.cd-tab.is-active {
+  background: var(--cd-surface);
+  color: var(--cd-accent);
+  font-weight: 700;
+  box-shadow: var(--cd-shadow);
+}
+
+.cd-tab-count {
+  display: inline-block;
+  min-width: 1.4em;
+  margin-left: 0.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--cd-accent-soft);
+  color: var(--cd-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.cd-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.cd-search {
+  position: relative;
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.cd-search .form-control {
+  padding-left: 2.1rem;
+  padding-right: 2rem;
+}
+
+.cd-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--cd-muted);
+  pointer-events: none;
+}
+
+.cd-search-kbd {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.cd-sort {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.cd-kbd {
+  display: inline-block;
+  padding: 0 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  opacity: 0.6;
+}
+
+/* キーボードの手がかりは、キーボードのある広い画面でだけ見せる */
+@media (max-width: 767.98px), (hover: none) {
+  .cd-kbd {
+    display: none;
+  }
+}
+
+.cd-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--cd-muted);
+  margin-bottom: 0.9rem;
+}
+
+.cd-empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--cd-muted);
+  border: 2px dashed var(--cd-border);
+  border-radius: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+/* ---- カード ---- */
+
+.cd-card {
+  --cd-ring: var(--cd-later);
+  margin-bottom: 0.9rem;
+  background: var(--cd-surface);
+  border: 1px solid var(--cd-border);
+  border-left: 4px solid var(--cd-ring);
+  border-radius: 0.75rem;
+  box-shadow: var(--cd-shadow);
+  color: var(--cd-text);
+  transition: box-shadow 0.2s, transform 0.2s, opacity 0.2s;
+}
+
+.cd-card:hover {
+  box-shadow: var(--cd-shadow-lift);
+}
+
+.cd-card--today {
+  --cd-ring: var(--cd-today);
+  background: linear-gradient(135deg, var(--cd-accent-soft), var(--cd-surface) 60%);
+}
+
+.cd-card--soon {
+  --cd-ring: var(--cd-soon);
+}
+
+.cd-card--later {
+  --cd-ring: var(--cd-later);
+}
+
+.cd-card--past {
+  --cd-ring: var(--cd-past);
+}
+
+/* サーバーの返事を待っているあいだ */
+.cd-card--pending {
+  opacity: 0.65;
+}
+
+/* 新しく入った・戻ってきたカードを少し光らせる */
+.cd-card--highlight {
+  animation: cd-glow 1.8s ease-out;
+}
+
+@keyframes cd-glow {
+  0% { box-shadow: 0 0 0 4px var(--cd-ring); }
+  100% { box-shadow: var(--cd-shadow); }
+}
+
+.cd-card-body {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.cd-card-main {
+  /* スマホの幅でもリングが右に並ぶよう、小さめから伸ばす */
+  flex: 1 1 9rem;
+  min-width: 0;
+}
+
+.cd-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+.cd-card-actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+}
+
 .cd-memo {
   white-space: pre-line;
 }
 
-/* 削除の確認。<dialog> を Bootstrap の card の見た目で、画面の真ん中に出す */
-.cd-dialog {
-  width: min(32rem, calc(100vw - 2rem));
-  height: fit-content;
-  padding: 0;
+/* 名前（クリックでその場で書きかえ） */
+.cd-name {
   border: 0;
-  border-radius: 0.375rem;
+  padding: 0 0.15rem;
+  margin: 0 -0.15rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border-radius: 0.25rem;
+  cursor: text;
 }
 
-.cd-dialog::backdrop {
-  background: rgb(0 0 0 / 0.4);
+.cd-name:hover:not(:disabled) {
+  background: var(--cd-accent-soft);
+}
+
+.cd-name-input {
+  max-width: 20rem;
+  font-weight: 700;
+}
+
+.cd-pill {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.cd-pill--soon {
+  background: var(--cd-soon);
+}
+
+/* 当日・明日の残り時間 */
+.cd-tick {
+  font-size: 0.85rem;
+  color: var(--cd-ring);
+  font-weight: 700;
+}
+
+.cd-tick-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- リング ---- */
+
+.cd-ring {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  color: var(--cd-ring);
+}
+
+.cd-ring-track {
+  fill: none;
+  stroke: var(--cd-border);
+}
+
+.cd-ring-bar {
+  fill: none;
+  stroke: var(--cd-ring);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.cd-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  padding-top: 26px;
+  line-height: 1;
+}
+
+.cd-ring-days {
+  font-size: 1.55rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.cd-ring-unit {
+  margin-left: 0.1rem;
+  font-size: 0.75rem;
+  color: var(--cd-muted);
+}
+
+.cd-ring-today {
+  font-size: 1.1rem;
+  font-weight: 800;
+  padding-top: 4px;
+}
+
+/* ---- 読み込み中（スケルトン） ---- */
+
+.cd-skeleton {
+  border-left-color: var(--cd-border);
+}
+
+.cd-bone {
+  height: 0.85rem;
+  margin-bottom: 0.6rem;
+  border-radius: 0.3rem;
+  background: linear-gradient(90deg, var(--cd-surface-2) 25%, var(--cd-border) 50%, var(--cd-surface-2) 75%);
+  background-size: 200% 100%;
+  animation: cd-shimmer 1.3s infinite linear;
+}
+
+.cd-bone-ring {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  margin: 0;
+}
+
+@keyframes cd-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.cd-spinner {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: cd-spin 0.8s linear infinite;
+}
+
+@keyframes cd-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- 入力パネル（<dialog>）。広い画面では右から、狭い画面では下から ---- */
+
+.cd-sheet {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(30rem, 100vw);
+  height: 100dvh;
+  max-width: 100vw;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--cd-surface);
+  color: var(--cd-text);
+  box-shadow: -8px 0 32px rgb(0 0 0 / 0.2);
+  animation: cd-slide-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.cd-sheet::backdrop {
+  background: rgb(0 0 0 / 0.35);
+  animation: cd-fade-in 0.25s ease;
+}
+
+.cd-sheet-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.cd-sheet-head,
+.cd-sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  flex: 0 0 auto;
+}
+
+.cd-sheet-head {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--cd-border);
+}
+
+.cd-sheet-foot {
+  justify-content: flex-end;
+  border-top: 1px solid var(--cd-border);
+}
+
+.cd-sheet-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.cd-icon-button {
+  border: 0;
+  background: transparent;
+  color: var(--cd-muted);
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.cd-icon-button:hover {
+  color: var(--cd-text);
+  background: var(--cd-surface-2);
+}
+
+/* 入力中の見通し */
+.cd-preview {
+  --cd-ring: var(--cd-later);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 6.5rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  background: var(--cd-surface-2);
+  border-left: 4px solid var(--cd-ring);
+}
+
+.cd-notify {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--cd-border);
+  border-radius: 0.75rem;
+}
+
+@keyframes cd-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+
+@keyframes cd-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+
+@keyframes cd-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* スマホ：下からせり上がるシート */
+@media (max-width: 767.98px) {
+  .cd-sheet {
+    inset: auto 0 0 0;
+    width: 100vw;
+    height: auto;
+    max-height: 92dvh;
+    border-radius: 1rem 1rem 0 0;
+    box-shadow: 0 -8px 32px rgb(0 0 0 / 0.2);
+    animation-name: cd-slide-up;
+  }
+
+  .cd-sheet-body {
+    max-height: 92dvh;
+  }
+
+  .cd-sheet-head {
+    position: relative;
+    padding-top: 1.4rem;
+  }
+
+  /* 指でつまむところ */
+  .cd-sheet-head::before {
+    content: "";
+    position: absolute;
+    top: 0.45rem;
+    left: 50%;
+    width: 2.5rem;
+    height: 0.25rem;
+    margin-left: -1.25rem;
+    border-radius: 999px;
+    background: var(--cd-border);
+  }
+
+  .cd-sort {
+    flex: 1 1 auto;
+  }
+
+  .cd-new {
+    flex: 1 1 100%;
+  }
+
+  /* 4つのタブが横に収まるよう詰める */
+  .cd-tab {
+    flex: 1 1 0;
+    padding: 0.4rem 0.3rem;
+    font-size: 0.82rem;
+  }
+
+  .cd-tab-count {
+    margin-left: 0.2rem;
+    padding: 0 0.25rem;
+  }
+
+  .cd-card-body {
+    gap: 0.75rem;
+  }
+}
+
+/* ---- トースト ---- */
+
+.cd-toasts {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1080;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(24rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.cd-toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem 0.85rem;
+  overflow: hidden;
+  border-radius: 0.6rem;
+  background: #1f2329;
+  color: #f1f3f5;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  pointer-events: auto;
+  animation: cd-toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.cd-toast-icon {
+  flex: 0 0 auto;
+}
+
+.cd-toast-success .cd-toast-icon { color: #7bd88f; }
+.cd-toast-info .cd-toast-icon { color: #8fb3ec; }
+.cd-toast-danger .cd-toast-icon { color: #ff8a80; }
+
+.cd-toast-text {
+  flex: 1 1 auto;
+  font-size: 0.9rem;
+}
+
+.cd-toast-action {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #8fb3ec;
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+}
+
+.cd-toast-action:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.cd-toast-close {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #adb5bd;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+/* 残り時間の帯 */
+.cd-toast-timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: rgb(255 255 255 / 0.35);
+  transform-origin: left;
+  animation-name: cd-timer;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes cd-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@keyframes cd-toast-in {
+  from { transform: translateY(1rem); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (max-width: 767.98px) {
+  .cd-toasts {
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+  }
+}
+
+/* ---- カードが増える・消える・並びが変わるときの動き（View Transitions。transition.ts） ---- */
+
+::view-transition-group(*) {
+  animation-duration: 0.3s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-new(*):only-child {
+  animation: cd-pop-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-old(*):only-child {
+  animation: cd-pop-out 0.25s ease-in forwards;
+}
+
+@keyframes cd-pop-in {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+}
+
+@keyframes cd-pop-out {
+  to { opacity: 0; transform: scale(0.96) translateX(24px); }
+}
+
+/* 動きを減らす設定のときは、動きを止める */
+@media (prefers-reduced-motion: reduce) {
+  .cd-app *,
+  .cd-sheet,
+  .cd-sheet::backdrop,
+  .cd-toast {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

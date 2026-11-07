@@ -2,6 +2,8 @@
 //
 // 型は apps/countdown/serializers.py が返す JSON の形に合わせてある。
 // どちらかを変えたら、もう一方も合わせる。
+// 日数（days_delta など）も API は返すが、画面は derive.ts で同じ計算をして使う。
+// 返事を待たずに表示する場面（楽観的更新・入力中の見通し）があるため。
 
 /** 予定・出来事 1件（API が返す形） */
 export type CountEvent = {
@@ -11,24 +13,14 @@ export type CountEvent = {
   date: string
   memo: string
   notify: boolean
-  /** 今日から見た日数差。未来なら正、過去なら負、当日は 0 */
-  days_delta: number
-  /** 画面に大きく出す日数（常に 0 以上） */
-  count_days: number
-  count_label: '残り' | '経過' | '当日'
-  /** 残り日数を「○週と○日」に分けたもの */
-  weeks: number
-  extra_days: number
-  /** 過ぎた出来事の周年（迎えていなければ 0） */
-  years_passed: number
+  /** 登録日時（日本時間。"2026-10-01T12:00:00.123+09:00"） */
+  created_at: string
 }
 
 /** 一覧（GET /countdown/api/events/） */
 export type EventList = {
   today: string
-  /** これからの予定（当日を含む）。近い順 */
   upcoming: CountEvent[]
-  /** 過ぎた出来事。新しい順 */
   past: CountEvent[]
 }
 
@@ -100,10 +92,21 @@ const eventUrl = (id: number) => `${config.apiUrl}${id}/`
 
 export const api = {
   list: () => request<EventList>(config.apiUrl),
-  get: (id: number) => request<CountEvent>(eventUrl(id)),
   create: (input: EventInput) =>
     request<CountEvent>(config.apiUrl, { method: 'POST', body: JSON.stringify(input) }),
-  update: (id: number, input: EventInput) =>
+  update: (id: number, input: Partial<EventInput>) =>
     request<CountEvent>(eventUrl(id), { method: 'PATCH', body: JSON.stringify(input) }),
   remove: (id: number) => request<void>(eventUrl(id), { method: 'DELETE' }),
+  /**
+   * ページを閉じる間ぎわの削除。keepalive を付けると、ページが無くなっても送りきってくれる。
+   * 「元に戻す」を待っている削除を、タブを閉じたときに送るのに使う（useEvents.ts）。
+   */
+  removeOnLeave: (id: number) => {
+    void fetch(eventUrl(id), {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': csrfToken() },
+      credentials: 'same-origin',
+      keepalive: true,
+    })
+  },
 }

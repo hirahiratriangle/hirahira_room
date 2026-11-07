@@ -149,6 +149,9 @@ class CountEventApiTests(TestCase):
         )
         # メモが無いときも null ではなく空文字で返す
         self.assertEqual(exam['memo'], '')
+        # 登録日時は日本時間で返す（画面は先頭の日付だけを使う）
+        self.assertTrue(exam['created_at'].startswith(self.today.isoformat()))
+        self.assertTrue(exam['created_at'].endswith('+09:00'))
 
     def test_only_own_events_are_listed(self):
         CountEvent.objects.create(user=self.other, name='相手の予定', date=self.today)

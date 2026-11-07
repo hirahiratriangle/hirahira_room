@@ -15,6 +15,7 @@
 # いっしょにコミットしてから ./deploy.sh する。ビルドを忘れると、古い画面のまま上がる。
 #   cd frontend/countdown
 #   npm ci            （初めてのとき・package-lock.json が変わったとき）
+#   npm test          （日数の計算 src/derive.ts のテスト）
 #   npm run build     （型の確かめ → ビルド）
 # 作りながら確かめるときは npm run dev（保存するたびにビルドし直す）を動かしたまま、
 # runserver の画面を読み直す。
