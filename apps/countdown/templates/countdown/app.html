@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% load static %}
+{% comment %}
+React の画面の入れ物。見出し（header）も中身も React が描く。
+ナビ・フッター・Bootstrap の見た目は base.html のものをそのまま使う。
+
+app.js と app.css は frontend/countdown を npm run build して作ったもの
+（static/countdown/app/ に出る。ビルドしたものもコミットする）。
+data-* で、React に URL の頭を渡す。URL を React の中に書き込まないため。
+{% endcomment %}
+
+{% block title %}カウントアップ＆ダウン | HirahiraRoom{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'countdown/app/app.css' %}">
+{% endblock %}
+
+{% block contents %}
+<div id="countdown-root"
+     data-base-path="{% url 'countdown:event_list' %}"
+     data-api-url="{% url 'countdown:api_events' %}"
+     data-login-url="{% url 'account_login' %}">
+    <noscript>
+        <div class="container px-5 py-5">
+            <p class="text-muted">この画面を使うには JavaScript を有効にしてください。</p>
+        </div>
+    </noscript>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{% static 'countdown/app/app.js' %}"></script>
+{% endblock %}

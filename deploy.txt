@@ -10,6 +10,15 @@
 # 出たら、本番の showmigrations で [ ] を確かめて migrate する。出ないときに自動で実行するものはない。
 # 新しいコードが動き出してから migrate が済むまでは、新しい欄を読む画面がエラーになる。すぐに続けて行う。
 
+# React の画面（いまは countdown の一覧・登録・編集・削除。ソースは frontend/countdown）
+# 本番では Node を動かさない。手元でビルドし、出来たもの（apps/countdown/static/countdown/app/）も
+# いっしょにコミットしてから ./deploy.sh する。ビルドを忘れると、古い画面のまま上がる。
+#   cd frontend/countdown
+#   npm ci            （初めてのとき・package-lock.json が変わったとき）
+#   npm run build     （型の確かめ → ビルド）
+# 作りながら確かめるときは npm run dev（保存するたびにビルドし直す）を動かしたまま、
+# runserver の画面を読み直す。
+
 # 前準備
 az webapp stop --name hirahira-room --resource-group hirahira
 

@@ -3,7 +3,7 @@ from io import StringIO
 
 from django.core import mail
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -43,15 +43,13 @@ class CountEventTests(TestCase):
         self.assertEqual(event.count_label, '当日')
 
 
-class CountEventViewTests(TestCase):
+class CountEventPageTests(TestCase):
+    """画面の入れ物（React を読み込むページ）。中身は React が描くので、ここでは開けるかだけを見る。"""
+
     def setUp(self):
         self.user = CustomUser.objects.create_user(
             username='tester', email='tester@example.com', password='pass12345'
         )
-        self.other = CustomUser.objects.create_user(
-            username='other', email='other@example.com', password='pass12345'
-        )
-        self.today = timezone.localdate()
 
     def test_pages_require_login(self):
         # サイト全体が LoginRequiredMiddleware でログイン必須
@@ -63,45 +61,179 @@ class CountEventViewTests(TestCase):
         self.client.force_login(self.user)
         self.assertEqual(self.client.get(reverse('countdown:index')).status_code, 200)
 
+    def test_every_screen_url_returns_the_react_shell(self):
+        # URL は React にする前と同じ。どれを開いても同じ入れ物を返す
+        self.client.force_login(self.user)
+        urls = [
+            reverse('countdown:event_list'),
+            reverse('countdown:event_create'),
+            reverse('countdown:event_update', kwargs={'pk': 1}),
+            reverse('countdown:event_delete', kwargs={'pk': 1}),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'id="countdown-root"')
+                self.assertContains(response, 'countdown/app/app.js')
+                # 書き込みに使う CSRF トークンの Cookie を配る
+                self.assertIn('csrftoken', response.cookies)
+
+
+class CountEventApiTests(TestCase):
+    """React が呼ぶ API（apps/countdown/api.py）。"""
+
+    def setUp(self):
+        self.user = CustomUser.objects.create_user(
+            username='tester', email='tester@example.com', password='pass12345'
+        )
+        self.other = CustomUser.objects.create_user(
+            username='other', email='other@example.com', password='pass12345'
+        )
+        self.today = timezone.localdate()
+        self.list_url = reverse('countdown:api_events')
+
+    def detail_url(self, event):
+        return reverse('countdown:api_event', kwargs={'pk': event.pk})
+
+    def post(self, data):
+        return self.client.post(self.list_url, data, content_type='application/json')
+
+    def test_requires_login_with_401_json(self):
+        # ログイン画面への転送（302）ではなく、React が読める 401 を返す
+        response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, 401)
+        self.assertIn('detail', response.json())
+
     def test_create_and_list(self):
         self.client.force_login(self.user)
-        response = self.client.post(reverse('countdown:event_create'), {
+        response = self.post({
             'name': '旅行', 'date': (self.today + timedelta(days=3)).isoformat(), 'memo': '',
         })
-        self.assertRedirects(response, reverse('countdown:event_list'))
+        self.assertEqual(response.status_code, 201)
 
         event = CountEvent.objects.get(name='旅行')
         self.assertEqual(event.user, self.user)
 
-        response = self.client.get(reverse('countdown:event_list'))
-        self.assertEqual(list(response.context['upcoming_events']), [event])
-        self.assertEqual(list(response.context['past_events']), [])
+        data = self.client.get(self.list_url).json()
+        self.assertEqual(data['today'], self.today.isoformat())
+        self.assertEqual([e['id'] for e in data['upcoming']], [event.pk])
+        self.assertEqual(data['past'], [])
 
-    def test_other_user_cannot_edit(self):
+    def test_list_is_split_and_ordered(self):
+        # これからの予定（当日を含む）は近い順、過ぎた出来事は新しい順
+        self.client.force_login(self.user)
+        for name, days in (('遠い予定', 30), ('当日', 0), ('近い予定', 3), ('昔', -400), ('最近', -2)):
+            CountEvent.objects.create(user=self.user, name=name, date=self.today + timedelta(days=days))
+
+        data = self.client.get(self.list_url).json()
+        self.assertEqual([e['name'] for e in data['upcoming']], ['当日', '近い予定', '遠い予定'])
+        self.assertEqual([e['name'] for e in data['past']], ['最近', '昔'])
+
+    def test_counts_are_computed_on_the_server(self):
+        self.client.force_login(self.user)
+        CountEvent.objects.create(user=self.user, name='試験', date=self.today + timedelta(days=10))
+        CountEvent.objects.create(user=self.user, name='入社日', date=self.today - timedelta(days=400))
+
+        data = self.client.get(self.list_url).json()
+        exam = data['upcoming'][0]
+        self.assertEqual(
+            (exam['days_delta'], exam['count_days'], exam['count_label'], exam['weeks'], exam['extra_days']),
+            (10, 10, '残り', 1, 3),
+        )
+        joined = data['past'][0]
+        self.assertEqual(
+            (joined['count_days'], joined['count_label'], joined['years_passed']),
+            (400, '経過', 1),
+        )
+        # メモが無いときも null ではなく空文字で返す
+        self.assertEqual(exam['memo'], '')
+
+    def test_only_own_events_are_listed(self):
+        CountEvent.objects.create(user=self.other, name='相手の予定', date=self.today)
+        self.client.force_login(self.user)
+        data = self.client.get(self.list_url).json()
+        self.assertEqual(data['upcoming'] + data['past'], [])
+
+    def test_other_user_cannot_see_edit_or_delete(self):
+        # 他人の予定は「無い」と答える（あるかどうかも漏らさない）
         event = CountEvent.objects.create(user=self.user, name='入社日', date=self.today)
         self.client.force_login(self.other)
-        response = self.client.get(reverse('countdown:event_update', kwargs={'pk': event.pk}))
-        self.assertEqual(response.status_code, 403)
+        url = self.detail_url(event)
+
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(
+            self.client.patch(url, {'name': '書きかえ'}, content_type='application/json').status_code, 404)
+        self.assertEqual(self.client.delete(url).status_code, 404)
+
+        event.refresh_from_db()
+        self.assertEqual(event.name, '入社日')
+
+    def test_update_and_delete_own_event(self):
+        event = CountEvent.objects.create(user=self.user, name='試験', date=self.today)
+        self.client.force_login(self.user)
+        url = self.detail_url(event)
+
+        response = self.client.patch(url, {'name': '本試験', 'notify': True}, content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        event.refresh_from_db()
+        self.assertEqual((event.name, event.notify), ('本試験', True))
+
+        self.assertEqual(self.client.delete(url).status_code, 204)
+        self.assertFalse(CountEvent.objects.filter(pk=event.pk).exists())
+
+    def test_put_is_not_accepted(self):
+        event = CountEvent.objects.create(user=self.user, name='試験', date=self.today)
+        self.client.force_login(self.user)
+        response = self.client.put(
+            self.detail_url(event),
+            {'name': '試験', 'date': self.today.isoformat(), 'memo': '', 'notify': False},
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 405)
 
     def test_create_with_notification(self):
         self.client.force_login(self.user)
-        response = self.client.post(reverse('countdown:event_create'), {
-            'name': '資格試験',
-            'date': (self.today + timedelta(days=10)).isoformat(),
-            'memo': '',
-            'notify': 'on',
+        self.post({
+            'name': '資格試験', 'date': (self.today + timedelta(days=10)).isoformat(),
+            'memo': '', 'notify': True,
         })
-        self.assertRedirects(response, reverse('countdown:event_list'))
         self.assertTrue(CountEvent.objects.get(name='資格試験').notify)
 
     def test_notification_is_off_by_default(self):
         self.client.force_login(self.user)
-        self.client.post(reverse('countdown:event_create'), {
-            'name': '通知なし',
-            'date': (self.today + timedelta(days=10)).isoformat(),
-            'memo': '',
-        })
+        self.post({'name': '通知なし', 'date': (self.today + timedelta(days=10)).isoformat()})
         self.assertFalse(CountEvent.objects.get(name='通知なし').notify)
+
+    def test_invalid_input_returns_field_errors(self):
+        # React は欄ごとのメッセージを、その欄の下に出す
+        self.client.force_login(self.user)
+        response = self.post({'name': '', 'date': '2026/01/01'})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(set(response.json()), {'name', 'date'})
+        self.assertFalse(CountEvent.objects.exists())
+
+    def test_user_cannot_be_set_from_the_request(self):
+        # 持ち主はログイン中の本人に決まる。送られてきた user は無視する
+        self.client.force_login(self.user)
+        self.post({'name': '旅行', 'date': self.today.isoformat(), 'user': self.other.pk})
+        self.assertEqual(CountEvent.objects.get(name='旅行').user, self.user)
+
+    def test_writes_require_csrf_token(self):
+        # 本物のブラウザと同じく CSRF を確かめるクライアントで送る
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+        data = {'name': '旅行', 'date': self.today.isoformat()}
+
+        response = client.post(self.list_url, data, content_type='application/json')
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(CountEvent.objects.exists())
+
+        # 入れ物のページが配る Cookie の値を X-CSRFToken に載せれば通る（React と同じ送り方）
+        token = client.get(reverse('countdown:event_list')).cookies['csrftoken'].value
+        response = client.post(
+            self.list_url, data, content_type='application/json', HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(response.status_code, 201)
 
 
 class ReminderTests(TestCase):

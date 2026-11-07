@@ -32,3 +32,6 @@ staticfiles/
 
 # Azure（Kudu）のデプロイ記録
 deployments/
+
+# React の画面（frontend/<アプリ>）の npm パッケージ。package-lock.json から npm ci で入れ直す
+node_modules/

@@ -1,0 +1,32 @@
+/* countdown の画面だけで使う見た目。ほかは base.html の Bootstrap をそのまま使う。
+   テンプレートのころ style="..." で直に書いていた色を、ここにまとめた。 */
+
+:root {
+  --cd-accent: #2c5aa0;
+}
+
+.cd-header {
+  background-color: var(--cd-accent);
+}
+
+.cd-accent {
+  color: var(--cd-accent);
+}
+
+/* メモの改行をそのまま見せる（テンプレートのころの linebreaksbr と同じ） */
+.cd-memo {
+  white-space: pre-line;
+}
+
+/* 削除の確認。<dialog> を Bootstrap の card の見た目で、画面の真ん中に出す */
+.cd-dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  height: fit-content;
+  padding: 0;
+  border: 0;
+  border-radius: 0.375rem;
+}
+
+.cd-dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}

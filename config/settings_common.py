@@ -18,8 +18,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'django_bootstrap5',  
-    
+    'django_bootstrap5',
+    # 画面を React で作るアプリが呼ぶ API（いまは countdown だけ）
+    'rest_framework',
+
     # 自作アプリ
     'accounts',
     'home',
@@ -177,6 +179,31 @@ ACCOUNT_EMAIL_SUBJECT_PREFIX = f'[{SITE_DISPLAY_NAME}] '
 # /accounts/signup/ は config/urls.py で 404 にしてある。これは、それ以外の道筋
 # （ソーシャルログインからの作成など）でも作られないようにするための二重の止め。
 ACCOUNT_ADAPTER = 'accounts.adapter.ClosedSignupAdapter'
+
+# ==================================
+# API（Django REST framework）
+# ==================================
+# React の画面は同じドメインから配るので、ログインは画面と同じセッションをそのまま使う。
+# SessionAuthentication は、ログイン中の書き込み（POST・PATCH・DELETE）に CSRF トークンを求める。
+# React は X-CSRFToken ヘッダーでトークンを渡す。
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    # API はデータ（JSON）だけを返す。DRF のブラウザ用の画面は出さない
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+    ],
+    # 日付は 2026-11-07 の形で受け渡す
+    'DATE_FORMAT': '%Y-%m-%d',
+    'DATE_INPUT_FORMATS': ['%Y-%m-%d'],
+}
 
 # ==================================
 # カウントダウンのリマインド通知

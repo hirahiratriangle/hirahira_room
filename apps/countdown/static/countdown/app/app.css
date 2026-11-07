@@ -1,0 +1,1 @@
+:root{--cd-accent:#2c5aa0}.cd-header{background-color:var(--cd-accent)}.cd-accent{color:var(--cd-accent)}.cd-memo{white-space:pre-line}.cd-dialog{border:0;border-radius:.375rem;width:min(32rem,100vw - 2rem);height:-moz-fit-content;height:fit-content;padding:0}.cd-dialog::backdrop{background:#0006}
