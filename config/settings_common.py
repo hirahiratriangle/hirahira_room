@@ -24,9 +24,6 @@ INSTALLED_APPS = [
     'accounts',
     'home',
     # 使って学ぶ・記録するアプリ（apps/ の下）
-    'apps.diary',
-    'apps.iris_classifier',
-    'apps.jpcore',
     'apps.countdown',
     'apps.fe',
     'apps.bk_houmu3',

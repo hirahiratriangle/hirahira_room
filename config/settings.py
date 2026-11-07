@@ -64,10 +64,6 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
-        'diary': {
-            'handlers': ['console'],
-            'level': 'INFO',
-        },
     },
 }
 

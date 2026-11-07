@@ -1,5 +1,5 @@
 """
-ASGI config for private_diary project.
+ASGI config for hirahira_room project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 

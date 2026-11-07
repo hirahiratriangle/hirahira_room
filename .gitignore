@@ -24,10 +24,6 @@ staticfiles/
 # Azure
 .azure
 
-# 機械学習モデルファイル
-apps/iris_classifier/models/
-*.pkl
-
 # Claude Code のローカル設定
 .claude/
 

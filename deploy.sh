@@ -10,7 +10,7 @@
 #
 # ここでは git archive で HEAD の中身だけを zip にするので、.gitignore にあるものも、
 # まだコミットしていないものも入らない。本番で要るものは zip に頼っていない。
-#   ・media と iris_classifier/models は /home/site/wwwroot の下（永続領域）にあり、
+#   ・media は /home/site/wwwroot の下（永続領域）にあり、
 #     デプロイで消えない
 #   ・staticfiles はビルド（Oryx）が collectstatic で作り直す
 # ビルドは、アプリ設定 SCM_DO_BUILD_DURING_DEPLOYMENT=True により az webapp up と同じく走る。

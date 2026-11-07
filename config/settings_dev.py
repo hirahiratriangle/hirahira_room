@@ -48,16 +48,6 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
         },
-        # diaryアプリケーションが利用するロガー
-        'diary': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-        },
-        #　iris_classifierアプリケーションが利用するロガー 
-        'iris_classifier': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-        },
     },
 
     # ハンドラの設定

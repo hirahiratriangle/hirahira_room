@@ -1,5 +1,5 @@
 """
-WSGI config for private_diary project.
+WSGI config for hirahira_room project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 

@@ -22,15 +22,6 @@ urlpatterns = [
     # ホーム画面（ログイン必須）
     path('', include('home.urls', namespace='home')),
 
-    # 日記アプリ
-    path('diary/', include('apps.diary.urls', namespace='diary')),
-
-    # Iris Classifier アプリ
-    path('iris/', include('apps.iris_classifier.urls', namespace='iris_classifier')),
-
-    # JP Core Issue 改善支援アプリ
-    path('jpcore/', include('apps.jpcore.urls', namespace='jpcore')),
-
     # カウントアップ＆ダウンアプリ
     path('countdown/', include('apps.countdown.urls', namespace='countdown')),
 

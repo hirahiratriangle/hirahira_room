@@ -37,7 +37,6 @@ az webapp ssh --name hirahira-room --resource-group hirahira
 #   cd "$(dirname "$(ls -d /tmp/*/manage.py | head -1)")" && source antenv/bin/activate
 #   python manage.py showmigrations   （未適用の [ ] を確認）
 #   python manage.py migrate
-#   python manage.py train_iris_model （初期モデルのトレーニング）
 
 # ローカルで本番設定のまま動かすことはできない（psycopg2 と DB 接続情報が要るため）。
 # ローカル開発は開発用設定を明示する:
