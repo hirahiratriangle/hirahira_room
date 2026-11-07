@@ -12,7 +12,19 @@ INSTALLED_APPS.insert(0, "whitenoise.runserver_nostatic")
 idx = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
 MIDDLEWARE.insert(idx + 1, "whitenoise.middleware.WhiteNoiseMiddleware")
 # 圧縮＋ハッシュ付きで配信
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# collectstatic がファイル名に中身のハッシュを付けた写し（例 css/mystyle.3f9a1c.css）と
+# 圧縮版（.gz・.br）を作り、{% static %} はハッシュ付きの名前を返す。名前が中身で変わるので、
+# WhiteNoise はそれを長くキャッシュさせてよく、デプロイすればすぐ新しいファイルが読まれる。
+#
+# 以前は STATICFILES_STORAGE で指定していたが、Django 5.1 でこの設定は無くなり、
+# 黙って無視されていた（ハッシュも圧縮もなしで配られていた）。いまは STORAGES で書く。
+#
+# この方式では、テンプレートや CSS が指すファイルが無いと collectstatic が止まり、
+# {% static %} もエラーになる。消したファイルを指したままにしない。
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [

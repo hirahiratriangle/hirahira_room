@@ -75,7 +75,8 @@ class CountEventPageTests(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, 'id="countdown-root"')
-                self.assertContains(response, 'countdown/app/app.js')
+                # 本番の静的ファイルの置き方では名前にハッシュが入る（app.fd3498665da6.js）
+                self.assertRegex(response.content.decode(), r'countdown/app/app(\.[0-9a-f]{12})?\.js')
                 # 書き込みに使う CSRF トークンの Cookie を配る
                 self.assertIn('csrftoken', response.cookies)
 
