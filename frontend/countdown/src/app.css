@@ -143,7 +143,8 @@ body,
 }
 
 .cd-body {
-  padding-top: 1rem;
+  /* タブの行の上の空き（下の .cd-toolbar の margin-bottom と合わせて、タブの行を広めに取る） */
+  padding-top: 2rem;
   padding-bottom: 1.5rem;
 }
 
@@ -153,7 +154,7 @@ body,
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 2rem;
 }
 
 .cd-tabs {
@@ -226,7 +227,8 @@ body,
 }
 
 .cd-section {
-  margin-bottom: 1.25rem;
+  /* 「これからの予定」と「過ぎた出来事」のあいだ */
+  margin-bottom: 2.5rem;
 }
 
 .cd-section-title {
@@ -634,7 +636,7 @@ body,
   }
 
   .cd-body {
-    padding-top: 0.75rem;
+    padding-top: 1.5rem;
   }
 
   /* タブを1行目、新規登録を2行目にする */
