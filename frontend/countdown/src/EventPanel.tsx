@@ -114,7 +114,7 @@ export function EventPanel({ mode, initial, errors: serverErrors, today, created
                 <ProgressRing progress={preview.progress} label={preview.progressLabel}>
                   {preview.delta === 0
                     ? <span className="cd-ring-today">本日</span>
-                    : <><span className="cd-ring-days">{preview.countDays}</span><span className="cd-ring-unit">日</span></>}
+                    : <><span className={`cd-ring-days ${preview.countDays >= 1000 ? 'is-long' : ''}`}>{preview.countDays}</span><span className="cd-ring-unit">日</span></>}
                 </ProgressRing>
                 <div>
                   <div className="fw-bold">{formatDate(input.date)}</div>

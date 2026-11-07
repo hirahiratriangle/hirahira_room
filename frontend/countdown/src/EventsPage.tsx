@@ -8,15 +8,13 @@
 // どのアドレスでもこの部品が描くので、パネルを開け閉めしても一覧は描き直されない
 // （絞り込み・検索・スクロールの位置がそのまま残る）。
 //
-// 一覧の上の道具：
-//   ・絞り込みのタブ（すべて／これから／過ぎた／通知オン）
-//   ・検索（名前とメモ）
-//   ・並べ替え（日付が近い順／名前順／登録が新しい順）
-// タブと並べ替えは、次に開いたときも同じになるよう、このブラウザに覚えておく。
+// 一覧の上は、絞り込みのタブ（すべて／これから／過ぎた／通知オン）と新規登録だけ。
+// 選んだタブは、次に開いたときも同じになるよう、このブラウザに覚えておく。
+// 並びは日数の少ない順に決めてある（これからの予定は近い順、過ぎた出来事は最近のものから）。
 //
-// キーボード：N で新規登録、/ で検索へ、Esc でパネルを閉じる・検索を消す。
+// キーボード：N で新規登録、Esc でパネルを閉じる。
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useMatch, useNavigate } from 'react-router'
 
 import type { EventInput } from './api'
@@ -32,7 +30,6 @@ import { useEvents, type Item } from './useEvents'
 import { useNow } from './useNow'
 
 type Filter = 'all' | 'upcoming' | 'past' | 'notify'
-type Sort = 'date' | 'name' | 'created'
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'すべて' },
@@ -41,45 +38,35 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'notify', label: '通知オン' },
 ]
 
-const SORTS: { key: Sort; label: string }[] = [
-  { key: 'date', label: '日付が近い順' },
-  { key: 'name', label: '名前順' },
-  { key: 'created', label: '登録が新しい順' },
-]
-
 const EMPTY_INPUT: EventInput = { name: '', date: '', memo: '', notify: false }
 
-// ---- タブと並べ替えをこのブラウザに覚えておく（使えないブラウザでは覚えないだけ） ----
+// ---- 選んだタブをこのブラウザに覚えておく（使えないブラウザでは覚えないだけ） ----
 const VIEW_KEY = 'countdown:view'
 
-function loadView(): { filter: Filter; sort: Sort } {
+function loadFilter(): Filter {
   try {
     const saved = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}')
-    return {
-      filter: FILTERS.some((f) => f.key === saved.filter) ? saved.filter : 'all',
-      sort: SORTS.some((s) => s.key === saved.sort) ? saved.sort : 'date',
-    }
+    return FILTERS.some((f) => f.key === saved.filter) ? saved.filter : 'all'
   } catch {
-    return { filter: 'all', sort: 'date' }
+    return 'all'
   }
 }
 
-function saveView(view: { filter: Filter; sort: Sort }) {
+function saveFilter(filter: Filter) {
   try {
-    localStorage.setItem(VIEW_KEY, JSON.stringify(view))
+    localStorage.setItem(VIEW_KEY, JSON.stringify({ filter }))
   } catch {
     // 覚えられなくても、画面はそのまま使える
   }
 }
 
-const collator = new Intl.Collator('ja')
-
-/** 並べ替え。「日付が近い順」は、これからの予定は近い順、過ぎた出来事は最近のものから */
-function sortItems(items: Item[], sort: Sort, upcoming: boolean): Item[] {
-  const list = [...items]
-  if (sort === 'name') return list.sort((a, b) => collator.compare(a.name, b.name))
-  if (sort === 'created') return list.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)
-  return list.sort((a, b) => (upcoming ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)))
+/**
+ * 日数の少ない順。これからの予定は残り日数の少ない（近い）順、
+ * 過ぎた出来事は経過日数の少ない（最近の）順。同じ日なら先に登録したほうを上に。
+ */
+function byDays(items: Item[], upcoming: boolean): Item[] {
+  return [...items].sort((a, b) =>
+    (upcoming ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)) || a.id - b.id)
 }
 
 export function EventsPage() {
@@ -91,11 +78,9 @@ export function EventsPage() {
   const updateMatch = useMatch('/:id/update')
   const deleteMatch = useMatch('/:id/delete')
 
-  const [view, setView] = useState(loadView)
-  const [query, setQuery] = useState('')
-  const search = useRef<HTMLInputElement>(null)
+  const [filter, setFilter] = useState(loadFilter)
 
-  useEffect(() => saveView(view), [view])
+  useEffect(() => saveFilter(filter), [filter])
 
   // 以前の削除確認のアドレスで開かれたら、一覧へ戻す
   useEffect(() => {
@@ -110,8 +95,7 @@ export function EventsPage() {
   const hasTicking = events.some((e) => today && [0, 1].includes(derive(e.date, today).delta))
   const now = useNow(hasTicking, () => void reload())
 
-  // ---- 絞り込み・検索・並べ替え ----
-  const q = query.trim().toLowerCase()
+  // ---- 絞り込み ----
   const { upcoming, past, counts } = useMemo(() => {
     const up: Item[] = []
     const ps: Item[] = []
@@ -122,23 +106,18 @@ export function EventsPage() {
       past: ps.length,
       notify: up.filter((e) => e.notify).length,
     }
-    const hit = (e: Item) => !q || e.name.toLowerCase().includes(q) || e.memo.toLowerCase().includes(q)
-    let upShown = up.filter(hit)
-    let pastShown = ps.filter(hit)
-    if (view.filter === 'past') upShown = []
-    if (view.filter === 'upcoming') pastShown = []
-    if (view.filter === 'notify') {
-      upShown = upShown.filter((e) => e.notify)
+    let upShown = up
+    let pastShown = ps
+    if (filter === 'past') upShown = []
+    if (filter === 'upcoming') pastShown = []
+    if (filter === 'notify') {
+      upShown = up.filter((e) => e.notify)
       pastShown = []
     }
-    return {
-      upcoming: sortItems(upShown, view.sort, true),
-      past: sortItems(pastShown, view.sort, false),
-      counts,
-    }
-  }, [events, today, q, view])
+    return { upcoming: byDays(upShown, true), past: byDays(pastShown, false), counts }
+  }, [events, today, filter])
 
-  const changeView = (next: Partial<typeof view>) => withTransition(() => setView((v) => ({ ...v, ...next })))
+  const changeFilter = (next: Filter) => withTransition(() => setFilter(next))
 
   // ---- 入力パネル ----
   const editId = updateMatch ? Number(updateMatch.params.id) : null
@@ -179,9 +158,6 @@ export function EventsPage() {
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault()
         navigate('/create/')
-      } else if (e.key === '/') {
-        e.preventDefault()
-        search.current?.focus()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -197,61 +173,31 @@ export function EventsPage() {
   return (
     <div className="cd-app">
       <header className="cd-header">
-        <div className="container px-4 px-md-5 py-4 text-center text-white">
-          <h1 className="h3 fw-bold mb-2">カウントアップ＆ダウン</h1>
-          <p className="mb-0 small">{today ? `本日 ${formatDate(today)}` : ' '}</p>
+        <div className="cd-main cd-header-inner">
+          <h1 className="cd-title">カウントアップ＆ダウン</h1>
+          <p className="cd-today">{today ? `本日 ${formatDate(today)}` : '\u00a0'}</p>
         </div>
       </header>
 
-      <main className="container px-4 px-md-5 py-4 py-md-5">
+      <main className="cd-main cd-body">
         <div className="cd-toolbar">
           <div className="cd-tabs" role="tablist" aria-label="絞り込み">
             {FILTERS.map((f) => (
               <button
                 key={f.key} type="button" role="tab"
-                aria-selected={view.filter === f.key}
-                className={`cd-tab ${view.filter === f.key ? 'is-active' : ''}`}
-                onClick={() => changeView({ filter: f.key })}
+                aria-selected={filter === f.key}
+                className={`cd-tab ${filter === f.key ? 'is-active' : ''}`}
+                onClick={() => changeFilter(f.key)}
               >
                 {f.label}
                 {ready && <span className="cd-tab-count">{counts[f.key]}</span>}
               </button>
             ))}
           </div>
-
-          <div className="cd-toolbar-row">
-            <div className="cd-search">
-              <Icon name="search" className="cd-search-icon" />
-              <input
-                ref={search}
-                type="search"
-                className="form-control"
-                placeholder="名前・メモで探す"
-                aria-label="名前・メモで探す"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setQuery('')
-                    e.currentTarget.blur()
-                  }
-                }}
-              />
-              <kbd className="cd-kbd cd-search-kbd" aria-hidden="true">/</kbd>
-            </div>
-            <select
-              className="form-select cd-sort"
-              aria-label="並べ替え"
-              value={view.sort}
-              onChange={(e) => changeView({ sort: e.target.value as Sort })}
-            >
-              {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            <Link to="/create/" className="btn btn-primary cd-new">
-              <Icon name="plus" className="me-1" />新規登録
-              <kbd className="cd-kbd ms-2" aria-hidden="true">N</kbd>
-            </Link>
-          </div>
+          <Link to="/create/" className="btn btn-primary btn-sm cd-new">
+            <Icon name="plus" className="me-1" />新規登録
+            <kbd className="cd-kbd ms-2" aria-hidden="true">N</kbd>
+          </Link>
         </div>
 
         {state.status === 'error' && (
@@ -274,7 +220,7 @@ export function EventsPage() {
 
         {ready && events.length > 0 && nothingShown && (
           <div className="cd-empty">
-            <p className="mb-0">{q ? `「${query.trim()}」に当てはまるものはありません。` : 'ここに出すものはありません。'}</p>
+            <p className="mb-0">ここに出すものはありません。</p>
           </div>
         )}
 
@@ -319,7 +265,7 @@ export function EventsPage() {
 
 function Section({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-5">
+    <section className="cd-section">
       <h2 className="cd-section-title">
         <Icon name={icon} className="me-2 cd-accent" />{title}
       </h2>

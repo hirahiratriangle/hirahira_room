@@ -45,11 +45,15 @@ export function EventCard({ event, today, now, highlighted, onRename, onDelete }
             <EditableName name={event.name} disabled={!!event.pending} onSave={onRename} />
             {x.urgency === 'soon' && <span className="cd-pill cd-pill--soon">もうすぐ</span>}
           </div>
-          <p className="cd-muted small mb-1">{formatDate(event.date)}</p>
-          {event.memo && <p className="cd-muted small mb-1 cd-memo">{event.memo}</p>}
-          {x.delta >= 0 && event.notify && (
-            <p className="small mb-1 cd-accent"><Icon name="envelope" className="me-1" />メール通知オン</p>
-          )}
+          <p className="cd-date">
+            {formatDate(event.date)}
+            {x.delta >= 0 && event.notify && (
+              <span className="cd-accent ms-2" title="メール通知オン">
+                <Icon name="envelope" className="me-1" />通知オン
+              </span>
+            )}
+          </p>
+          {event.memo && <p className="cd-muted cd-memo">{event.memo}</p>}
           {ticking && (
             <p className="cd-tick mb-0" aria-live="off">
               <Icon name="hourglass-half" className="me-1" />
@@ -59,28 +63,31 @@ export function EventCard({ event, today, now, highlighted, onRename, onDelete }
           )}
         </div>
 
+        {/* 右側：日数の補足と操作、その右にリング */}
         <div className="cd-card-side">
+          <div className="cd-card-meta">
+            <p className="cd-muted cd-note">{x.delta === 0 ? '当日です' : countNote(x)}</p>
+            <div className="cd-card-actions">
+              {event.pending ? (
+                <span className="cd-muted small"><span className="cd-spinner" /> 保存しています</span>
+              ) : (
+                <>
+                  <Link to={`/${event.id}/update/`} className="btn btn-sm btn-outline-primary">編集</Link>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onDelete}>削除</button>
+                </>
+              )}
+            </div>
+          </div>
           <ProgressRing progress={x.progress} label={x.progressLabel}>
             {x.delta === 0 ? (
               <span className="cd-ring-today">本日</span>
             ) : (
               <>
-                <span className="cd-ring-days">{x.countDays}</span>
+                <span className={`cd-ring-days ${x.countDays >= 1000 ? 'is-long' : ''}`}>{x.countDays}</span>
                 <span className="cd-ring-unit">日</span>
               </>
             )}
           </ProgressRing>
-          <p className="cd-muted small mb-0 text-center">{x.delta === 0 ? '当日です' : countNote(x)}</p>
-          <div className="cd-card-actions">
-            {event.pending ? (
-              <span className="cd-muted small"><span className="cd-spinner" /> 保存しています</span>
-            ) : (
-              <>
-                <Link to={`/${event.id}/update/`} className="btn btn-sm btn-outline-primary">編集</Link>
-                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onDelete}>削除</button>
-              </>
-            )}
-          </div>
         </div>
       </div>
     </article>
@@ -131,7 +138,7 @@ function EditableName({ name, disabled, onSave }: { name: string; disabled: bool
   }
 
   return (
-    <h4 className="h5 mb-1">
+    <h3 className="cd-name-heading">
       <button
         type="button"
         className="cd-name"
@@ -145,6 +152,6 @@ function EditableName({ name, disabled, onSave }: { name: string; disabled: bool
       >
         {name}
       </button>
-    </h4>
+    </h3>
   )
 }

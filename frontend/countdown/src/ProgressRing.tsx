@@ -4,8 +4,8 @@
 
 import type { ReactNode } from 'react'
 
-const SIZE = 84
-const STROKE = 6
+const SIZE = 64
+const STROKE = 5
 const R = (SIZE - STROKE) / 2
 const LENGTH = 2 * Math.PI * R
 
@@ -24,7 +24,7 @@ export function ProgressRing({ progress, label, children }: Props) {
           transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
         />
       </svg>
-      <div className="cd-ring-center">{children}</div>
+      <div className="cd-ring-center"><span className="cd-ring-value">{children}</span></div>
     </div>
   )
 }
