@@ -53,6 +53,9 @@ export function EventCard({ event, today, now, highlighted, onRename, onDelete }
               </span>
             )}
           </p>
+          {/* 残り日数と週（あと19日（2週と5日））。広い画面ではリングの横（cd-note）に出し、
+              スマホではリングの横に入りきらないので、ここ（日付の下）に出す */}
+          {x.delta !== 0 && <p className="cd-note-inline">{countNote(x)}</p>}
           {event.memo && <p className="cd-muted cd-memo">{event.memo}</p>}
           {ticking && (
             <p className="cd-tick mb-0" aria-live="off">

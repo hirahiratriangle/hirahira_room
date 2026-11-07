@@ -332,6 +332,15 @@ body,
   gap: 0.3rem;
 }
 
+/* スマホだけで出す「あと19日（2週と5日）」（広い画面では .cd-note がリングの横に出す） */
+.cd-note-inline {
+  display: none;
+  margin: 0.1rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--cd-ring);
+}
+
 .cd-card-actions .btn {
   padding: 0.1rem 0.5rem;
   font-size: 0.78rem;
@@ -660,9 +669,13 @@ body,
     gap: 0.5rem;
   }
 
-  /* 狭い画面では、日数の補足（あと19日…）はリングと重なるので出さない */
+  /* 狭い画面では、日数の補足（あと19日（2週と5日））をリングの横ではなく日付の下に出す */
   .cd-note {
     display: none;
+  }
+
+  .cd-note-inline {
+    display: block;
   }
 
   /* 編集・削除を縦に積んで、リングの左に並べる（カードの高さを抑える） */
