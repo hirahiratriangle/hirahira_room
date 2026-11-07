@@ -23,32 +23,32 @@ urlpatterns = [
     path('', include('home.urls', namespace='home')),
 
     # 日記アプリ
-    path('diary/', include('diary.urls', namespace='diary')),
+    path('diary/', include('apps.diary.urls', namespace='diary')),
 
     # Iris Classifier アプリ
-    path('iris/', include('iris_classifier.urls', namespace='iris_classifier')),
+    path('iris/', include('apps.iris_classifier.urls', namespace='iris_classifier')),
 
     # JP Core Issue 改善支援アプリ
-    path('jpcore/', include('jpcore.urls', namespace='jpcore')),
+    path('jpcore/', include('apps.jpcore.urls', namespace='jpcore')),
 
     # カウントアップ＆ダウンアプリ
-    path('countdown/', include('countdown.urls', namespace='countdown')),
+    path('countdown/', include('apps.countdown.urls', namespace='countdown')),
 
     # 銀行業務検定 法務3級 対策アプリ
-    path('bk_houmu3/', include('bk_houmu3.urls', namespace='bk_houmu3')),
+    path('bk_houmu3/', include('apps.bk_houmu3.urls', namespace='bk_houmu3')),
     # 取り組み（3つの構想・SE／PGの賃金をまとめた入り口。ログイン必須）
     # /pvsys/ からの転送は置かない
     path('works/', include('works.urls', namespace='works')),
     # 基本情報技術者試験（FE）対策アプリ。Logic Apps と GitHub Actions の定期実行もここを叩く
-    path('fe/', include('fe.urls', namespace='fe')),
+    path('fe/', include('apps.fe.urls', namespace='fe')),
     # genba（1現場1リポジトリの記録を4つの立場で使う）
-    path('genba/', include('genba.urls', namespace='genba')),
+    path('genba/', include('apps.genba.urls', namespace='genba')),
     # 社内活動の3つの構想（「社内活動 3つの構想.pptx」を順に読むページ）
-    path('proposals/', include('proposals.urls', namespace='proposals')),
+    path('proposals/', include('works.proposals.urls', namespace='proposals')),
     # 福祉従事者の活動ページ（fun IT club WG-03。ログインなしで公開）
-    path('welfare/', include('welfare_activity.urls', namespace='welfare_activity')),
+    path('welfare/', include('works.welfare_activity.urls', namespace='welfare_activity')),
     # SE／PGの賃金の議論（「SE_PG賃金_第1弾.pptx」を順に読むページ）
-    path('wages/', include('wages.urls', namespace='wages')),
+    path('wages/', include('works.wages.urls', namespace='wages')),
 ]
 
 # メディアファイルの配信設定

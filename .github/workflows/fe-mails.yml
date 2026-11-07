@@ -1,7 +1,7 @@
 name: 基本情報の問題メール送信
 
 # Azure App Service (Linux) には cron が無いため、ここから毎日叩く。
-# 実際に送るのはサイト側（/fe/tasks/send-mails/ → fe/mail.py の send_daily）。
+# 実際に送るのはサイト側（/fe/tasks/send-mails/ → apps/fe/mail.py の send_daily）。
 # cron は UTC 指定。15:00 UTC = 翌日 0:00 JST。
 # 同じ日に何度呼んでも、同じ登録の同じ送り方には1通しか送らないので、
 # 「Run workflow」で手で流し直してよい。

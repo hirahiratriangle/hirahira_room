@@ -23,16 +23,18 @@ INSTALLED_APPS = [
     # 自作アプリ
     'accounts',
     'home',
-    'diary',
-    'iris_classifier',
-    'jpcore',
-    'countdown',
-    'fe',
-    'bk_houmu3',
-    'genba',
-    'proposals',
-    'welfare_activity',
-    'wages',
+    # 使って学ぶ・記録するアプリ（apps/ の下）
+    'apps.diary',
+    'apps.iris_classifier',
+    'apps.jpcore',
+    'apps.countdown',
+    'apps.fe',
+    'apps.bk_houmu3',
+    'apps.genba',
+    # わたしの活動（works/ の下。works が入り口）
+    'works.proposals',
+    'works.welfare_activity',
+    'works.wages',
     'works',
 ]
 

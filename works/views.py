@@ -1,6 +1,6 @@
 from django.views import generic
 
-from proposals import concept_data
+from works.proposals import concept_data
 
 
 class IndexView(generic.TemplateView):

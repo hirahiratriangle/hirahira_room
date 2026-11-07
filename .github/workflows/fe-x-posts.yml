@@ -3,7 +3,7 @@ name: 基本情報の問題の X 投稿
 # 定期の投稿は Azure Logic Apps（hirahira-fe-x-post）が日本時間の7時・12時・19時に起こす。
 # GitHub Actions の定期実行は数時間遅れることがあったため、2026-10-30 にやめた。
 # このワークフローは、失敗した枠を手で流し直すときだけに使う。
-# 実際に投稿するのはサイト側（/fe/tasks/post-x/ → fe/x_post.py の post_slot）。
+# 実際に投稿するのはサイト側（/fe/tasks/post-x/ → apps/fe/x_post.py の post_slot）。
 # 同じ日の同じ時間帯は1回しか投稿しないので、流し直してよい。
 # 失敗した時間帯は、流し直すと同じ問題で投稿し直す。
 on:
