@@ -105,14 +105,20 @@ export function derive(date: string, today: string, createdAt: string = today): 
   }
 }
 
-/** 「あと10日（1週と3日）」「経過400日（1周年経過）」「本日」 */
+/** 週と日。「1週と3日」「2週」「0週と5日」。週は 0 でも必ず出す */
+export function weeksText(x: Derived): string {
+  return `${x.weeks}週${x.extraDays ? `と${x.extraDays}日` : ''}`
+}
+
+/**
+ * 日数の補足。これからの予定も過ぎた出来事も、必ず週を付ける。
+ * 「あと10日（1週と3日）」「あと5日（0週と5日）」「経過400日（57週と1日・1周年経過）」「本日」
+ */
 export function countNote(x: Derived): string {
   if (x.delta === 0) return '本日'
-  if (x.delta > 0) {
-    const weeks = x.weeks ? `（${x.weeks}週${x.extraDays ? `と${x.extraDays}日` : ''}）` : ''
-    return `あと${x.countDays}日${weeks}`
-  }
-  return `経過${x.countDays}日${x.years ? `（${x.years}周年経過）` : ''}`
+  if (x.delta > 0) return `あと${x.countDays}日（${weeksText(x)}）`
+  const years = x.years ? `・${x.years}周年経過` : ''
+  return `経過${x.countDays}日（${weeksText(x)}${years}）`
 }
 
 /**

@@ -335,6 +335,10 @@ body,
 }
 
 /* スマホだけで出す「あと19日（2週と5日）」（広い画面では .cd-note がリングの横に出す） */
+.cd-nowrap {
+  white-space: nowrap;
+}
+
 .cd-note-inline {
   display: none;
   margin: 0.1rem 0 0;

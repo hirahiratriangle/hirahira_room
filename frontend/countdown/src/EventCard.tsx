@@ -55,7 +55,7 @@ export function EventCard({ event, today, now, highlighted, onRename, onDelete }
           </p>
           {/* 残り日数と週（あと19日（2週と5日））。広い画面ではリングの横（cd-note）に出し、
               スマホではリングの横に入りきらないので、ここ（日付の下）に出す */}
-          {x.delta !== 0 && <p className="cd-note-inline">{countNote(x)}</p>}
+          {x.delta !== 0 && <p className="cd-note-inline"><NoteText text={countNote(x)} /></p>}
           {event.memo && <p className="cd-muted cd-memo">{event.memo}</p>}
           {ticking && (
             <p className="cd-tick mb-0" aria-live="off">
@@ -156,5 +156,20 @@ function EditableName({ name, disabled, onSave }: { name: string; disabled: bool
         {name}
       </button>
     </h3>
+  )
+}
+
+/**
+ * 日数の補足を、「・」のところでだけ折り返せるようにして出す。
+ * 「経過400日（57週と1日・1周年経過）」が狭い画面で「1周年経 / 過）」と切れないように。
+ */
+function NoteText({ text }: { text: string }) {
+  const parts = text.split('・')
+  return (
+    <>
+      {parts.map((part, i) => (
+        <span key={i} className="cd-nowrap">{i > 0 ? `・${part}` : part}</span>
+      ))}
+    </>
   )
 }

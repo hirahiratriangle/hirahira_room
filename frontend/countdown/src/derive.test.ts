@@ -13,6 +13,13 @@ describe('derive', () => {
     expect(countNote(x)).toBe('あと10日（1週と3日）')
   })
 
+  it('週は必ず付ける（7日未満は 0週、ちょうどの週は日を省く）', () => {
+    expect(countNote(derive('2026-11-12', TODAY))).toBe('あと5日（0週と5日）')
+    expect(countNote(derive('2026-11-21', TODAY))).toBe('あと14日（2週）')
+    expect(countNote(derive('2026-11-02', TODAY))).toBe('経過5日（0週と5日）')
+    expect(countNote(derive('2026-10-31', TODAY))).toBe('経過7日（1週）')
+  })
+
   it('7日以内は「もうすぐ」', () => {
     expect(derive('2026-11-14', TODAY).urgency).toBe('soon')
     expect(derive('2026-11-15', TODAY).urgency).toBe('later')
@@ -26,7 +33,7 @@ describe('derive', () => {
   it('過ぎた出来事は経過日数と周年を数える', () => {
     const x = derive('2025-10-03', TODAY)
     expect([x.delta, x.countDays, x.years, x.urgency]).toEqual([-400, 400, 1, 'past'])
-    expect(countNote(x)).toBe('経過400日（1周年経過）')
+    expect(countNote(x)).toBe('経過400日（57週と1日・1周年経過）')
   })
 
   it('年をまたいでも日数がずれない（うるう年を含む）', () => {
