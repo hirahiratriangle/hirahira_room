@@ -2,7 +2,7 @@
 .vscode/
 
 # Pythonのコンパイルファイル
---pycache__/
+__pycache__/
 *.pyc
 
 # Mac用
@@ -33,3 +33,6 @@ iris_classifier/models/
 
 # ローカルの認証情報（メール送信の動作確認など）
 .env.local
+
+# Azure（Kudu）のデプロイ記録
+deployments/
