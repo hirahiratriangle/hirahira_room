@@ -9,7 +9,7 @@
 // （絞り込み・検索・スクロールの位置がそのまま残る）。
 //
 // 一覧の上は、絞り込みのタブ（すべて／これから／過ぎた／通知オン）と新規登録だけ。
-// 選んだタブは、次に開いたときも同じになるよう、このブラウザに覚えておく。
+// 開いたときは、いつも「これから」のタブから始める（前に選んだタブは覚えない）。
 // 並びは日数の少ない順に決めてある（これからの予定は近い順、過ぎた出来事は最近のものから）。
 //
 // キーボード：N で新規登録、Esc でパネルを閉じる。
@@ -40,24 +40,19 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 const EMPTY_INPUT: EventInput = { name: '', date: '', memo: '', notify: false }
 
-// ---- 選んだタブをこのブラウザに覚えておく（使えないブラウザでは覚えないだけ） ----
-const VIEW_KEY = 'countdown:view'
+/**
+ * 開いたときのタブ。いつも「これから」から始める。
+ * 以前は前に選んだタブをブラウザに覚えていたが、「これから」以外が残っていると、
+ * 開いたときにカードが1枚も出ず、データが消えたように見えることがあったのでやめた。
+ */
+const DEFAULT_FILTER: Filter = 'upcoming'
 
-function loadFilter(): Filter {
-  try {
-    const saved = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}')
-    return FILTERS.some((f) => f.key === saved.filter) ? saved.filter : 'all'
-  } catch {
-    return 'all'
-  }
-}
-
-function saveFilter(filter: Filter) {
-  try {
-    localStorage.setItem(VIEW_KEY, JSON.stringify({ filter }))
-  } catch {
-    // 覚えられなくても、画面はそのまま使える
-  }
+/** 選んでいるタブに出すものが無いときの言葉 */
+const EMPTY_TEXT: Record<Filter, string> = {
+  all: 'ここに出すものはありません。',
+  upcoming: 'これからの予定はありません。',
+  past: '過ぎた出来事はありません。',
+  notify: '通知をオンにした予定はありません。',
 }
 
 /**
@@ -78,9 +73,7 @@ export function EventsPage() {
   const updateMatch = useMatch('/:id/update')
   const deleteMatch = useMatch('/:id/delete')
 
-  const [filter, setFilter] = useState(loadFilter)
-
-  useEffect(() => saveFilter(filter), [filter])
+  const [filter, setFilter] = useState<Filter>(DEFAULT_FILTER)
 
   // 以前の削除確認のアドレスで開かれたら、一覧へ戻す
   useEffect(() => {
@@ -220,7 +213,7 @@ export function EventsPage() {
 
         {ready && events.length > 0 && nothingShown && (
           <div className="cd-empty">
-            <p className="mb-0">ここに出すものはありません。</p>
+            <p className="mb-0">{EMPTY_TEXT[filter]}</p>
           </div>
         )}
 
