@@ -3210,7 +3210,8 @@ class XPostTests(TestCase):
         values = dict(
             subject=category.subject, category=category, stem=stem,
             choices=['周波数', '暗号鍵', 'ネットワークの名前', '製造番号'],
-            answer_index=2, explanation='SSID はネットワークの名前。', source='自作',
+            answer_index=2, explanation='SSID はネットワークの名前。',
+            source='令和7年度 科目A 問1 ／ シラバス Ver.8.0 中分類10',
         )
         values.update(fields)
         return Question.objects.create(**values)
@@ -3223,15 +3224,18 @@ class XPostTests(TestCase):
 
     # ---- 投稿できる問題と文面 ----
 
-    def test_eligible_questions_are_fixed_subject_a(self):
+    def test_eligible_questions_are_official_fixed_subject_a(self):
         from . import x_post
         short = self._question()
         long = self._question(stem='長い' * 200)
+        sample = self._question(stem='サンプル', source='サンプル問題 科目A 問12')
+        self._question(stem='オリジナル', source='シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN')
+        self._question(stem='自作の問題', source='自作')
         self._question(stem='科目Bの問題', code=101, choices=['ア', 'イ', 'ウ', 'エ', 'オ', 'カ'])
         template = QuestionTemplate.objects.first()
         self._question(stem='テンプレートの問題', template=template)
         self._question(stem='使わない問題', is_active=False)
-        self.assertEqual(set(x_post.eligible_questions()), {short, long})
+        self.assertEqual(set(x_post.eligible_questions()), {short, long, sample})
 
     def test_long_stem_is_cut_and_points_to_the_page(self):
         from . import x_post
@@ -3250,23 +3254,14 @@ class XPostTests(TestCase):
         post = self._post(stem='長い' * 200, figures=[{'src': 'data:image/png;base64,AAAA', 'alt': '図'}])
         self.assertIn('▶問題の続き・図・選択肢と解答はこちら', post.text)
 
-    def test_official_questions_come_about_one_in_three(self):
+    def test_original_questions_are_never_posted(self):
         from . import x_post
-        official = self._question(stem='公開問題', source='令和7年度 科目A 問1')
-        originals = [self._question(stem='オリジナル{}'.format(i)) for i in range(9)]
-        pool = [official] + originals
-        rng = random.Random(7)
-        picks = [x_post.pick(pool, rng) for _ in range(900)]
-        share = picks.count(official) / len(picks)
-        self.assertAlmostEqual(share, 1 / 3, delta=0.05)
-
-    def test_pick_falls_back_when_one_side_is_empty(self):
-        from . import x_post
-        official = self._question(stem='公開問題', source='令和7年度 科目A 問1')
-        original = self._question(stem='オリジナル')
-        rng = random.Random(1)
-        self.assertEqual({x_post.pick([official], rng) for _ in range(20)}, {official})
-        self.assertEqual({x_post.pick([original], rng) for _ in range(20)}, {original})
+        self._question(stem='オリジナル', source='シラバス Ver.8.0 中分類10')
+        self.assertEqual(x_post.post_slot('morning'), {'status': 'empty'})
+        official = self._question(stem='公開問題')
+        for day in range(10):
+            x_post.post_slot('noon', today=timezone.localdate() - timezone.timedelta(days=day))
+        self.assertEqual(set(XPost.objects.values_list('stem', flat=True)), {official.stem})
 
     def test_text_fits_the_limit_and_has_url_and_tags(self):
         from . import x_post
@@ -3294,21 +3289,9 @@ class XPostTests(TestCase):
         )
         self.assertEqual(citation('シラバス Ver.8.0 中分類10'), '')
 
-    def test_source_line_names_syllabus_item_for_original_questions(self):
-        from .x_post import source_line
-        self.assertEqual(
-            source_line('シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN'),
-            '（オリジナル問題／シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN）',
-        )
-        self.assertEqual(
-            source_line('令和7年度 科目A 問2 ／ シラバス Ver.8.0 中分類1 応用数学'),
-            '（出典：令和7年度 基本情報技術者試験 科目A 問2）',
-        )
-        self.assertEqual(source_line('自作'), '（オリジナル問題）')
-
     def test_text_has_source_line(self):
-        post = self._post(source='シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN')
-        self.assertIn('（オリジナル問題／シラバス Ver.8.0 中分類10 ネットワーク（3）無線LAN）', post.text)
+        post = self._post(source='令和7年度 科目A 問2 ／ シラバス Ver.8.0 中分類1 応用数学')
+        self.assertIn('\n（出典：令和7年度 基本情報技術者試験 科目A 問2）\n', post.text)
 
     def test_weight_counts_full_width_and_url(self):
         from .x_post import weight
@@ -3334,18 +3317,56 @@ class XPostTests(TestCase):
         self.assertEqual(XPost.objects.count(), 3)
         self.assertEqual(len(set(XPost.objects.values_list('code', flat=True))), 3)
 
-    def test_pick_is_uniform_random_with_repeats(self):
-        """重みなしで毎回引くので、前に出た問題も出る。"""
+    def _post_days(self, days, rng):
+        """過去の days 日ぶん、朝の枠に投稿し、出た問題文を古い順に返す。"""
         from . import x_post
-        self._question()
-        self._question(stem='DNS の役割はどれか。')
-        rng = random.Random(1)
         stems = []
-        for day in range(20):
+        for day in range(days, 0, -1):
             date = timezone.localdate() - timezone.timedelta(days=day)
             x_post.post_slot('morning', today=date, rng=rng)
             stems.append(XPost.objects.get(date=date, slot='morning').stem)
-        self.assertEqual(len(set(stems)), 2)
+        return stems
+
+    def test_no_repeat_until_every_question_is_posted(self):
+        """ひと回り出し終えるまで同じ問題は出ず、次の周回でまた全問が出る。"""
+        for i in range(5):
+            self._question(stem='問題{}'.format(i))
+        stems = self._post_days(15, random.Random(3))
+        for start in (0, 5, 10):
+            self.assertEqual(len(set(stems[start:start + 5])), 5, stems)
+        # 周回の中の順番は、周回ごとに引き直す
+        self.assertNotEqual(stems[0:5], stems[5:10])
+        self.assertEqual(sorted(Question.objects.values_list('x_round', flat=True)), [3] * 5)
+
+    def test_question_added_mid_round_joins_the_round(self):
+        for i in range(3):
+            self._question(stem='問題{}'.format(i))
+        first = self._post_days(2, random.Random(5))
+        XPost.objects.all().delete()
+        self._question(stem='新しい問題')
+        rest = self._post_days(2, random.Random(5))
+        # 1周目の残りは、まだ出ていない1問と新しい問題
+        self.assertEqual(len(set(first + rest)), 4)
+
+    def test_round_survives_purge_of_old_posts(self):
+        """XPost を消しても、周回は問題の側に残る。"""
+        from . import x_post
+        for i in range(3):
+            self._question(stem='問題{}'.format(i))
+        first = self._post_days(2, random.Random(9))
+        XPost.objects.all().delete()
+        x_post.post_slot('noon', rng=random.Random(9))
+        self.assertNotIn(XPost.objects.get().stem, first)
+
+    def test_failed_post_counts_once_in_the_round(self):
+        from . import x_post
+        self._question()
+        self._question(stem='DNS の役割はどれか。')
+        with mock.patch.object(x_post, 'send', side_effect=x_post.PostError('503')):
+            with self.assertRaises(x_post.PostError):
+                x_post.post_slot('noon')
+        x_post.post_slot('noon')
+        self.assertEqual(sorted(Question.objects.values_list('x_round', flat=True)), [0, 1])
 
     def test_failed_post_is_retried_with_the_same_question(self):
         from . import x_post
@@ -3441,6 +3462,13 @@ class XPostTests(TestCase):
         self.assertContains(response, 'SSID はネットワークの名前。')
         self.assertContains(response, '学習モード')
         self.assertContains(response, '<a href="https://example.jp/fe/" class="x-cta">')
+        self.assertContains(response, '出典：令和7年度 基本情報技術者試験 科目A 問1')
+
+    def test_earlier_original_post_still_shows_its_page(self):
+        """公開問題だけにする前に投稿したオリジナル問題も、期限までは解答ページを出す。"""
+        post = self._post()
+        XPost.objects.filter(pk=post.pk).update(source='シラバス Ver.8.0 中分類10')
+        response = self.client.post(reverse('fe:x_answer', args=[post.code]), {'choice': 2})
         self.assertContains(response, 'オリジナル問題')
 
     def test_official_question_shows_citation(self):

@@ -217,6 +217,11 @@ class Question(models.Model):
     params = models.JSONField(verbose_name='生成パラメータ', null=True, blank=True)
 
     is_active = models.BooleanField(verbose_name='有効', default=True)
+    # X に投稿した周回の番号（fe.x_post.pick が付ける）。0 はまだ一度も投稿していない。
+    # 公開問題をひと回り投稿し終えるまで、同じ問題を出さないために使う。XPost は
+    # 30日で消えるので、投稿の履歴からは周回を追えない。そのため問題の側に持つ。
+    # 取り込み（fe.importer.sync）は行を消さずに更新するので、この値は残る。
+    x_round = models.PositiveIntegerField(verbose_name='X に投稿した周回', default=0)
     created_at = models.DateTimeField(verbose_name='作成日時', auto_now_add=True)
     updated_at = models.DateTimeField(verbose_name='更新日時', auto_now=True)
 
@@ -742,7 +747,7 @@ class XPost(models.Model):
 
     投稿のときに問題の中身を写して持ち、解答ページはこの写しから描く。あとで問題を
     直しても、取り込みで消えても、X に出した問題とページの中身は食い違わない。
-    投稿から X_POST_KEEP_DAYS 日たったら行ごと消す（fe.x_post.purge_old）。消えた投稿や
+    投稿から FE_X_KEEP_DAYS 日たったら行ごと消す（fe.x_post.purge_old）。消えた投稿や
     存在しない code のページには、同じ案内ページを出す。
 
     1日3回（朝・昼・夜）で、日付と時間帯の組は1つだけ。定期実行が遅れて二重に

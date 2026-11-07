@@ -3,14 +3,14 @@
 Azure Logic Apps が日本時間の7時・12時・19時に /fe/tasks/post-x/ を叩き、
 post_slot がその時間帯の1問を投稿する。Logic Apps は予定の日付（date）も渡す。
 GitHub Actions のワークフローは、手で流し直すときだけに使う。投稿は「問題文＋出典＋解答ページの URL＋タグ」だけで、選択肢・正解・
-解説は解答ページ（/fe/x/<code>/）にだけ出す。出典は、IPA の公開問題なら IPA の
-求める形、自作の問題なら「オリジナル問題」ともとにしたシラバスの項目。
+解説は解答ページ（/fe/x/<code>/）にだけ出す。出典は IPA の求める形で書く。
 
-- 出題は、科目Aの固定問題から毎回1問を引く。OFFICIAL_SHARE（3回に1回）の割合で
-  IPA の公開問題から、それ以外はオリジナル問題から、それぞれ重みなしで引く。
-  前に出た問題も同じように引くので、近いうちに同じ問題が出ることもある。
+- 出題は、科目Aの固定問題のうち IPA の公開問題・サンプル問題だけから引く。
+  オリジナル問題（自作）は投稿しない（2026-11-07 から）。
+- 公開問題をひと回り投稿し終えるまで、同じ問題は出さない（pick）。どこまで出したかは
+  問題の側の Question.x_round に持つ。周回の中の順番は毎回ランダムに引く。
 - 1件に収まらない長い問題文は途中で切り、続きは解答ページで見せる。図のある
-  問題も、図は解答ページで見せる。そのため科目Aの固定問題はすべて投稿できる。
+  問題も、図は解答ページで見せる。そのため科目Aの公開問題はすべて投稿できる。
 - 投稿のときに問題の中身を XPost に写す。解答ページはこの写しから描く。
 - 投稿から settings.FE_X_KEEP_DAYS 日たった XPost は、行ごと消す（purge_old）。
 - 日付と時間帯の組は1つだけ。同じ時間帯に何度呼ばれても投稿は1回で、
@@ -59,8 +59,6 @@ LINK_LABEL_FIGURE = '▶図・選択肢と解答はこちら'
 LINK_LABEL_CUT = '▶問題の続き・選択肢と解答はこちら'
 LINK_LABEL_CUT_FIGURE = '▶問題の続き・図・選択肢と解答はこちら'
 ELLIPSIS = '…'
-# IPA の公開問題を出す割合。公開問題は問題集の1割ほどしかないので、多めに出す
-OFFICIAL_SHARE = 1 / 3
 TAGS = '#基本情報技術者 #FE #IPA'
 EXAM_NAME = '基本情報技術者試験'
 CODE_LENGTH = 10
@@ -107,18 +105,11 @@ def citation(source):
 
 
 def source_line(source):
-    """投稿に書く出典の行。IPA の公開問題は IPA の求める形、自作の問題はシラバスの項目。
+    """投稿に書く出典の行。「（出典：令和7年度 基本情報技術者試験 科目A 問2）」。
 
-    自作の問題の source は「シラバス Ver.8.0 中分類1 応用数学（3）数値解析」の形で、
-    もとにしたシラバスの項目を書いてある。それを「オリジナル問題」と並べて出す。
+    投稿するのは公開問題だけ（eligible_questions）なので、出典は必ず IPA の求める形になる。
     """
-    cite = citation(source)
-    if cite:
-        return '（{}）'.format(cite)
-    head = source.split(' ／ ')[0].strip()
-    if head.startswith('シラバス'):
-        return '（オリジナル問題／{}）'.format(head)
-    return '（オリジナル問題）'
+    return '（{}）'.format(citation(source))
 
 
 def page_url(code):
@@ -153,22 +144,37 @@ def build_text(stem, source, has_figures, url, date, slot):
 
 
 def eligible_questions():
-    """投稿できる問題。科目Aの固定問題（計算テンプレートの問題は除く）。"""
-    return list(
+    """投稿できる問題。科目Aの固定問題のうち、IPA の公開問題・サンプル問題だけ。
+
+    計算テンプレートの問題とオリジナル問題（自作）は投稿しない。公開問題かどうかは
+    source の書き出しで見分ける（is_official）。前後の空白を許すため、DB では絞らない。
+    """
+    questions = (
         Question.objects.active()
         .filter(subject=SUBJECT_A, template__isnull=True)
         .select_related('category')
     )
+    return [q for q in questions if is_official(q.source)]
 
 
 def pick(pool, rng=None):
-    """OFFICIAL_SHARE の割合で公開問題から、それ以外はオリジナル問題から1問を引く。"""
-    rng = rng or random
-    official = [q for q in pool if is_official(q.source)]
-    original = [q for q in pool if not is_official(q.source)]
-    if official and (not original or rng.random() < OFFICIAL_SHARE):
-        return rng.choice(official)
-    return rng.choice(original)
+    """今の周回でまだ投稿していない問題から、重みなしで1問を引く。
+
+    今の周回は、投稿できる問題の x_round のいちばん大きい値。それより小さい問題が
+    この周回の残り。残りが無ければ（はじめての投稿も含む）次の周回に進み、全問から引く。
+    周回の途中で取り込んだ新しい問題は x_round が 0 なので、その周回の残りに入る。
+
+    引いた問題の x_round は、その周回の番号に書き換えて返す。保存は呼び出し側
+    （post_slot）が投稿の記録と一緒に行う。
+    """
+    current = max(q.x_round for q in pool)
+    rest = [q for q in pool if q.x_round < current]
+    if not rest:
+        current += 1
+        rest = pool
+    question = (rng or random).choice(rest)
+    question.x_round = current
+    return question
 
 
 def new_code():
@@ -222,6 +228,8 @@ def post_slot(slot, today=None, rng=None):
         try:
             with transaction.atomic():
                 post = _create(today, slot, question)
+                # 投稿に失敗しても、その枠は同じ問題で投稿し直すので、ここで出したことにする
+                question.save(update_fields=['x_round'])
         except IntegrityError:
             # 同じ時間帯の呼び出しが重なった。先に作った方に任せる
             return {'status': 'already'}
