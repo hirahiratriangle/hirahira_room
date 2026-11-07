@@ -22,6 +22,11 @@
     <!-- Applications Section -->
     <section id="applications" class="mb-5">
         <h2 class="h4 mb-4" style="color: #2c5aa0;">アプリケーション</h2>
+        {% comment %}
+        アプリのボタンは、どれも別タブで開く（target="_blank"）。ホームを開いたまま、
+        いくつものアプリを行き来できるようにするため。ボタンを足すときも付ける。
+        rel="noopener" は、開いた先のページからこのタブを操作させないための決まりごと。
+        {% endcomment %}
         <div class="list-group">
             <!-- 銀行業務検定 法務3級 対策 -->
             <div class="list-group-item list-group-item-action">
@@ -34,8 +39,8 @@
                         <p class="mb-2 text-muted">過去問の1問1答（五答択一）。区分ごとの正答率を集計し，苦手分野を重点的に出題</p>
                         <div class="mt-2">
                             {% if user.is_authenticated %}
-                            <a href="{% url 'bk_houmu3:index' %}" class="btn btn-sm btn-outline-primary me-2">ダッシュボード</a>
-                            <a href="{% url 'bk_houmu3:stats' %}" class="btn btn-sm btn-outline-primary">分野別正答率</a>
+                            <a href="{% url 'bk_houmu3:index' %}" class="btn btn-sm btn-outline-primary me-2" target="_blank" rel="noopener">ダッシュボード</a>
+                            <a href="{% url 'bk_houmu3:stats' %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">分野別正答率</a>
                             {% else %}
                             <a href="{% url 'account_login' %}" class="btn btn-sm btn-outline-primary">ログイン</a>
                             {% endif %}
@@ -55,10 +60,10 @@
                         <p class="mb-2 text-muted">出来事や予定を名前と日付で登録すると、経過日数と残り日数を毎日カウント</p>
                         <div class="mt-2">
                             {% if user.is_authenticated %}
-                            <a href="{% url 'countdown:event_list' %}" class="btn btn-sm btn-outline-primary me-2">一覧を見る</a>
-                            <a href="{% url 'countdown:event_create' %}" class="btn btn-sm btn-outline-primary">新規登録</a>
+                            <a href="{% url 'countdown:event_list' %}" class="btn btn-sm btn-outline-primary me-2" target="_blank" rel="noopener">一覧を見る</a>
+                            <a href="{% url 'countdown:event_create' %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">新規登録</a>
                             {% else %}
-                            <a href="{% url 'countdown:index' %}" class="btn btn-sm btn-outline-primary me-2">詳しく見る</a>
+                            <a href="{% url 'countdown:index' %}" class="btn btn-sm btn-outline-primary me-2" target="_blank" rel="noopener">詳しく見る</a>
                             <a href="{% url 'account_login' %}" class="btn btn-sm btn-outline-primary">ログイン</a>
                             {% endif %}
                         </div>
@@ -76,9 +81,9 @@
                         </h5>
                         <p class="mb-2 text-muted">現場の記録を、成長につなげる仕組み（プロトタイプ）</p>
                         <div class="mt-2">
-                            <a href="{% url 'genba:about' %}" class="btn btn-sm btn-outline-primary me-2">案内</a>
-                            <a href="{% url 'genba:concept' %}" class="btn btn-sm btn-outline-primary me-2">構想プレゼン</a>
-                            <a href="{% url 'genba:demo' %}" class="btn btn-sm btn-outline-primary">デモ</a>
+                            <a href="{% url 'genba:about' %}" class="btn btn-sm btn-outline-primary me-2" target="_blank" rel="noopener">案内</a>
+                            <a href="{% url 'genba:concept' %}" class="btn btn-sm btn-outline-primary me-2" target="_blank" rel="noopener">構想プレゼン</a>
+                            <a href="{% url 'genba:demo' %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">デモ</a>
                         </div>
                     </div>
                 </div>
@@ -94,8 +99,8 @@
                         </h5>
                         <p class="mb-2 text-muted">シラバス準拠の1問1答。分野ごとの正答率を集計し，苦手分野を重点的に出題</p>
                         <div class="mt-2">
-                            <a href="{% url 'fe:index' %}" class="btn btn-sm btn-outline-primary me-2">ダッシュボード</a>
-                            <a href="{% url 'fe:stats' %}" class="btn btn-sm btn-outline-primary">分野別正答率</a>
+                            <a href="{% url 'fe:index' %}" class="btn btn-sm btn-outline-primary me-2" target="_blank" rel="noopener">ダッシュボード</a>
+                            <a href="{% url 'fe:stats' %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">分野別正答率</a>
                         </div>
                     </div>
                 </div>
@@ -111,8 +116,8 @@
                         </h5>
                         <p class="mb-2 text-muted">福祉従事者の勘を支える伴奏者となるプラットフォームの構想と活動の様子</p>
                         <div class="mt-2">
-                            <a href="{% url 'welfare_activity:home' %}" class="btn btn-sm btn-outline-primary me-2">活動ページ</a>
-                            <a href="{% url 'welfare_activity:slides' %}" class="btn btn-sm btn-outline-primary">構想資料</a>
+                            <a href="{% url 'welfare_activity:home' %}" class="btn btn-sm btn-outline-primary me-2" target="_blank" rel="noopener">活動ページ</a>
+                            <a href="{% url 'welfare_activity:slides' %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">構想資料</a>
                         </div>
                     </div>
                 </div>
@@ -128,7 +133,7 @@
                         </h5>
                         <p class="mb-2 text-muted">社内活動 3つの構想、SE／PGの賃金と仕事の実質</p>
                         <div class="mt-2">
-                            <a href="{% url 'works:index' %}" class="btn btn-sm btn-outline-primary">開く</a>
+                            <a href="{% url 'works:index' %}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">開く</a>
                         </div>
                     </div>
                 </div>
